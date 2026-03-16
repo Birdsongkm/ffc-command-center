@@ -35,6 +35,18 @@ const TEAM = [
   { name: "Lone Bryan", initials: "LB" },
 ];
 
+// Auto-categorize emails by keywords
+function categorizeEmail(from, subject) {
+  const text = `${from} ${subject}`.toLowerCase();
+  if (/grant|foundation|fund|donat|donor|philanthrop|argosy|anschutz|morgridge|colorado trust|hfdk|beacon/i.test(text)) return "fundraising";
+  if (/invoice|payment|budget|financial|payroll|quickbooks|credit card|expense|debbie|accounting/i.test(text)) return "finance";
+  if (/board|governance|jack|ash/i.test(text)) return "board";
+  if (/garden|operator|pickup|harvest|program|carmen|laura|pledge.*share|giving gnome/i.test(text)) return "programs";
+  if (/marketing|social media|newsletter|press|adjoa|jamie|josh|campaign|mailchimp/i.test(text)) return "marketing";
+  if (/partner|council|coalition|refed|usda|policy|denver.*gov|advocacy|cisco/i.test(text)) return "external";
+  return "admin";
+}
+
 function catStyle(id) {
   const c = CATEGORIES.find(x => x.id === id);
   return c || { label: id, color: "#5F5E5A", bg: "#F1EFE8" };
@@ -111,6 +123,27 @@ function NoteForm({ title, onSave, onCancel }) {
   );
 }
 
+function formatTime(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Denver" });
+}
+
+function formatEmailDate(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diff = (now - d) / 3600000;
+  if (diff < 1) return `${Math.round(diff * 60)}m ago`;
+  if (diff < 24) return `${Math.round(diff)}h ago`;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function parseFrom(from) {
+  const match = from.match(/^"?([^"<]+)"?\s*<?/);
+  return match ? match[1].trim() : from;
+}
+
 export default function Home() {
   const [tasks, setTasks] = useLocalStorage("ffc-tasks", []);
   const [notes, setNotes] = useLocalStorage("ffc-notes", []);
@@ -121,18 +154,32 @@ export default function Home() {
   const [filterCat, setFilterCat] = useState("all");
   const [now, setNow] = useState(new Date());
 
+  // Live data state
+  const [authenticated, setAuthenticated] = useState(false);
+  const [emails, setEmails] = useState([]);
+  const [calEvents, setCalEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => { const i = setInterval(()=>setNow(new Date()), 30000); return ()=>clearInterval(i); }, []);
+
+  // Fetch live data
+  useEffect(() => {
+    fetch('/api/data')
+      .then(r => r.json())
+      .then(d => {
+        setAuthenticated(d.authenticated);
+        if (d.authenticated) {
+          setEmails(d.emails || []);
+          setCalEvents(d.events || []);
+        }
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
 
   const month = now.getMonth() + 1;
   const dateStr = now.toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric", year:"numeric", timeZone:"America/Denver" });
   const timeStr = now.toLocaleTimeString("en-US", { hour:"numeric", minute:"2-digit", timeZone:"America/Denver" });
-
-  const events = [
-    { time:"9:00 AM", title:"Morning planning block", type:"focus" },
-    { time:"10:00 AM", title:"Team standup", type:"team", context:"Weekly check-in with Laura, Carmen, Adjoa, Gretchen" },
-    { time:"2:00 PM", title:"Finance committee prep", type:"team", context:"Monthly review with Debbie. Prepare variance notes and AR updates." },
-    { time:"3:30 PM", title:"Laura 1:1", type:"team", context:"Recurring weekly. Check operator onboarding progress and pickup pilot status." },
-  ];
 
   const active = tasks.filter(t=>!t.done);
   const done = tasks.filter(t=>t.done);
@@ -140,7 +187,7 @@ export default function Home() {
   const grouped = {};
   for (const u of Object.keys(URG)) grouped[u] = filtered.filter(t=>urgency(t.due)===u);
   const overdueN = active.filter(t=>urgency(t.due)==="overdue").length;
-  const meetingN = events.filter(e=>e.type!=="travel"&&e.type!=="personal").length;
+  const unreadN = emails.filter(e=>e.unread).length;
 
   const addTask = (task) => { setTasks(prev=>[task,...prev]); setShowTF(false); setTfInit(null); };
   const toggle = (id) => setTasks(prev=>prev.map(t=>t.id===id?{...t,done:!t.done}:t));
@@ -149,11 +196,11 @@ export default function Home() {
 
   const typeColor = { external:"#534AB7", team:"#0F6E56", travel:"#888", personal:"#bbb", focus:"#378ADD", funder:"#854F0B" };
 
-  const btn = (active, accent) => ({
-    fontSize:13, padding:"6px 14px", borderRadius:8, cursor:"pointer", fontWeight: active?600:400, transition:"all 0.15s",
-    border: active ? `1.5px solid ${accent||"#2D5016"}` : "1px solid #e0e0de",
-    background: active ? (accent?"#EEEDFE":"#f0f7ec") : "#fff",
-    color: active ? (accent||"#2D5016") : "#777",
+  const btnStyle = (isActive, accent) => ({
+    fontSize:13, padding:"6px 14px", borderRadius:8, cursor:"pointer", fontWeight: isActive?600:400, transition:"all 0.15s",
+    border: isActive ? `1.5px solid ${accent||"#2D5016"}` : "1px solid #e0e0de",
+    background: isActive ? (accent?"#EEEDFE":"#f0f7ec") : "#fff",
+    color: isActive ? (accent||"#2D5016") : "#777",
   });
 
   return (
@@ -167,24 +214,45 @@ export default function Home() {
       </Head>
 
       <div style={{ maxWidth:960, margin:"0 auto", padding:"0 16px" }}>
+        {/* Header */}
         <header style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 0 14px", borderBottom:"1.5px solid #eee", flexWrap:"wrap", gap:8 }}>
           <div>
             <div style={{ fontSize:20, fontWeight:700, color:"#2D5016" }}>FFC Command Center</div>
             <div style={{ fontSize:12, color:"#999", marginTop:2 }}>{dateStr} · {timeStr}</div>
           </div>
           <nav style={{ display:"flex", gap:4 }}>
-            <button onClick={()=>setView("home")} style={btn(view==="home")}>Home</button>
-            <button onClick={()=>setView("tasks")} style={btn(view==="tasks")}>Tasks{active.length?` (${active.length})`:""}</button>
-            <button onClick={()=>setView("notes")} style={btn(view==="notes")}>Notes</button>
+            <button onClick={()=>setView("home")} style={btnStyle(view==="home")}>Home</button>
+            <button onClick={()=>setView("emails")} style={btnStyle(view==="emails")}>
+              Emails{unreadN > 0 ? ` (${unreadN})` : ""}
+            </button>
+            <button onClick={()=>setView("tasks")} style={btnStyle(view==="tasks")}>Tasks{active.length?` (${active.length})`:""}</button>
+            <button onClick={()=>setView("notes")} style={btnStyle(view==="notes")}>Notes</button>
           </nav>
         </header>
 
+        {/* Connect Google prompt */}
+        {!loading && !authenticated && (
+          <div style={{ textAlign:"center", padding:"40px 20px", background:"#f8f8f6", borderRadius:12, margin:"20px 0" }}>
+            <div style={{ fontSize:32, marginBottom:12 }}>🔗</div>
+            <div style={{ fontSize:16, fontWeight:600, marginBottom:8 }}>Connect your Google account</div>
+            <div style={{ fontSize:13, color:"#666", marginBottom:16, maxWidth:400, margin:"0 auto 16px" }}>
+              Link your Gmail and Google Calendar to see your real emails, meetings, and get AI-powered categorization.
+            </div>
+            <a href="/api/auth/login" style={{ display:"inline-block", fontSize:14, padding:"10px 24px", borderRadius:8, background:"#2D5016", color:"#fff", textDecoration:"none", fontWeight:500 }}>
+              Connect Google
+            </a>
+          </div>
+        )}
+
+        {/* HOME */}
         {view==="home" && (
           <main style={{ paddingTop:16 }}>
+            {/* Summary cards */}
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:10, marginBottom:18 }}>
               {[
-                { label:"Meetings today", val:meetingN, sub:null },
+                { label:"Meetings today", val: calEvents.length, sub:null },
                 { label:"Open tasks", val:active.length, sub:overdueN>0?`${overdueN} overdue`:null, subColor:"#E24B4A" },
+                { label:"Unread emails", val:unreadN, sub:null },
                 { label:"Notes saved", val:notes.length, sub:null },
               ].map((c,i) => (
                 <div key={i} style={{ background:"#f8f8f6", borderRadius:10, padding:"14px 16px" }}>
@@ -195,34 +263,39 @@ export default function Home() {
               ))}
             </div>
 
+            {/* Calendar - live or placeholder */}
             <section style={{ border:"1px solid #eee", borderRadius:12, padding:18, marginBottom:18 }}>
               <h2 style={{ fontSize:15, fontWeight:700, margin:"0 0 14px" }}>Today's calendar</h2>
-              {events.map((e,i) => (
-                <div key={i} style={{ display:"flex", gap:12, padding:"10px 0", borderBottom:i<events.length-1?"1px solid #f0f0ee":"none", alignItems:"flex-start" }}>
-                  <div style={{ width:3, borderRadius:2, background:typeColor[e.type]||"#ccc", alignSelf:"stretch", minHeight:36, flexShrink:0 }} />
-                  <div style={{ minWidth:72, fontSize:13, color:"#888", paddingTop:2 }}>{e.time}</div>
+              {calEvents.length > 0 ? calEvents.map((e,i) => (
+                <div key={e.id} style={{ display:"flex", gap:12, padding:"10px 0", borderBottom:i<calEvents.length-1?"1px solid #f0f0ee":"none", alignItems:"flex-start" }}>
+                  <div style={{ width:3, borderRadius:2, background:"#0F6E56", alignSelf:"stretch", minHeight:36, flexShrink:0 }} />
+                  <div style={{ minWidth:72, fontSize:13, color:"#888", paddingTop:2 }}>{formatTime(e.start)}</div>
                   <div style={{ flex:1 }}>
                     <div style={{ fontSize:14, fontWeight:500 }}>{e.title}</div>
                     {e.location && <div style={{ fontSize:12, color:"#999", marginTop:2 }}>{e.location}</div>}
-                    {e.context && <div style={{ fontSize:12, color:"#555", marginTop:6, background:"#fafaf8", padding:"8px 10px", borderRadius:6, lineHeight:1.6, borderLeft:`2px solid ${typeColor[e.type]}` }}>{e.context}</div>}
                   </div>
-                  {(e.type==="external"||e.type==="team"||e.type==="funder") && (
-                    <div style={{ display:"flex", gap:4, flexShrink:0, flexDirection:"column" }}>
-                      <button onClick={()=>setNoteForm(e.title)} style={{ fontSize:11, padding:"4px 10px", borderRadius:6, border:"1px solid #ddd", background:"#fff", cursor:"pointer", color:"#666" }}>Notes</button>
-                      <button onClick={()=>{setTfInit({title:`Follow up: ${e.title}`,catId:e.type==="funder"?"fundraising":"external"});setShowTF(true);}} style={{ fontSize:11, padding:"4px 10px", borderRadius:6, border:"1px solid #ddd", background:"#fff", cursor:"pointer", color:"#666" }}>Task</button>
-                    </div>
-                  )}
+                  <div style={{ display:"flex", gap:4, flexShrink:0, flexDirection:"column" }}>
+                    <button onClick={()=>setNoteForm(e.title)} style={{ fontSize:11, padding:"4px 10px", borderRadius:6, border:"1px solid #ddd", background:"#fff", cursor:"pointer", color:"#666" }}>Notes</button>
+                    <button onClick={()=>{setTfInit({title:`Follow up: ${e.title}`,catId:"admin"});setShowTF(true);}} style={{ fontSize:11, padding:"4px 10px", borderRadius:6, border:"1px solid #ddd", background:"#fff", cursor:"pointer", color:"#666" }}>Task</button>
+                  </div>
                 </div>
-              ))}
+              )) : (
+                <div style={{ fontSize:13, color:"#999", padding:"10px 0" }}>
+                  {authenticated ? "No meetings today" : "Connect Google to see your calendar"}
+                </div>
+              )}
               {noteForm && <NoteForm title={noteForm} onSave={t=>saveNote(noteForm,t)} onCancel={()=>setNoteForm(null)} />}
             </section>
 
+            {/* Quick actions */}
             <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:18 }}>
               <button onClick={()=>{setShowTF(true);setTfInit(null);}} style={{ fontSize:13, padding:"8px 16px", borderRadius:8, border:"1.5px solid #2D5016", background:"#f0f7ec", cursor:"pointer", color:"#2D5016", fontWeight:500 }}>+ New task</button>
               <button onClick={()=>setNoteForm("Quick note")} style={{ fontSize:13, padding:"8px 16px", borderRadius:8, border:"1px solid #ddd", background:"#fff", cursor:"pointer", color:"#555" }}>Quick note</button>
+              {authenticated && <button onClick={()=>setView("emails")} style={{ fontSize:13, padding:"8px 16px", borderRadius:8, border:"1px solid #ddd", background:"#fff", cursor:"pointer", color:"#555" }}>Triage emails →</button>}
             </div>
             {showTF && <TaskForm initial={tfInit} onSave={addTask} onCancel={()=>{setShowTF(false);setTfInit(null);}} />}
 
+            {/* Task preview */}
             {active.length > 0 && (
               <section style={{ border:"1px solid #eee", borderRadius:12, padding:18, marginBottom:18 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
@@ -253,6 +326,7 @@ export default function Home() {
               </section>
             )}
 
+            {/* Seasonal */}
             <section style={{ background:"#f8f8f6", borderRadius:12, padding:18, marginBottom:18 }}>
               <h2 style={{ fontSize:14, fontWeight:700, margin:"0 0 8px", color:"#2D5016" }}>
                 {now.toLocaleDateString("en-US",{month:"long",timeZone:"America/Denver"})} seasonal focus
@@ -262,6 +336,70 @@ export default function Home() {
           </main>
         )}
 
+        {/* EMAILS */}
+        {view==="emails" && (
+          <main style={{ paddingTop:16 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+              <h1 style={{ fontSize:18, fontWeight:700, margin:0 }}>Email triage</h1>
+              {authenticated && (
+                <button onClick={()=>{setLoading(true);fetch('/api/data').then(r=>r.json()).then(d=>{setEmails(d.emails||[]);setLoading(false);});}} style={{ fontSize:12, padding:"6px 14px", borderRadius:8, border:"1px solid #ddd", background:"#fff", cursor:"pointer", color:"#666" }}>Refresh</button>
+              )}
+            </div>
+            {!authenticated ? (
+              <div style={{ textAlign:"center", padding:60, color:"#bbb" }}>
+                <div style={{ fontSize:32, marginBottom:8 }}>📧</div>
+                <div style={{ fontSize:15, fontWeight:500 }}>Connect Google to see your emails</div>
+                <a href="/api/auth/login" style={{ display:"inline-block", marginTop:12, fontSize:13, padding:"8px 20px", borderRadius:8, background:"#2D5016", color:"#fff", textDecoration:"none", fontWeight:500 }}>Connect Google</a>
+              </div>
+            ) : emails.length === 0 ? (
+              <div style={{ textAlign:"center", padding:60, color:"#bbb" }}>
+                <div style={{ fontSize:32, marginBottom:8 }}>✨</div>
+                <div style={{ fontSize:15, fontWeight:500 }}>Inbox zero!</div>
+              </div>
+            ) : (
+              <div>
+                <div style={{ fontSize:12, color:"#999", marginBottom:12 }}>
+                  {emails.length} emails · {unreadN} unread · Auto-categorized by your CEO categories
+                </div>
+                {emails.map(e => {
+                  const cat = categorizeEmail(e.from, e.subject);
+                  return (
+                    <div key={e.id} style={{ display:"flex", gap:12, padding:"12px 0", borderBottom:"1px solid #f0f0ee", alignItems:"flex-start", opacity: e.unread ? 1 : 0.7 }}>
+                      <div style={{ width:3, borderRadius:2, background:catStyle(cat).color, alignSelf:"stretch", minHeight:48, flexShrink:0 }} />
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
+                          <div style={{ fontSize:13, fontWeight: e.unread ? 700 : 500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                            {parseFrom(e.from)}
+                          </div>
+                          <div style={{ fontSize:11, color:"#999", flexShrink:0 }}>{formatEmailDate(e.date)}</div>
+                        </div>
+                        <div style={{ fontSize:14, fontWeight: e.unread ? 600 : 400, marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                          {e.subject || "(no subject)"}
+                        </div>
+                        <div style={{ fontSize:12, color:"#999", marginTop:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                          {e.snippet}
+                        </div>
+                        <div style={{ display:"flex", gap:6, marginTop:6, alignItems:"center", flexWrap:"wrap" }}>
+                          <Badge catId={cat} />
+                          <button onClick={()=>{
+                            setTfInit({ title: `Re: ${e.subject}`, catId: cat, notes: `From: ${parseFrom(e.from)}\n${e.snippet}`, source: "email" });
+                            setShowTF(true);
+                            setView("tasks");
+                          }} style={{ fontSize:11, padding:"3px 10px", borderRadius:6, border:"1px solid #2D5016", background:"#f0f7ec", cursor:"pointer", color:"#2D5016", fontWeight:500 }}>
+                            Create task
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {showTF && <TaskForm initial={tfInit} onSave={addTask} onCancel={()=>{setShowTF(false);setTfInit(null);}} />}
+          </main>
+        )}
+
+        {/* TASKS */}
         {view==="tasks" && (
           <main style={{ paddingTop:16 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
@@ -269,11 +407,11 @@ export default function Home() {
               <button onClick={()=>{setShowTF(true);setTfInit(null);}} style={{ fontSize:13, padding:"8px 16px", borderRadius:8, background:"#2D5016", color:"#fff", border:"none", cursor:"pointer", fontWeight:500 }}>+ New task</button>
             </div>
             <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
-              <button onClick={()=>setFilterCat("all")} style={btn(filterCat==="all")}>All ({active.length})</button>
+              <button onClick={()=>setFilterCat("all")} style={btnStyle(filterCat==="all")}>All ({active.length})</button>
               {CATEGORIES.map(c=>{
                 const n=active.filter(t=>t.catId===c.id).length;
                 if(!n) return null;
-                return <button key={c.id} onClick={()=>setFilterCat(c.id)} style={btn(filterCat===c.id, c.color)}>{c.label} ({n})</button>;
+                return <button key={c.id} onClick={()=>setFilterCat(c.id)} style={btnStyle(filterCat===c.id, c.color)}>{c.label} ({n})</button>;
               })}
             </div>
             {showTF && <TaskForm initial={tfInit} onSave={addTask} onCancel={()=>{setShowTF(false);setTfInit(null);}} />}
@@ -322,6 +460,7 @@ export default function Home() {
           </main>
         )}
 
+        {/* NOTES */}
         {view==="notes" && (
           <main style={{ paddingTop:16 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
@@ -351,7 +490,7 @@ export default function Home() {
         )}
 
         <footer style={{ textAlign:"center", padding:"24px 0 16px", fontSize:11, color:"#ccc" }}>
-          FFC Command Center v1.0 · Built for Kayla Birdsong · Fresh Food Connect
+          FFC Command Center v2.0 · Built for Kayla Birdsong · Fresh Food Connect
         </footer>
       </div>
     </>
