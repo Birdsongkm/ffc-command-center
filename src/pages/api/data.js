@@ -71,7 +71,7 @@ export default async function handler(req, res) {
     if (eData.messages) {
       const details = await Promise.all(
         eData.messages.map(m =>
-          fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=To&metadataHeaders=Reply-To`, { headers: h }).then(r => r.json())
+          fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=To&metadataHeaders=Cc&metadataHeaders=Reply-To&metadataHeaders=Message-ID&metadataHeaders=List-Unsubscribe`, { headers: h }).then(r => r.json())
         )
       );
       emails = details.map(d => {
@@ -81,7 +81,10 @@ export default async function handler(req, res) {
           threadId: d.threadId,
           from: g('From'),
           to: g('To'),
+          cc: g('Cc'),
           replyTo: g('Reply-To'),
+          messageId: g('Message-ID'),
+          listUnsubscribe: g('List-Unsubscribe'),
           subject: g('Subject'),
           date: g('Date'),
           snippet: d.snippet,
