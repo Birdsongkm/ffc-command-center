@@ -21,14 +21,12 @@ async function refreshToken(rt) {
   return r.json();
 }
 
-export default async function handler(req, res) {
+async function getToken(req, res) {
   const cookies = parseCookies(req);
   let token = cookies.ffc_at;
   const exp = parseInt(cookies.ffc_exp || '0');
   const rt = cookies.ffc_rt;
-
-  if (!token) return res.json({ authenticated: false });
-
+  if (!token) return null;
   if (Date.now() > exp && rt) {
     try {
       const n = await refreshToken(rt);
@@ -39,23 +37,30 @@ export default async function handler(req, res) {
           `ffc_at=${token}; ${o}`,
           `ffc_exp=${Date.now() + n.expires_in * 1000}; ${o}`,
         ]);
-      } else {
-        return res.json({ authenticated: false });
-      }
-    } catch (e) {
-      return res.json({ authenticated: false });
-    }
+      } else { return null; }
+    } catch (e) { return null; }
   }
+  return token;
+}
+
+export default async function handler(req, res) {
+  const token = await getToken(req, res);
+  if (!token) return res.json({ authenticated: false });
 
   const h = { Authorization: `Bearer ${token}` };
+  const page = req.query.page || '';
 
   try {
     const now = new Date();
     const sod = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
     const eod = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
 
+    // Fetch emails - 50 at a time with pagination
+    let emailUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=50&q=is:inbox';
+    if (page) emailUrl += `&pageToken=${page}`;
+
     const [eRes, cRes] = await Promise.all([
-      fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=20&q=is:inbox', { headers: h }),
+      fetch(emailUrl, { headers: h }),
       fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${sod}&timeMax=${eod}&singleEvents=true&orderBy=startTime`, { headers: h }),
     ]);
 
@@ -65,19 +70,23 @@ export default async function handler(req, res) {
     let emails = [];
     if (eData.messages) {
       const details = await Promise.all(
-        eData.messages.slice(0, 15).map(m =>
-          fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`, { headers: h }).then(r => r.json())
+        eData.messages.map(m =>
+          fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=To&metadataHeaders=Reply-To`, { headers: h }).then(r => r.json())
         )
       );
       emails = details.map(d => {
         const g = name => (d.payload?.headers || []).find(h => h.name === name)?.value || '';
         return {
           id: d.id,
+          threadId: d.threadId,
           from: g('From'),
+          to: g('To'),
+          replyTo: g('Reply-To'),
           subject: g('Subject'),
           date: g('Date'),
           snippet: d.snippet,
           unread: (d.labelIds || []).includes('UNREAD'),
+          labels: d.labelIds || [],
         };
       });
     }
@@ -89,9 +98,18 @@ export default async function handler(req, res) {
       end: e.end?.dateTime || e.end?.date,
       location: e.location || '',
       description: e.description || '',
+      attendees: (e.attendees || []).map(a => ({ email: a.email, name: a.displayName || '', status: a.responseStatus || '' })),
+      hangoutLink: e.hangoutLink || '',
+      htmlLink: e.htmlLink || '',
     }));
 
-    res.json({ authenticated: true, emails, events });
+    res.json({
+      authenticated: true,
+      emails,
+      events,
+      nextPage: eData.nextPageToken || null,
+      totalEmails: eData.resultSizeEstimate || emails.length,
+    });
   } catch (e) {
     res.json({ authenticated: false, error: e.message });
   }
