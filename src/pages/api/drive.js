@@ -49,45 +49,30 @@ export default async function handler(req, res) {
 
   const h = { Authorization: `Bearer ${token}` };
   const { q, action } = req.query;
+  const fields = 'files(id,name,mimeType,modifiedTime,webViewLink,iconLink,owners,starred)';
 
   try {
+    let driveUrl;
+
     if (action === 'search' && q) {
-      // Search Drive files
-      const query = encodeURIComponent(`name contains '${q.replace(/'/g, "\\'")}'`);
-      const r = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,mimeType,modifiedTime,webViewLink,iconLink,owners,starred)&orderBy=modifiedTime desc&pageSize=20`,
-        { headers: h }
-      );
-      const data = await r.json();
-      return res.json({ authenticated: true, files: data.files || [] });
+      const searchQ = encodeURIComponent(`name contains '${q.replace(/'/g, "\\'")}'`);
+      driveUrl = `https://www.googleapis.com/drive/v3/files?q=${searchQ}&fields=${fields}&orderBy=modifiedTime desc&pageSize=20`;
+    } else if (action === 'starred') {
+      const starQ = encodeURIComponent('starred = true and trashed = false');
+      driveUrl = `https://www.googleapis.com/drive/v3/files?q=${starQ}&fields=${fields}&orderBy=modifiedTime desc&pageSize=20`;
+    } else {
+      // Recent files (default)
+      const recentQ = encodeURIComponent('trashed = false');
+      driveUrl = `https://www.googleapis.com/drive/v3/files?q=${recentQ}&fields=${fields}&orderBy=modifiedTime desc&pageSize=20`;
     }
 
-    if (action === 'recent') {
-      // Recent files
-      const r = await fetch(
-        `https://www.googleapis.com/drive/v3/files?orderBy=modifiedTime desc&fields=files(id,name,mimeType,modifiedTime,webViewLink,iconLink,owners,starred)&pageSize=20&q=trashed=false`,
-        { headers: h }
-      );
-      const data = await r.json();
-      return res.json({ authenticated: true, files: data.files || [] });
-    }
-
-    if (action === 'starred') {
-      // Starred/important files
-      const r = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q=starred=true and trashed=false&fields=files(id,name,mimeType,modifiedTime,webViewLink,iconLink,owners,starred)&orderBy=modifiedTime desc&pageSize=20`,
-        { headers: h }
-      );
-      const data = await r.json();
-      return res.json({ authenticated: true, files: data.files || [] });
-    }
-
-    // Default: recent files
-    const r = await fetch(
-      `https://www.googleapis.com/drive/v3/files?orderBy=modifiedTime desc&fields=files(id,name,mimeType,modifiedTime,webViewLink,iconLink,owners,starred)&pageSize=20&q=trashed=false`,
-      { headers: h }
-    );
+    const r = await fetch(driveUrl, { headers: h });
     const data = await r.json();
+
+    if (data.error) {
+      return res.json({ authenticated: true, files: [], error: data.error.message || data.error });
+    }
+
     res.json({ authenticated: true, files: data.files || [] });
   } catch (e) {
     res.json({ authenticated: false, error: e.message });
