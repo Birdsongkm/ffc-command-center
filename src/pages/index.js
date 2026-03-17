@@ -144,6 +144,44 @@ function parseFrom(from) {
   return match ? match[1].trim() : from;
 }
 
+function formatFileDate(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diff = (now - d) / 3600000;
+  if (diff < 1) return `${Math.round(diff * 60)}m ago`;
+  if (diff < 24) return `${Math.round(diff)}h ago`;
+  if (diff < 168) return `${Math.round(diff / 24)}d ago`;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function fileIcon(mimeType) {
+  if (!mimeType) return "\u{1F4C4}";
+  if (mimeType.includes("spreadsheet") || mimeType.includes("excel")) return "\u{1F4CA}";
+  if (mimeType.includes("presentation") || mimeType.includes("powerpoint")) return "\u{1F4CA}";
+  if (mimeType.includes("document") || mimeType.includes("word")) return "\u{1F4DD}";
+  if (mimeType.includes("pdf")) return "\u{1F4D5}";
+  if (mimeType.includes("folder")) return "\u{1F4C1}";
+  if (mimeType.includes("image")) return "\u{1F5BC}\uFE0F";
+  if (mimeType.includes("video")) return "\u{1F3AC}";
+  if (mimeType.includes("audio")) return "\u{1F3B5}";
+  if (mimeType.includes("form")) return "\u{1F4CB}";
+  return "\u{1F4C4}";
+}
+
+function fileTypeName(mimeType) {
+  if (!mimeType) return "File";
+  if (mimeType.includes("spreadsheet") || mimeType.includes("excel")) return "Spreadsheet";
+  if (mimeType.includes("presentation") || mimeType.includes("powerpoint")) return "Slides";
+  if (mimeType.includes("document") || mimeType.includes("word")) return "Doc";
+  if (mimeType.includes("pdf")) return "PDF";
+  if (mimeType.includes("folder")) return "Folder";
+  if (mimeType.includes("image")) return "Image";
+  if (mimeType.includes("video")) return "Video";
+  if (mimeType.includes("form")) return "Form";
+  return "File";
+}
+
 export default function Home() {
   const [tasks, setTasks] = useLocalStorage("ffc-tasks", []);
   const [notes, setNotes] = useLocalStorage("ffc-notes", []);
@@ -159,6 +197,12 @@ export default function Home() {
   const [emails, setEmails] = useState([]);
   const [calEvents, setCalEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Drive state
+  const [driveFiles, setDriveFiles] = useState([]);
+  const [driveView, setDriveView] = useState("recent");
+  const [driveSearch, setDriveSearch] = useState("");
+  const [driveLoading, setDriveLoading] = useState(false);
 
   useEffect(() => { const i = setInterval(()=>setNow(new Date()), 30000); return ()=>clearInterval(i); }, []);
 
@@ -176,6 +220,21 @@ export default function Home() {
       })
       .catch(() => setLoading(false));
   }, []);
+
+  // Fetch Drive files
+  const fetchDrive = (action, q) => {
+    setDriveLoading(true);
+    let url = `/api/drive?action=${action}`;
+    if (q) url += `&q=${encodeURIComponent(q)}`;
+    fetch(url)
+      .then(r => r.json())
+      .then(d => { if (d.files) setDriveFiles(d.files); setDriveLoading(false); })
+      .catch(() => setDriveLoading(false));
+  };
+
+  useEffect(() => {
+    if (view === "drive" && authenticated) fetchDrive("recent");
+  }, [view, authenticated]);
 
   const month = now.getMonth() + 1;
   const dateStr = now.toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric", year:"numeric", timeZone:"America/Denver" });
@@ -226,6 +285,7 @@ export default function Home() {
               Emails{unreadN > 0 ? ` (${unreadN})` : ""}
             </button>
             <button onClick={()=>setView("tasks")} style={btnStyle(view==="tasks")}>Tasks{active.length?` (${active.length})`:""}</button>
+            <button onClick={()=>setView("drive")} style={btnStyle(view==="drive")}>Drive</button>
             <button onClick={()=>setView("notes")} style={btnStyle(view==="notes")}>Notes</button>
           </nav>
         </header>
@@ -236,7 +296,7 @@ export default function Home() {
             <div style={{ fontSize:32, marginBottom:12 }}>🔗</div>
             <div style={{ fontSize:16, fontWeight:600, marginBottom:8 }}>Connect your Google account</div>
             <div style={{ fontSize:13, color:"#666", marginBottom:16, maxWidth:400, margin:"0 auto 16px" }}>
-              Link your Gmail and Google Calendar to see your real emails, meetings, and get AI-powered categorization.
+              Link your Gmail, Google Calendar, and Google Drive to see your emails, meetings, files, and get AI-powered categorization.
             </div>
             <a href="/api/auth/login" style={{ display:"inline-block", fontSize:14, padding:"10px 24px", borderRadius:8, background:"#2D5016", color:"#fff", textDecoration:"none", fontWeight:500 }}>
               Connect Google
@@ -460,6 +520,79 @@ export default function Home() {
           </main>
         )}
 
+        {/* DRIVE */}
+        {view==="drive" && (
+          <main style={{ paddingTop:16 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+              <h1 style={{ fontSize:18, fontWeight:700, margin:0 }}>Google Drive</h1>
+            </div>
+            {!authenticated ? (
+              <div style={{ textAlign:"center", padding:60, color:"#bbb" }}>
+                <div style={{ fontSize:32, marginBottom:8 }}>📁</div>
+                <div style={{ fontSize:15, fontWeight:500 }}>Connect Google to access your Drive</div>
+                <a href="/api/auth/login" style={{ display:"inline-block", marginTop:12, fontSize:13, padding:"8px 20px", borderRadius:8, background:"#2D5016", color:"#fff", textDecoration:"none", fontWeight:500 }}>Connect Google</a>
+              </div>
+            ) : (
+              <div>
+                {/* Search bar */}
+                <div style={{ display:"flex", gap:8, marginBottom:14 }}>
+                  <input
+                    placeholder="Search your Drive files..."
+                    value={driveSearch}
+                    onChange={e=>setDriveSearch(e.target.value)}
+                    onKeyDown={e=>{ if(e.key==="Enter" && driveSearch.trim()) { setDriveView("search"); fetchDrive("search", driveSearch.trim()); }}}
+                    style={{ flex:1, padding:"10px 14px", border:"1.5px solid #ddd", borderRadius:8, fontSize:14 }}
+                  />
+                  <button onClick={()=>{ if(driveSearch.trim()) { setDriveView("search"); fetchDrive("search", driveSearch.trim()); }}}
+                    style={{ fontSize:13, padding:"8px 18px", borderRadius:8, background:"#2D5016", color:"#fff", border:"none", cursor:"pointer", fontWeight:500 }}>Search</button>
+                </div>
+
+                {/* Sub-nav: Recent / Starred */}
+                <div style={{ display:"flex", gap:6, marginBottom:16 }}>
+                  <button onClick={()=>{setDriveView("recent");fetchDrive("recent");setDriveSearch("");}} style={btnStyle(driveView==="recent")}>Recent</button>
+                  <button onClick={()=>{setDriveView("starred");fetchDrive("starred");setDriveSearch("");}} style={btnStyle(driveView==="starred")}>Starred</button>
+                  {driveView==="search" && <button style={btnStyle(true)}>Search results</button>}
+                </div>
+
+                {driveLoading ? (
+                  <div style={{ textAlign:"center", padding:40, color:"#999" }}>Loading files...</div>
+                ) : driveFiles.length === 0 ? (
+                  <div style={{ textAlign:"center", padding:60, color:"#bbb" }}>
+                    <div style={{ fontSize:32, marginBottom:8 }}>📂</div>
+                    <div style={{ fontSize:15, fontWeight:500 }}>
+                      {driveView==="search" ? "No files found" : driveView==="starred" ? "No starred files" : "No recent files"}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ fontSize:12, color:"#999", marginBottom:10 }}>
+                      {driveFiles.length} file{driveFiles.length!==1?"s":""}
+                      {driveView==="search" ? ` matching "${driveSearch}"` : driveView==="starred" ? " starred" : " recently modified"}
+                    </div>
+                    {driveFiles.map(f => (
+                      <a key={f.id} href={f.webViewLink} target="_blank" rel="noopener noreferrer"
+                        style={{ display:"flex", gap:12, padding:"12px 0", borderBottom:"1px solid #f0f0ee", alignItems:"center", textDecoration:"none", color:"inherit" }}>
+                        <div style={{ fontSize:24, width:36, textAlign:"center", flexShrink:0 }}>{fileIcon(f.mimeType)}</div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:14, fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                            {f.starred ? "\u2B50 " : ""}{f.name}
+                          </div>
+                          <div style={{ display:"flex", gap:8, marginTop:3, alignItems:"center", flexWrap:"wrap" }}>
+                            <span style={{ fontSize:11, padding:"2px 8px", borderRadius:6, background:"#f0f0ee", color:"#777" }}>{fileTypeName(f.mimeType)}</span>
+                            <span style={{ fontSize:11, color:"#999" }}>{formatFileDate(f.modifiedTime)}</span>
+                            {f.owners && f.owners[0] && <span style={{ fontSize:11, color:"#bbb" }}>{f.owners[0].displayName || ""}</span>}
+                          </div>
+                        </div>
+                        <div style={{ fontSize:12, color:"#2D5016", flexShrink:0, fontWeight:500 }}>Open →</div>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </main>
+        )}
+
         {/* NOTES */}
         {view==="notes" && (
           <main style={{ paddingTop:16 }}>
@@ -490,7 +623,7 @@ export default function Home() {
         )}
 
         <footer style={{ textAlign:"center", padding:"24px 0 16px", fontSize:11, color:"#ccc" }}>
-          FFC Command Center v2.0 · Built for Kayla Birdsong · Fresh Food Connect
+          FFC Command Center v3.0 · Built for Kayla Birdsong · Fresh Food Connect
         </footer>
       </div>
     </>
