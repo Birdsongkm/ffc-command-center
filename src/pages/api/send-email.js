@@ -43,19 +43,21 @@ async function getToken(req, res) {
   return token;
 }
 
-function buildRawEmail({ to, subject, body, inReplyTo, references, threadId }) {
+function buildRawEmail({ to, cc, subject, body, inReplyTo, references }) {
   const lines = [
     `To: ${to}`,
+  ];
+  if (cc) lines.push(`Cc: ${cc}`);
+  lines.push(
     `Subject: ${subject}`,
     'Content-Type: text/plain; charset=utf-8',
     'MIME-Version: 1.0',
-  ];
+  );
   if (inReplyTo) {
     lines.push(`In-Reply-To: ${inReplyTo}`);
     lines.push(`References: ${references || inReplyTo}`);
   }
   lines.push('', body);
-  // Base64url encode
   const raw = Buffer.from(lines.join('\r\n')).toString('base64')
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   return raw;
@@ -67,12 +69,12 @@ export default async function handler(req, res) {
   const token = await getToken(req, res);
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
 
-  const { to, subject, body, threadId, inReplyTo, references } = req.body;
+  const { to, cc, subject, body, threadId, inReplyTo, references } = req.body;
 
   if (!to || !body) return res.status(400).json({ error: 'Missing to or body' });
 
   try {
-    const raw = buildRawEmail({ to, subject: subject || '(no subject)', body, inReplyTo, references });
+    const raw = buildRawEmail({ to, cc: cc || '', subject: subject || '(no subject)', body, inReplyTo, references });
 
     const payload = { raw };
     if (threadId) payload.threadId = threadId;
