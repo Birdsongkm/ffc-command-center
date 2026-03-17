@@ -103,6 +103,19 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: data.error?.message || 'Failed to delete' });
     }
 
+    // Helper function to format events
+    const formatEvents = (items) => (items || []).map(e => ({
+      id: e.id,
+      title: e.summary || '(No title)',
+      start: e.start?.dateTime || e.start?.date,
+      end: e.end?.dateTime || e.end?.date,
+      location: e.location || '',
+      description: e.description || '',
+      attendees: (e.attendees || []).map(a => ({ email: a.email, name: a.displayName || '', status: a.responseStatus || '' })),
+      hangoutLink: e.hangoutLink || '',
+      htmlLink: e.htmlLink || '',
+    }));
+
     // Get week's events (for proactive weekly view)
     if (action === 'week') {
       const now = new Date();
@@ -117,17 +130,21 @@ export default async function handler(req, res) {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       const data = await r.json();
-      const events = (data.items || []).map(e => ({
-        id: e.id,
-        title: e.summary || '(No title)',
-        start: e.start?.dateTime || e.start?.date,
-        end: e.end?.dateTime || e.end?.date,
-        location: e.location || '',
-        description: e.description || '',
-        attendees: (e.attendees || []).map(a => ({ email: a.email, name: a.displayName || '', status: a.responseStatus || '' })),
-        hangoutLink: e.hangoutLink || '',
-        htmlLink: e.htmlLink || '',
-      }));
+      const events = formatEvents(data.items);
+      return res.json({ success: true, events });
+    }
+
+    // Get events in a custom date range
+    if (action === 'range') {
+      const { startDate, endDate } = req.body;
+      if (!startDate || !endDate) return res.status(400).json({ error: 'Missing startDate or endDate' });
+
+      const r = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${startDate}&timeMax=${endDate}&singleEvents=true&orderBy=startTime&maxResults=50`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await r.json();
+      const events = formatEvents(data.items);
       return res.json({ success: true, events });
     }
 
