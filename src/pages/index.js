@@ -35,7 +35,6 @@ const TEAM = [
   { name: "Lone Bryan", initials: "LB" },
 ];
 
-// Auto-categorize emails by keywords
 function categorizeEmail(from, subject) {
   const text = `${from} ${subject}`.toLowerCase();
   if (/grant|foundation|fund|donat|donor|philanthrop|argosy|anschutz|morgridge|colorado trust|hfdk|beacon/i.test(text)) return "fundraising";
@@ -123,6 +122,102 @@ function NoteForm({ title, onSave, onCancel }) {
   );
 }
 
+function ComposeForm({ onSend, onCancel, replyTo }) {
+  const [to, setTo] = useState(replyTo?.replyTo || replyTo?.from || "");
+  const [subject, setSubject] = useState(replyTo ? `Re: ${(replyTo.subject || "").replace(/^Re:\s*/i, "")}` : "");
+  const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const send = async () => {
+    if (!to.trim() || !body.trim()) return;
+    setSending(true);
+    try {
+      const payload = { to: to.trim(), subject, body };
+      if (replyTo) {
+        payload.threadId = replyTo.threadId;
+        payload.inReplyTo = replyTo.id;
+      }
+      const r = await fetch('/api/send-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const d = await r.json();
+      if (d.success) { onSend(); } else { alert('Failed to send: ' + (d.error || 'Unknown error')); }
+    } catch (e) { alert('Error sending: ' + e.message); }
+    setSending(false);
+  };
+  return (
+    <div style={{ background:"#f8f8f6", borderRadius:12, padding:18, marginBottom:16, border:"1.5px solid #2D5016" }}>
+      <div style={{ fontSize:14, fontWeight:700, marginBottom:12, color:"#2D5016" }}>{replyTo ? "Reply" : "Compose email"}</div>
+      <input placeholder="To" value={to} onChange={e=>setTo(e.target.value)}
+        style={{ width:"100%", padding:"10px 12px", border:"1px solid #ddd", borderRadius:8, fontSize:14, marginBottom:8, boxSizing:"border-box" }} />
+      <input placeholder="Subject" value={subject} onChange={e=>setSubject(e.target.value)}
+        style={{ width:"100%", padding:"10px 12px", border:"1px solid #ddd", borderRadius:8, fontSize:14, marginBottom:8, boxSizing:"border-box" }} />
+      <textarea autoFocus placeholder="Write your message..." value={body} onChange={e=>setBody(e.target.value)} rows={6}
+        style={{ width:"100%", padding:"10px 12px", border:"1px solid #ddd", borderRadius:8, fontSize:14, resize:"vertical", boxSizing:"border-box", lineHeight:1.6 }} />
+      <div style={{ display:"flex", gap:8, marginTop:12 }}>
+        <button onClick={send} disabled={sending}
+          style={{ fontSize:13, padding:"10px 24px", borderRadius:8, background: sending?"#999":"#2D5016", color:"#fff", border:"none", cursor: sending?"default":"pointer", fontWeight:600 }}>
+          {sending ? "Sending..." : "Send"}
+        </button>
+        <button onClick={onCancel} style={{ fontSize:13, padding:"10px 20px", borderRadius:8, background:"transparent", border:"1px solid #ddd", cursor:"pointer", color:"#666" }}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function EventForm({ onSave, onCancel }) {
+  const [title, setTitle] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [startTime, setStartTime] = useState("09:00");
+  const [endTime, setEndTime] = useState("10:00");
+  const [location, setLocation] = useState("");
+  const [attendees, setAttendees] = useState("");
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    if (!title.trim()) return;
+    setSaving(true);
+    try {
+      const r = await fetch('/api/calendar-actions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          event: {
+            title: title.trim(),
+            start: `${date}T${startTime}:00`,
+            end: `${date}T${endTime}:00`,
+            location,
+            attendees: attendees ? attendees.split(',').map(e => e.trim()).filter(Boolean) : [],
+          }
+        })
+      });
+      const d = await r.json();
+      if (d.success) { onSave(d.event); } else { alert('Failed: ' + (d.error || 'Unknown error')); }
+    } catch (e) { alert('Error: ' + e.message); }
+    setSaving(false);
+  };
+  return (
+    <div style={{ background:"#f8f8f6", borderRadius:12, padding:18, marginBottom:16, border:"1.5px solid #0F6E56" }}>
+      <div style={{ fontSize:14, fontWeight:700, marginBottom:12, color:"#0F6E56" }}>New event</div>
+      <input autoFocus placeholder="Event title" value={title} onChange={e=>setTitle(e.target.value)}
+        style={{ width:"100%", padding:"10px 12px", border:"1px solid #ddd", borderRadius:8, fontSize:14, marginBottom:8, boxSizing:"border-box" }} />
+      <div style={{ display:"flex", gap:8, marginBottom:8, flexWrap:"wrap" }}>
+        <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{ padding:"8px 10px", border:"1px solid #ddd", borderRadius:8, fontSize:13 }} />
+        <input type="time" value={startTime} onChange={e=>setStartTime(e.target.value)} style={{ padding:"8px 10px", border:"1px solid #ddd", borderRadius:8, fontSize:13 }} />
+        <span style={{ alignSelf:"center", color:"#999" }}>to</span>
+        <input type="time" value={endTime} onChange={e=>setEndTime(e.target.value)} style={{ padding:"8px 10px", border:"1px solid #ddd", borderRadius:8, fontSize:13 }} />
+      </div>
+      <input placeholder="Location (optional)" value={location} onChange={e=>setLocation(e.target.value)}
+        style={{ width:"100%", padding:"10px 12px", border:"1px solid #ddd", borderRadius:8, fontSize:13, marginBottom:8, boxSizing:"border-box" }} />
+      <input placeholder="Attendees (comma-separated emails)" value={attendees} onChange={e=>setAttendees(e.target.value)}
+        style={{ width:"100%", padding:"10px 12px", border:"1px solid #ddd", borderRadius:8, fontSize:13, marginBottom:8, boxSizing:"border-box" }} />
+      <div style={{ display:"flex", gap:8, marginTop:4 }}>
+        <button onClick={save} disabled={saving}
+          style={{ fontSize:13, padding:"10px 24px", borderRadius:8, background: saving?"#999":"#0F6E56", color:"#fff", border:"none", cursor: saving?"default":"pointer", fontWeight:600 }}>
+          {saving ? "Creating..." : "Create event"}
+        </button>
+        <button onClick={onCancel} style={{ fontSize:13, padding:"10px 20px", borderRadius:8, background:"transparent", border:"1px solid #ddd", cursor:"pointer", color:"#666" }}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 function formatTime(dateStr) {
   if (!dateStr) return "";
   const d = new Date(dateStr);
@@ -142,6 +237,11 @@ function formatEmailDate(dateStr) {
 function parseFrom(from) {
   const match = from.match(/^"?([^"<]+)"?\s*<?/);
   return match ? match[1].trim() : from;
+}
+
+function parseEmail(from) {
+  const match = from.match(/<([^>]+)>/);
+  return match ? match[1] : from;
 }
 
 function formatFileDate(dateStr) {
@@ -198,6 +298,18 @@ export default function Home() {
   const [calEvents, setCalEvents] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Pagination
+  const [nextPage, setNextPage] = useState(null);
+  const [totalEmails, setTotalEmails] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Email compose/reply
+  const [compose, setCompose] = useState(null); // null, "new", or email object for reply
+  const [actionFeedback, setActionFeedback] = useState(null);
+
+  // Calendar
+  const [showEventForm, setShowEventForm] = useState(false);
+
   // Drive state
   const [driveFiles, setDriveFiles] = useState([]);
   const [driveView, setDriveView] = useState("recent");
@@ -207,19 +319,72 @@ export default function Home() {
   useEffect(() => { const i = setInterval(()=>setNow(new Date()), 30000); return ()=>clearInterval(i); }, []);
 
   // Fetch live data
+  const fetchData = (page) => {
+    const url = page ? `/api/data?page=${page}` : '/api/data';
+    return fetch(url).then(r => r.json());
+  };
+
   useEffect(() => {
-    fetch('/api/data')
-      .then(r => r.json())
+    fetchData()
       .then(d => {
         setAuthenticated(d.authenticated);
         if (d.authenticated) {
           setEmails(d.emails || []);
           setCalEvents(d.events || []);
+          setNextPage(d.nextPage || null);
+          setTotalEmails(d.totalEmails || 0);
         }
         setLoading(false);
       })
       .catch(() => setLoading(false));
   }, []);
+
+  const loadMoreEmails = () => {
+    if (!nextPage || loadingMore) return;
+    setLoadingMore(true);
+    fetchData(nextPage).then(d => {
+      setEmails(prev => [...prev, ...(d.emails || [])]);
+      setNextPage(d.nextPage || null);
+      setLoadingMore(false);
+    }).catch(() => setLoadingMore(false));
+  };
+
+  const refreshEmails = () => {
+    setLoading(true);
+    fetchData().then(d => {
+      setEmails(d.emails || []);
+      setCalEvents(d.events || []);
+      setNextPage(d.nextPage || null);
+      setTotalEmails(d.totalEmails || 0);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  };
+
+  // Email actions
+  const emailAction = async (messageId, action) => {
+    try {
+      const r = await fetch('/api/email-actions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId, action }),
+      });
+      const d = await r.json();
+      if (d.success) {
+        if (action === 'archive' || action === 'trash') {
+          setEmails(prev => prev.filter(e => e.id !== messageId));
+        } else if (action === 'markRead') {
+          setEmails(prev => prev.map(e => e.id === messageId ? { ...e, unread: false } : e));
+        } else if (action === 'markUnread') {
+          setEmails(prev => prev.map(e => e.id === messageId ? { ...e, unread: true } : e));
+        } else if (action === 'star') {
+          setEmails(prev => prev.map(e => e.id === messageId ? { ...e, starred: true } : e));
+        } else if (action === 'unstar') {
+          setEmails(prev => prev.map(e => e.id === messageId ? { ...e, starred: false } : e));
+        }
+        setActionFeedback(action === 'archive' ? 'Archived' : action === 'trash' ? 'Trashed' : action === 'markRead' ? 'Marked read' : action === 'markUnread' ? 'Marked unread' : action === 'star' ? 'Starred' : 'Done');
+        setTimeout(() => setActionFeedback(null), 2000);
+      }
+    } catch (e) { console.error(e); }
+  };
 
   // Fetch Drive files
   const fetchDrive = (action, q) => {
@@ -253,14 +418,16 @@ export default function Home() {
   const del = (id) => setTasks(prev=>prev.filter(t=>t.id!==id));
   const saveNote = (meeting,text) => { setNotes(prev=>[{id:Date.now().toString(),meeting,text,date:new Date().toISOString()},...prev]); setNoteForm(null); };
 
-  const typeColor = { external:"#534AB7", team:"#0F6E56", travel:"#888", personal:"#bbb", focus:"#378ADD", funder:"#854F0B" };
-
   const btnStyle = (isActive, accent) => ({
     fontSize:13, padding:"6px 14px", borderRadius:8, cursor:"pointer", fontWeight: isActive?600:400, transition:"all 0.15s",
     border: isActive ? `1.5px solid ${accent||"#2D5016"}` : "1px solid #e0e0de",
     background: isActive ? (accent?"#EEEDFE":"#f0f7ec") : "#fff",
     color: isActive ? (accent||"#2D5016") : "#777",
   });
+
+  const smallBtn = (onClick, label, color) => (
+    <button onClick={onClick} style={{ fontSize:11, padding:"3px 8px", borderRadius:5, border:`1px solid ${color||"#ddd"}`, background:"#fff", cursor:"pointer", color: color||"#888", fontWeight:500 }}>{label}</button>
+  );
 
   return (
     <>
@@ -272,6 +439,13 @@ export default function Home() {
         <style>{`* { box-sizing: border-box; } body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif; color:#222; background:#fff; }`}</style>
       </Head>
 
+      {/* Action feedback toast */}
+      {actionFeedback && (
+        <div style={{ position:"fixed", top:16, right:16, background:"#2D5016", color:"#fff", padding:"8px 18px", borderRadius:8, fontSize:13, fontWeight:500, zIndex:999, boxShadow:"0 2px 12px rgba(0,0,0,0.15)" }}>
+          {actionFeedback}
+        </div>
+      )}
+
       <div style={{ maxWidth:960, margin:"0 auto", padding:"0 16px" }}>
         {/* Header */}
         <header style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 0 14px", borderBottom:"1.5px solid #eee", flexWrap:"wrap", gap:8 }}>
@@ -279,7 +453,7 @@ export default function Home() {
             <div style={{ fontSize:20, fontWeight:700, color:"#2D5016" }}>FFC Command Center</div>
             <div style={{ fontSize:12, color:"#999", marginTop:2 }}>{dateStr} · {timeStr}</div>
           </div>
-          <nav style={{ display:"flex", gap:4 }}>
+          <nav style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
             <button onClick={()=>setView("home")} style={btnStyle(view==="home")}>Home</button>
             <button onClick={()=>setView("emails")} style={btnStyle(view==="emails")}>
               Emails{unreadN > 0 ? ` (${unreadN})` : ""}
@@ -296,7 +470,7 @@ export default function Home() {
             <div style={{ fontSize:32, marginBottom:12 }}>🔗</div>
             <div style={{ fontSize:16, fontWeight:600, marginBottom:8 }}>Connect your Google account</div>
             <div style={{ fontSize:13, color:"#666", marginBottom:16, maxWidth:400, margin:"0 auto 16px" }}>
-              Link your Gmail, Google Calendar, and Google Drive to see your emails, meetings, files, and get AI-powered categorization.
+              Link your Gmail, Google Calendar, and Google Drive for full read/write access to your emails, meetings, and files.
             </div>
             <a href="/api/auth/login" style={{ display:"inline-block", fontSize:14, padding:"10px 24px", borderRadius:8, background:"#2D5016", color:"#fff", textDecoration:"none", fontWeight:500 }}>
               Connect Google
@@ -307,12 +481,11 @@ export default function Home() {
         {/* HOME */}
         {view==="home" && (
           <main style={{ paddingTop:16 }}>
-            {/* Summary cards */}
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:10, marginBottom:18 }}>
               {[
                 { label:"Meetings today", val: calEvents.length, sub:null },
                 { label:"Open tasks", val:active.length, sub:overdueN>0?`${overdueN} overdue`:null, subColor:"#E24B4A" },
-                { label:"Unread emails", val:unreadN, sub:null },
+                { label:"Unread emails", val:unreadN, sub: totalEmails > emails.length ? `${totalEmails}+ total` : null },
                 { label:"Notes saved", val:notes.length, sub:null },
               ].map((c,i) => (
                 <div key={i} style={{ background:"#f8f8f6", borderRadius:10, padding:"14px 16px" }}>
@@ -323,9 +496,13 @@ export default function Home() {
               ))}
             </div>
 
-            {/* Calendar - live or placeholder */}
+            {/* Calendar */}
             <section style={{ border:"1px solid #eee", borderRadius:12, padding:18, marginBottom:18 }}>
-              <h2 style={{ fontSize:15, fontWeight:700, margin:"0 0 14px" }}>Today's calendar</h2>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+                <h2 style={{ fontSize:15, fontWeight:700, margin:0 }}>Today's calendar</h2>
+                {authenticated && <button onClick={()=>setShowEventForm(!showEventForm)} style={{ fontSize:12, padding:"5px 12px", borderRadius:6, border:"1px solid #0F6E56", background:"#E1F5EE", cursor:"pointer", color:"#0F6E56", fontWeight:500 }}>+ New event</button>}
+              </div>
+              {showEventForm && <EventForm onSave={(evt) => { setCalEvents(prev => [...prev, { id: evt.id, title: evt.summary, start: evt.start?.dateTime, end: evt.end?.dateTime, location: evt.location || '', description: evt.description || '' }]); setShowEventForm(false); }} onCancel={()=>setShowEventForm(false)} />}
               {calEvents.length > 0 ? calEvents.map((e,i) => (
                 <div key={e.id} style={{ display:"flex", gap:12, padding:"10px 0", borderBottom:i<calEvents.length-1?"1px solid #f0f0ee":"none", alignItems:"flex-start" }}>
                   <div style={{ width:3, borderRadius:2, background:"#0F6E56", alignSelf:"stretch", minHeight:36, flexShrink:0 }} />
@@ -333,6 +510,7 @@ export default function Home() {
                   <div style={{ flex:1 }}>
                     <div style={{ fontSize:14, fontWeight:500 }}>{e.title}</div>
                     {e.location && <div style={{ fontSize:12, color:"#999", marginTop:2 }}>{e.location}</div>}
+                    {e.hangoutLink && <a href={e.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ fontSize:11, color:"#185FA5", marginTop:2, display:"inline-block" }}>Join video call</a>}
                   </div>
                   <div style={{ display:"flex", gap:4, flexShrink:0, flexDirection:"column" }}>
                     <button onClick={()=>setNoteForm(e.title)} style={{ fontSize:11, padding:"4px 10px", borderRadius:6, border:"1px solid #ddd", background:"#fff", cursor:"pointer", color:"#666" }}>Notes</button>
@@ -351,6 +529,7 @@ export default function Home() {
             <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:18 }}>
               <button onClick={()=>{setShowTF(true);setTfInit(null);}} style={{ fontSize:13, padding:"8px 16px", borderRadius:8, border:"1.5px solid #2D5016", background:"#f0f7ec", cursor:"pointer", color:"#2D5016", fontWeight:500 }}>+ New task</button>
               <button onClick={()=>setNoteForm("Quick note")} style={{ fontSize:13, padding:"8px 16px", borderRadius:8, border:"1px solid #ddd", background:"#fff", cursor:"pointer", color:"#555" }}>Quick note</button>
+              {authenticated && <button onClick={()=>{setCompose("new");setView("emails");}} style={{ fontSize:13, padding:"8px 16px", borderRadius:8, border:"1px solid #ddd", background:"#fff", cursor:"pointer", color:"#555" }}>Compose email</button>}
               {authenticated && <button onClick={()=>setView("emails")} style={{ fontSize:13, padding:"8px 16px", borderRadius:8, border:"1px solid #ddd", background:"#fff", cursor:"pointer", color:"#555" }}>Triage emails →</button>}
             </div>
             {showTF && <TaskForm initial={tfInit} onSave={addTask} onCancel={()=>{setShowTF(false);setTfInit(null);}} />}
@@ -401,10 +580,15 @@ export default function Home() {
           <main style={{ paddingTop:16 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
               <h1 style={{ fontSize:18, fontWeight:700, margin:0 }}>Email triage</h1>
-              {authenticated && (
-                <button onClick={()=>{setLoading(true);fetch('/api/data').then(r=>r.json()).then(d=>{setEmails(d.emails||[]);setLoading(false);});}} style={{ fontSize:12, padding:"6px 14px", borderRadius:8, border:"1px solid #ddd", background:"#fff", cursor:"pointer", color:"#666" }}>Refresh</button>
-              )}
+              <div style={{ display:"flex", gap:6 }}>
+                {authenticated && <button onClick={()=>setCompose(compose === "new" ? null : "new")} style={{ fontSize:12, padding:"6px 14px", borderRadius:8, border:"1.5px solid #2D5016", background:"#f0f7ec", cursor:"pointer", color:"#2D5016", fontWeight:500 }}>Compose</button>}
+                {authenticated && <button onClick={refreshEmails} style={{ fontSize:12, padding:"6px 14px", borderRadius:8, border:"1px solid #ddd", background:"#fff", cursor:"pointer", color:"#666" }}>Refresh</button>}
+              </div>
             </div>
+
+            {/* Compose form */}
+            {compose === "new" && <ComposeForm onSend={() => { setCompose(null); refreshEmails(); }} onCancel={() => setCompose(null)} />}
+
             {!authenticated ? (
               <div style={{ textAlign:"center", padding:60, color:"#bbb" }}>
                 <div style={{ fontSize:32, marginBottom:8 }}>📧</div>
@@ -419,40 +603,59 @@ export default function Home() {
             ) : (
               <div>
                 <div style={{ fontSize:12, color:"#999", marginBottom:12 }}>
-                  {emails.length} emails · {unreadN} unread · Auto-categorized by your CEO categories
+                  {emails.length} loaded{totalEmails > emails.length ? ` of ~${totalEmails}` : ""} · {unreadN} unread · Auto-categorized
                 </div>
                 {emails.map(e => {
                   const cat = categorizeEmail(e.from, e.subject);
+                  const isReplying = compose && typeof compose === 'object' && compose.id === e.id;
                   return (
-                    <div key={e.id} style={{ display:"flex", gap:12, padding:"12px 0", borderBottom:"1px solid #f0f0ee", alignItems:"flex-start", opacity: e.unread ? 1 : 0.7 }}>
-                      <div style={{ width:3, borderRadius:2, background:catStyle(cat).color, alignSelf:"stretch", minHeight:48, flexShrink:0 }} />
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
-                          <div style={{ fontSize:13, fontWeight: e.unread ? 700 : 500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                            {parseFrom(e.from)}
+                    <div key={e.id}>
+                      <div style={{ display:"flex", gap:12, padding:"12px 0", borderBottom: isReplying ? "none" : "1px solid #f0f0ee", alignItems:"flex-start", opacity: e.unread ? 1 : 0.65 }}>
+                        <div style={{ width:3, borderRadius:2, background:catStyle(cat).color, alignSelf:"stretch", minHeight:48, flexShrink:0 }} />
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
+                            <div style={{ fontSize:13, fontWeight: e.unread ? 700 : 500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                              {parseFrom(e.from)}
+                            </div>
+                            <div style={{ fontSize:11, color:"#999", flexShrink:0 }}>{formatEmailDate(e.date)}</div>
                           </div>
-                          <div style={{ fontSize:11, color:"#999", flexShrink:0 }}>{formatEmailDate(e.date)}</div>
-                        </div>
-                        <div style={{ fontSize:14, fontWeight: e.unread ? 600 : 400, marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                          {e.subject || "(no subject)"}
-                        </div>
-                        <div style={{ fontSize:12, color:"#999", marginTop:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                          {e.snippet}
-                        </div>
-                        <div style={{ display:"flex", gap:6, marginTop:6, alignItems:"center", flexWrap:"wrap" }}>
-                          <Badge catId={cat} />
-                          <button onClick={()=>{
-                            setTfInit({ title: `Re: ${e.subject}`, catId: cat, notes: `From: ${parseFrom(e.from)}\n${e.snippet}`, source: "email" });
-                            setShowTF(true);
-                            setView("tasks");
-                          }} style={{ fontSize:11, padding:"3px 10px", borderRadius:6, border:"1px solid #2D5016", background:"#f0f7ec", cursor:"pointer", color:"#2D5016", fontWeight:500 }}>
-                            Create task
-                          </button>
+                          <div style={{ fontSize:14, fontWeight: e.unread ? 600 : 400, marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                            {e.subject || "(no subject)"}
+                          </div>
+                          <div style={{ fontSize:12, color:"#999", marginTop:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                            {e.snippet}
+                          </div>
+                          <div style={{ display:"flex", gap:5, marginTop:8, alignItems:"center", flexWrap:"wrap" }}>
+                            <Badge catId={cat} />
+                            {smallBtn(() => emailAction(e.id, 'archive'), 'Archive', '#2D5016')}
+                            {smallBtn(() => setCompose(e), 'Reply', '#185FA5')}
+                            {smallBtn(() => emailAction(e.id, e.unread ? 'markRead' : 'markUnread'), e.unread ? 'Mark read' : 'Mark unread')}
+                            {smallBtn(() => emailAction(e.id, 'star'), '★')}
+                            {smallBtn(() => emailAction(e.id, 'trash'), 'Trash', '#E24B4A')}
+                            <button onClick={()=>{
+                              setTfInit({ title: `Re: ${e.subject}`, catId: cat, notes: `From: ${parseFrom(e.from)}\n${e.snippet}`, source: "email" });
+                              setShowTF(true);
+                              setView("tasks");
+                            }} style={{ fontSize:11, padding:"3px 8px", borderRadius:5, border:"1px solid #2D5016", background:"#f0f7ec", cursor:"pointer", color:"#2D5016", fontWeight:500 }}>
+                              Task
+                            </button>
+                          </div>
                         </div>
                       </div>
+                      {isReplying && <ComposeForm replyTo={e} onSend={() => { setCompose(null); refreshEmails(); }} onCancel={() => setCompose(null)} />}
                     </div>
                   );
                 })}
+
+                {/* Load more */}
+                {nextPage && (
+                  <div style={{ textAlign:"center", padding:"20px 0" }}>
+                    <button onClick={loadMoreEmails} disabled={loadingMore}
+                      style={{ fontSize:13, padding:"10px 28px", borderRadius:8, border:"1.5px solid #2D5016", background:"#f0f7ec", cursor: loadingMore?"default":"pointer", color:"#2D5016", fontWeight:600 }}>
+                      {loadingMore ? "Loading..." : "Load more emails"}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
             {showTF && <TaskForm initial={tfInit} onSave={addTask} onCancel={()=>{setShowTF(false);setTfInit(null);}} />}
@@ -534,7 +737,6 @@ export default function Home() {
               </div>
             ) : (
               <div>
-                {/* Search bar */}
                 <div style={{ display:"flex", gap:8, marginBottom:14 }}>
                   <input
                     placeholder="Search your Drive files..."
@@ -546,14 +748,11 @@ export default function Home() {
                   <button onClick={()=>{ if(driveSearch.trim()) { setDriveView("search"); fetchDrive("search", driveSearch.trim()); }}}
                     style={{ fontSize:13, padding:"8px 18px", borderRadius:8, background:"#2D5016", color:"#fff", border:"none", cursor:"pointer", fontWeight:500 }}>Search</button>
                 </div>
-
-                {/* Sub-nav: Recent / Starred */}
                 <div style={{ display:"flex", gap:6, marginBottom:16 }}>
                   <button onClick={()=>{setDriveView("recent");fetchDrive("recent");setDriveSearch("");}} style={btnStyle(driveView==="recent")}>Recent</button>
                   <button onClick={()=>{setDriveView("starred");fetchDrive("starred");setDriveSearch("");}} style={btnStyle(driveView==="starred")}>Starred</button>
                   {driveView==="search" && <button style={btnStyle(true)}>Search results</button>}
                 </div>
-
                 {driveLoading ? (
                   <div style={{ textAlign:"center", padding:40, color:"#999" }}>Loading files...</div>
                 ) : driveFiles.length === 0 ? (
@@ -623,7 +822,7 @@ export default function Home() {
         )}
 
         <footer style={{ textAlign:"center", padding:"24px 0 16px", fontSize:11, color:"#ccc" }}>
-          FFC Command Center v3.0 · Built for Kayla Birdsong · Fresh Food Connect
+          FFC Command Center v4.0 · Built for Kayla Birdsong · Fresh Food Connect
         </footer>
       </div>
     </>
