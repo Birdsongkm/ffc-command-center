@@ -55,8 +55,8 @@ export default async function handler(req, res) {
     const sod = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
     const eod = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
 
-    // Fetch emails - 50 at a time with pagination
-    let emailUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=50&q=is:inbox';
+    // Fetch emails - 50 at a time with pagination (only unread)
+    let emailUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=50&q=is:inbox%20is:unread';
     if (page) emailUrl += `&pageToken=${page}`;
 
     const [eRes, cRes] = await Promise.all([
@@ -71,25 +71,36 @@ export default async function handler(req, res) {
     if (eData.messages) {
       const details = await Promise.all(
         eData.messages.map(m =>
-          fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=To&metadataHeaders=Cc&metadataHeaders=Reply-To&metadataHeaders=Message-ID&metadataHeaders=List-Unsubscribe`, { headers: h }).then(r => r.json())
+          fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=To&metadataHeaders=Cc&metadataHeaders=Reply-To&metadataHeaders=Message-ID&metadataHeaders=List-Unsubscribe&metadataHeaders=Bcc&metadataHeaders=Delivered-To&metadataHeaders=X-Mailer&metadataHeaders=Precedence&metadataHeaders=List-Id`, { headers: h }).then(r => r.json())
         )
       );
       emails = details.map(d => {
         const g = name => (d.payload?.headers || []).find(h => h.name === name)?.value || '';
+        const toStr = g('To');
+        const ccStr = g('Cc');
+        const toAddrs = toStr.split(',').map(e => e.trim()).filter(Boolean);
+        const ccAddrs = ccStr.split(',').map(e => e.trim()).filter(Boolean);
+        const recipientCount = new Set([...toAddrs, ...ccAddrs]).size;
         return {
           id: d.id,
           threadId: d.threadId,
           from: g('From'),
-          to: g('To'),
-          cc: g('Cc'),
+          to: toStr,
+          cc: ccStr,
+          bcc: g('Bcc'),
+          deliveredTo: g('Delivered-To'),
           replyTo: g('Reply-To'),
           messageId: g('Message-ID'),
           listUnsubscribe: g('List-Unsubscribe'),
+          xMailer: g('X-Mailer'),
+          precedence: g('Precedence'),
+          listId: g('List-Id'),
           subject: g('Subject'),
           date: g('Date'),
           snippet: d.snippet,
           unread: (d.labelIds || []).includes('UNREAD'),
           labels: d.labelIds || [],
+          recipientCount,
         };
       });
     }
