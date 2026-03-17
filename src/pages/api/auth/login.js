@@ -3,7 +3,12 @@ export default function handler(req, res) {
     client_id: process.env.GOOGLE_CLIENT_ID,
     redirect_uri: `${process.env.APP_URL}/api/auth/callback`,
     response_type: 'code',
-    scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/drive.readonly',
+    scope: [
+      'https://www.googleapis.com/auth/gmail.modify',
+      'https://www.googleapis.com/auth/gmail.send',
+      'https://www.googleapis.com/auth/calendar',
+      'https://www.googleapis.com/auth/drive',
+    ].join(' '),
     access_type: 'offline',
     prompt: 'consent',
   });
