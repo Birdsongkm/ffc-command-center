@@ -72,6 +72,17 @@ async function doAction(token, messageId, action) {
     const r = await fetch(gmailUrl, { method: 'POST', headers: h, body: JSON.stringify({ removeLabelIds: ['STARRED'] }) });
     return r.json();
   }
+  if (action === 'snooze') {
+    // For now, just archive the message (remove from INBOX)
+    // Client-side will handle snooze reminder storage
+    const r = await fetch(gmailUrl, { method: 'POST', headers: h, body: JSON.stringify({ removeLabelIds: ['INBOX'] }) });
+    return r.json();
+  }
+  if (action === 'forward') {
+    // This action requires messageId, forwardTo, and will be handled by calling forward endpoint
+    // Note: The actual forwarding is handled via send-email.js with forward mode
+    return { error: 'Use forward via send-email endpoint' };
+  }
   return { error: 'Unknown action' };
 }
 
