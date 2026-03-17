@@ -43,76 +43,90 @@ async function getToken(req, res) {
   return token;
 }
 
+// Process a single action on one message
+async function doAction(token, messageId, action) {
+  const h = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const gmailUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`;
+
+  if (action === 'archive') {
+    const r = await fetch(gmailUrl, { method: 'POST', headers: h, body: JSON.stringify({ removeLabelIds: ['INBOX'] }) });
+    return r.json();
+  }
+  if (action === 'markRead') {
+    const r = await fetch(gmailUrl, { method: 'POST', headers: h, body: JSON.stringify({ removeLabelIds: ['UNREAD'] }) });
+    return r.json();
+  }
+  if (action === 'markUnread') {
+    const r = await fetch(gmailUrl, { method: 'POST', headers: h, body: JSON.stringify({ addLabelIds: ['UNREAD'] }) });
+    return r.json();
+  }
+  if (action === 'trash') {
+    const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/trash`, { method: 'POST', headers: h });
+    return r.json();
+  }
+  if (action === 'star') {
+    const r = await fetch(gmailUrl, { method: 'POST', headers: h, body: JSON.stringify({ addLabelIds: ['STARRED'] }) });
+    return r.json();
+  }
+  if (action === 'unstar') {
+    const r = await fetch(gmailUrl, { method: 'POST', headers: h, body: JSON.stringify({ removeLabelIds: ['STARRED'] }) });
+    return r.json();
+  }
+  return { error: 'Unknown action' };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
   const token = await getToken(req, res);
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
 
-  const h = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-  const { action, messageId } = req.body;
+  const { action, messageId, messageIds } = req.body;
 
-  if (!messageId || !action) return res.status(400).json({ error: 'Missing messageId or action' });
-
-  const gmailUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`;
+  if (!action) return res.status(400).json({ error: 'Missing action' });
 
   try {
-    if (action === 'archive') {
-      // Archive = remove INBOX label
-      const r = await fetch(gmailUrl, {
-        method: 'POST', headers: h,
-        body: JSON.stringify({ removeLabelIds: ['INBOX'] }),
-      });
-      const data = await r.json();
-      return res.json({ success: !data.error, data });
+    // Batch mode: process multiple messages
+    if (messageIds && Array.isArray(messageIds) && messageIds.length > 0) {
+      // Use Gmail batch modify for supported actions (much faster)
+      const h = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+      if (action === 'archive') {
+        const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/batchModify', {
+          method: 'POST', headers: h,
+          body: JSON.stringify({ ids: messageIds, removeLabelIds: ['INBOX'] }),
+        });
+        if (r.status === 204 || r.status === 200) return res.json({ success: true, count: messageIds.length });
+        const data = await r.json();
+        return res.json({ success: false, error: data.error?.message || 'Batch archive failed' });
+      }
+
+      if (action === 'markRead') {
+        const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/batchModify', {
+          method: 'POST', headers: h,
+          body: JSON.stringify({ ids: messageIds, removeLabelIds: ['UNREAD'] }),
+        });
+        if (r.status === 204 || r.status === 200) return res.json({ success: true, count: messageIds.length });
+        const data = await r.json();
+        return res.json({ success: false, error: data.error?.message || 'Batch mark read failed' });
+      }
+
+      if (action === 'trash') {
+        // No batch trash endpoint, do them in parallel
+        const results = await Promise.all(messageIds.map(id => doAction(token, id, 'trash')));
+        return res.json({ success: true, count: messageIds.length });
+      }
+
+      // Fallback: process individually in parallel
+      const results = await Promise.all(messageIds.map(id => doAction(token, id, action)));
+      return res.json({ success: true, count: messageIds.length });
     }
 
-    if (action === 'markRead') {
-      const r = await fetch(gmailUrl, {
-        method: 'POST', headers: h,
-        body: JSON.stringify({ removeLabelIds: ['UNREAD'] }),
-      });
-      const data = await r.json();
-      return res.json({ success: !data.error, data });
-    }
+    // Single message mode
+    if (!messageId) return res.status(400).json({ error: 'Missing messageId or messageIds' });
 
-    if (action === 'markUnread') {
-      const r = await fetch(gmailUrl, {
-        method: 'POST', headers: h,
-        body: JSON.stringify({ addLabelIds: ['UNREAD'] }),
-      });
-      const data = await r.json();
-      return res.json({ success: !data.error, data });
-    }
-
-    if (action === 'trash') {
-      const r = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/trash`,
-        { method: 'POST', headers: h }
-      );
-      const data = await r.json();
-      return res.json({ success: !data.error, data });
-    }
-
-    if (action === 'star') {
-      const r = await fetch(gmailUrl, {
-        method: 'POST', headers: h,
-        body: JSON.stringify({ addLabelIds: ['STARRED'] }),
-      });
-      const data = await r.json();
-      return res.json({ success: !data.error, data });
-    }
-
-    if (action === 'unstar') {
-      const r = await fetch(gmailUrl, {
-        method: 'POST', headers: h,
-        body: JSON.stringify({ removeLabelIds: ['STARRED'] }),
-      });
-      const data = await r.json();
-      return res.json({ success: !data.error, data });
-    }
-
-    return res.status(400).json({ error: 'Unknown action' });
+    const data = await doAction(token, messageId, action);
+    res.json({ success: !data.error, data });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
