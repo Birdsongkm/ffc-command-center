@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Head from "next/head";
 
 // ═══════════════════════════════════════════════
-//  THEME — White/light base with nature leaf accents, color-coded sections
+//  THEME
 // ═══════════════════════════════════════════════
 const T = {
   bg: "#F7FAF5", surface: "#FFFFFF", card: "#FFFFFF", cardHover: "#F0F5EE",
@@ -29,13 +29,14 @@ const CATEGORIES = [
   { id: "marketing", label: "Marketing", color: "#C44A8B", bg: "#FBE8F3" },
 ];
 
+// Fill in real email addresses here
 const TEAM = [
-  { name: "Laura Lavid", initials: "LL", email: "" },
-  { name: "Gretchen Roberts", initials: "GR", email: "" },
-  { name: "Carmen Alcantara", initials: "CA", email: "" },
-  { name: "Adjoa Kittoe", initials: "AK", email: "" },
-  { name: "Debbie Nash", initials: "DN", email: "" },
-  { name: "Lone Bryan", initials: "LB", email: "" },
+  { name: "Laura Lavid", initials: "LL", email: "laura@freshfoodconnect.org" },
+  { name: "Gretchen Roberts", initials: "GR", email: "gretchen@freshfoodconnect.org" },
+  { name: "Carmen Alcantara", initials: "CA", email: "carmen@freshfoodconnect.org" },
+  { name: "Adjoa Kittoe", initials: "AK", email: "adjoa@freshfoodconnect.org" },
+  { name: "Debbie Nash", initials: "DN", email: "debbie@freshfoodconnect.org" },
+  { name: "Lone Bryan", initials: "LB", email: "lone@freshfoodconnect.org" },
 ];
 
 const URGENCY = [
@@ -43,6 +44,24 @@ const URGENCY = [
   { id: "high", label: "High", color: "#C4942A", bg: "#FFF8E8", dot: "#FFAA33" },
   { id: "medium", label: "Medium", color: "#3B82C4", bg: "#EBF3FB", dot: "#55AAFF" },
   { id: "low", label: "Low", color: "#6B8068", bg: "#F0F5EE", dot: "#6B8068" },
+];
+
+// Daily motivational quote — rotates by day of month
+const QUOTES = [
+  "Every connection you make today reduces hunger tomorrow.",
+  "Your leadership is building a more resilient food system.",
+  "Small actions, scaled with heart — that's Fresh Food Connect.",
+  "Leading with purpose is its own kind of strength.",
+  "You're not just running operations — you're changing lives.",
+  "Progress over perfection. Keep moving forward.",
+  "Communities thrive when leaders show up.",
+  "The work you do matters more than you know.",
+  "Nourishing communities, one connection at a time.",
+  "Today's inbox is tomorrow's impact.",
+  "Great leaders make space for what matters most.",
+  "Your mission is your compass. Trust it.",
+  "Sustainable change takes sustained effort. You're doing it.",
+  "Showing up every day IS the strategy.",
 ];
 
 // ═══════════════════════════════════════════════
@@ -57,15 +76,14 @@ function classifyEmail(e) {
   const listId = (e.listId || "").toLowerCase();
   const precedence = (e.precedence || "").toLowerCase();
   const recipientCount = e.recipientCount || 1;
-  const deliveredTo = (e.deliveredTo || "").toLowerCase();
 
-  // DropboxSign / HelloSign from Laura = HIGH PRIORITY
+  // DropboxSign / HelloSign = HIGH PRIORITY regardless
   if (from.includes("dropboxsign") || from.includes("hellosign") || from.includes("dropbox.com")) {
     return "needs-response";
   }
 
-  const isBcc = deliveredTo && !to.includes(deliveredTo) && !cc.includes(deliveredTo);
-  const isMassSend = recipientCount >= 5 || isBcc;
+  // Raised threshold to 20 to avoid false mass-send classification
+  const isMassSend = recipientCount >= 20;
 
   if (isMassSend && !from.includes("classy") && !from.includes("hubspot")) return "fyi-mass";
   if (listUnsub || listId || precedence === "list" || precedence === "bulk") {
@@ -77,8 +95,8 @@ function classifyEmail(e) {
   if (from.includes("noreply") || from.includes("no-reply") || from.includes("notifications@") || from.includes("mailer-daemon") || from.includes("postmaster")) return "automated";
   if ((from.includes("classy") || subj.includes("classy")) && (subj.includes("donation") || subj.includes("gift") || subj.includes("contribut"))) return "classy-onetime";
   if (from.includes("classy")) return "classy-recurring";
-  if (from.includes("freshfoodconnect") || from.includes("ffc")) return "team";
-  if (recipientCount <= 3 && !isBcc) return "needs-response";
+  if (from.includes("freshfoodconnect") || from.includes("@ffc")) return "team";
+  if (recipientCount <= 3) return "needs-response";
   return "needs-response";
 }
 
@@ -132,6 +150,19 @@ function getQuickReplies(email) {
     { label: "Let me get back to you", text: "Thanks for this — let me look into it and get back to you by end of week." },
     { label: "Loop in team", text: "Thanks! I'm going to loop in my team to make sure we follow up properly." },
   ];
+}
+
+// Extract Google Calendar RSVP links from email HTML
+function extractCalendarRsvpLinks(html) {
+  if (!html) return {};
+  const links = {};
+  const accept = html.match(/href="(https?:\/\/[^"]*?action=ACCEPT[^"]*?)"/i);
+  const decline = html.match(/href="(https?:\/\/[^"]*?action=DECLINE[^"]*?)"/i);
+  const maybe = html.match(/href="(https?:\/\/[^"]*?action=TENTATIVE[^"]*?)"/i);
+  if (accept) links.accept = accept[1].replace(/&amp;/g, '&');
+  if (decline) links.decline = decline[1].replace(/&amp;/g, '&');
+  if (maybe) links.maybe = maybe[1].replace(/&amp;/g, '&');
+  return links;
 }
 
 const SNOOZE_OPTIONS = [
@@ -213,9 +244,9 @@ function SnoozePicker({ onSnooze, onCancel }) {
 }
 
 // ═══════════════════════════════════════════════
-//  COMPOSE / REPLY / FORWARD FORM
+//  COMPOSE / REPLY / FORWARD FORM — with autocomplete
 // ═══════════════════════════════════════════════
-function ComposeForm({ mode = "compose", email = null, onSend, onCancel, signature = "", suggestedForwardTo = "", prefillBody = "" }) {
+function ComposeForm({ mode = "compose", email = null, onSend, onCancel, signature = "", suggestedForwardTo = "", prefillBody = "", contacts = [] }) {
   const [to, setTo] = useState(mode === "reply" && email ? (email.replyTo || email.from || "") : (mode === "forward" ? suggestedForwardTo : ""));
   const [cc, setCc] = useState(mode === "reply" && email ? (email.cc || "") : "");
   const [subject, setSubject] = useState(
@@ -224,7 +255,30 @@ function ComposeForm({ mode = "compose", email = null, onSend, onCancel, signatu
   );
   const [body, setBody] = useState(prefillBody || "");
   const [sending, setSending] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSugg, setShowSugg] = useState(false);
   const inputStyle = { width: "100%", padding: "12px 16px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 16, background: T.bg, color: T.text, outline: "none", boxSizing: "border-box" };
+
+  const handleToChange = (val) => {
+    setTo(val);
+    const lastPart = val.split(",").pop().trim().toLowerCase();
+    if (lastPart.length >= 2) {
+      const matches = contacts.filter(c =>
+        c.name.toLowerCase().includes(lastPart) || c.email.toLowerCase().includes(lastPart)
+      ).slice(0, 6);
+      setSuggestions(matches);
+      setShowSugg(matches.length > 0);
+    } else {
+      setShowSugg(false);
+    }
+  };
+
+  const pickSuggestion = (c) => {
+    const parts = to.split(",");
+    parts[parts.length - 1] = ` ${c.name} <${c.email}>`;
+    setTo(parts.join(",").trimStart() + ", ");
+    setShowSugg(false);
+  };
 
   const handleSend = async () => {
     if (!to.trim()) return;
@@ -243,7 +297,30 @@ function ComposeForm({ mode = "compose", email = null, onSend, onCancel, signatu
         <span style={{ fontWeight: 600, fontSize: 17, color: T.text }}>{mode === "reply" ? "Reply" : mode === "forward" ? "Forward" : "New Email"}</span>
         <button onClick={onCancel} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: T.textMuted }}>×</button>
       </div>
-      <input placeholder="To" value={to} onChange={e => setTo(e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
+      {/* To field with autocomplete */}
+      <div style={{ position: "relative", marginBottom: 8 }}>
+        <input placeholder="To" value={to} onChange={e => handleToChange(e.target.value)}
+          onBlur={() => setTimeout(() => setShowSugg(false), 150)}
+          style={inputStyle} />
+        {showSugg && (
+          <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 200, boxShadow: "0 6px 24px rgba(0,0,0,0.12)", overflow: "hidden" }}>
+            {suggestions.map((c, i) => (
+              <div key={i} onMouseDown={() => pickSuggestion(c)}
+                style={{ padding: "10px 16px", cursor: "pointer", fontSize: 15, display: "flex", alignItems: "center", gap: 10, borderBottom: i < suggestions.length - 1 ? `1px solid ${T.borderLight}` : "none" }}
+                onMouseEnter={e => e.currentTarget.style.background = T.bg}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                <div style={{ width: 30, height: 30, borderRadius: "50%", background: T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: T.accent, flexShrink: 0 }}>
+                  {c.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, color: T.text }}>{c.name}</div>
+                  <div style={{ fontSize: 13, color: T.textMuted }}>{c.email}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <input placeholder="Cc" value={cc} onChange={e => setCc(e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
       <input placeholder="Subject" value={subject} onChange={e => setSubject(e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
       <textarea placeholder="Write your message..." value={body} onChange={e => setBody(e.target.value)} rows={6} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
@@ -271,7 +348,6 @@ function EventForm({ event = null, onSave, onCancel, prefillFromEmail = null }) 
   const [desc, setDesc] = useState(event?.description || "");
   const [saving, setSaving] = useState(false);
   const inputStyle = { width: "100%", padding: "12px 16px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 16, background: T.bg, color: T.text, outline: "none", boxSizing: "border-box" };
-
   return (
     <div style={{ background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 12, padding: 22, marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
@@ -304,7 +380,6 @@ function TaskForm({ task = null, onSave, onCancel, prefillFromEmail = null }) {
   const [due, setDue] = useState(task?.due || "");
   const [notes, setNotes] = useState(task?.notes || "");
   const inputStyle = { width: "100%", padding: "12px 16px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 16, background: T.bg, color: T.text, outline: "none", boxSizing: "border-box" };
-
   return (
     <div style={{ background: T.card, border: `1px solid ${T.taskAmberBorder}`, borderRadius: 12, padding: 22, marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
@@ -328,6 +403,107 @@ function TaskForm({ task = null, onSave, onCancel, prefillFromEmail = null }) {
 }
 
 // ═══════════════════════════════════════════════
+//  FINANCE REVIEW PANEL
+// ═══════════════════════════════════════════════
+function FinanceReviewPanel({ email, onClose, showToast }) {
+  const [steps, setSteps] = useState([
+    { id: "email", label: "Debbie's details email received", done: true, icon: "📧",
+      detail: email ? `${email.from?.replace(/<.*>/, "").trim()} · "${email.subject}"` : "Email received" },
+    { id: "budget", label: "Review Budget vs Actuals", done: false, icon: "📊",
+      detail: "Open the monthly Budget vs Actuals Google Sheet" },
+    { id: "grants", label: "Grant allocation review", done: false, icon: "🌱",
+      detail: "Compare current allocations to previous months' detail sheets" },
+    { id: "agenda", label: "Finance Committee agenda prep", done: false, icon: "📋",
+      detail: "Find agenda folder and prep for upcoming meeting" },
+    { id: "reminder", label: "Draft committee reminder", done: false, icon: "✉️",
+      detail: "Create a draft reminder for finance committee members" },
+  ]);
+  const [drafting, setDrafting] = useState(false);
+  const [draftStatus, setDraftStatus] = useState(null);
+
+  const toggleDone = (id) => setSteps(prev => prev.map(s => s.id === id ? { ...s, done: !s.done } : s));
+  const doneCount = steps.filter(s => s.done).length;
+
+  const draftReminder = async () => {
+    setDrafting(true);
+    try {
+      const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+      const params = new URLSearchParams({
+        action: "draftCommitteeReminder",
+        to: "finance-committee@freshfoodconnect.org",
+        agendaLink: "https://drive.google.com/",
+        meetingDate: today,
+      });
+      const r = await fetch(`/api/finance-review?${params}`);
+      const d = await r.json();
+      if (d.draftId || d.success) {
+        setDraftStatus("✓ Draft created — check your Drafts tab");
+        toggleDone("reminder");
+        showToast("Committee reminder draft created!");
+      } else {
+        setDraftStatus("Could not create draft. Try again.");
+      }
+    } catch { setDraftStatus("Error creating draft."); }
+    setDrafting(false);
+  };
+
+  const btnStyle = { padding: "7px 16px", background: T.taskAmberBg, color: T.taskAmber, border: `1px solid ${T.taskAmberBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600, flexShrink: 0, whiteSpace: "nowrap" };
+
+  return (
+    <div style={{ background: T.card, border: `2px solid ${T.taskAmberBorder}`, borderRadius: 16, padding: 24, marginBottom: 26 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 22 }}>📊</span>
+          <span style={{ fontSize: 19, fontWeight: 700, color: T.taskAmber }}>Monthly Finance Review</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <span style={{ fontSize: 14, color: T.textMuted }}>{doneCount}/{steps.length} steps</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: T.textMuted }}>×</button>
+        </div>
+      </div>
+      {/* Progress bar */}
+      <div style={{ height: 6, background: T.border, borderRadius: 3, marginBottom: 20 }}>
+        <div style={{ height: "100%", background: T.taskAmber, borderRadius: 3, width: `${(doneCount / steps.length) * 100}%`, transition: "width 0.4s" }} />
+      </div>
+
+      {steps.map((step, i) => (
+        <div key={step.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: i < steps.length - 1 ? `1px solid ${T.borderLight}` : "none" }}>
+          <button onClick={() => step.id !== "email" && toggleDone(step.id)}
+            style={{ width: 26, height: 26, borderRadius: "50%", border: `2px solid ${step.done ? T.taskAmber : T.border}`, background: step.done ? T.taskAmber : "transparent", cursor: step.id === "email" ? "default" : "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13 }}>
+            {step.done ? "✓" : ""}
+          </button>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 16, color: step.done ? T.textMuted : T.text, textDecoration: step.done ? "line-through" : "none" }}>{step.icon} {step.label}</div>
+            <div style={{ fontSize: 13, color: T.textMuted, marginTop: 2 }}>{step.detail}</div>
+          </div>
+          {step.id === "budget" && !step.done && (
+            <button onClick={() => { window.open("https://drive.google.com/drive/search?q=Budget+Actuals", "_blank"); toggleDone("budget"); }} style={btnStyle}>Open Sheet →</button>
+          )}
+          {step.id === "grants" && !step.done && (
+            <button onClick={() => { window.open("https://drive.google.com/drive/search?q=grant+allocation+detail", "_blank"); toggleDone("grants"); }} style={btnStyle}>Open Drive →</button>
+          )}
+          {step.id === "agenda" && !step.done && (
+            <button onClick={() => { window.open("https://drive.google.com/drive/search?q=finance+committee+agenda", "_blank"); toggleDone("agenda"); }} style={btnStyle}>Find Agenda →</button>
+          )}
+          {step.id === "reminder" && !step.done && (
+            <button onClick={draftReminder} disabled={drafting} style={{ ...btnStyle, opacity: drafting ? 0.6 : 1 }}>{drafting ? "Drafting..." : "Draft Reminder"}</button>
+          )}
+          {step.id === "reminder" && draftStatus && (
+            <span style={{ fontSize: 13, color: T.calGreen, flexShrink: 0 }}>{draftStatus}</span>
+          )}
+        </div>
+      ))}
+
+      {doneCount === steps.length && (
+        <div style={{ marginTop: 16, padding: "14px 20px", background: T.calGreenBg, borderRadius: 10, textAlign: "center", fontSize: 16, color: T.calGreen, fontWeight: 600 }}>
+          🎉 Finance review complete!
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════
 //  MAIN APP
 // ═══════════════════════════════════════════════
 export default function Home() {
@@ -340,6 +516,7 @@ export default function Home() {
   const [toast, setToast] = useState(null);
 
   const [expandedEmail, setExpandedEmail] = useState(null);
+  const [hoveredEmail, setHoveredEmail] = useState(null);
   const [emailBody, setEmailBody] = useState({});
   const [composing, setComposing] = useState(null);
   const [showSnooze, setShowSnooze] = useState(null);
@@ -355,20 +532,14 @@ export default function Home() {
     return {};
   });
 
-  // TASK STATE — with backup protection
+  // Tasks with backup protection
   const [tasks, setTasks] = useState(() => {
     if (typeof window !== "undefined") {
       try {
         const stored = localStorage.getItem("ffc_tasks");
         const backup = localStorage.getItem("ffc_tasks_backup");
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-        if (backup) {
-          const parsedBackup = JSON.parse(backup);
-          if (Array.isArray(parsedBackup) && parsedBackup.length > 0) return parsedBackup;
-        }
+        if (stored) { const p = JSON.parse(stored); if (Array.isArray(p) && p.length > 0) return p; }
+        if (backup) { const p = JSON.parse(backup); if (Array.isArray(p) && p.length > 0) return p; }
       } catch {}
     }
     return [];
@@ -382,26 +553,17 @@ export default function Home() {
   const [driveSearch, setDriveSearch] = useState("");
   const [driveView, setDriveView] = useState("recent");
   const [drafts, setDrafts] = useState([]);
+  const [draftsTotal, setDraftsTotal] = useState(0);
 
-  // Sticky Notes
   const [stickyNotes, setStickyNotes] = useState(() => {
     if (typeof window !== "undefined") { try { return JSON.parse(localStorage.getItem("ffc_stickies") || "[]"); } catch { return []; } }
     return [];
   });
   const [newStickyText, setNewStickyText] = useState("");
-
-  // Week prep
   const [showWeekPrep, setShowWeekPrep] = useState(false);
   const [weekPrepEvents, setWeekPrepEvents] = useState([]);
-
-  // Monday digest
   const [digest, setDigest] = useState(null);
-
-  // Finance review
-  const [financeAlert, setFinanceAlert] = useState(null);
-
-  // Credit card
-  const [ccAlert, setCcAlert] = useState(null);
+  const [financePanel, setFinancePanel] = useState(null); // null or email object
 
   // ── Persist ──
   useEffect(() => {
@@ -420,6 +582,25 @@ export default function Home() {
   }, [forwardSuggestions]);
 
   const showToast = useCallback((msg) => setToast(msg), []);
+
+  // ── Build contacts list from loaded emails (for autocomplete) ──
+  const contacts = useMemo(() => {
+    const seen = new Map();
+    // Add team members first
+    TEAM.forEach(t => { if (t.email) seen.set(t.email, t.name); });
+    // Then add from emails
+    emails.forEach(e => {
+      const match = (e.from || "").match(/^(.*?)\s*<(.+?)>$/);
+      if (match) {
+        const name = match[1].replace(/"/g, "").trim();
+        const addr = match[2].trim();
+        if (addr && !seen.has(addr)) seen.set(addr, name || addr);
+      } else if (e.from && e.from.includes("@")) {
+        if (!seen.has(e.from)) seen.set(e.from, e.from);
+      }
+    });
+    return Array.from(seen.entries()).map(([email, name]) => ({ email, name }));
+  }, [emails]);
 
   // ── Fetch data ──
   const fetchData = useCallback(async (pageToken) => {
@@ -495,11 +676,14 @@ export default function Home() {
     return d;
   };
 
+  // "This Week" — starts from TODAY, not Sunday
   const fetchWeekEvents = async () => {
     const now = new Date();
-    const sun = new Date(now); sun.setDate(now.getDate() - now.getDay()); sun.setHours(0, 0, 0, 0);
-    const sat = new Date(sun); sat.setDate(sun.getDate() + 7);
-    const r = await fetch("/api/calendar-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "range", startDate: sun.toISOString(), endDate: sat.toISOString() }) });
+    const today = new Date(now); today.setHours(0, 0, 0, 0);
+    const endOfWeek = new Date(now);
+    const daysUntilSat = 6 - now.getDay();
+    endOfWeek.setDate(now.getDate() + daysUntilSat); endOfWeek.setHours(23, 59, 59, 999);
+    const r = await fetch("/api/calendar-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "range", startDate: today.toISOString(), endDate: endOfWeek.toISOString() }) });
     const d = await r.json();
     if (d.success) setWeekEvents(d.events || []);
   };
@@ -530,20 +714,14 @@ export default function Home() {
 
   useEffect(() => { if (auth && tab === "drive") fetchDrive(driveView); }, [auth, tab, driveView]);
 
-  const fetchDrafts = async () => { const r = await fetch("/api/drafts"); const d = await r.json(); if (d.drafts) setDrafts(d.drafts); };
+  const fetchDrafts = async () => {
+    const r = await fetch("/api/drafts");
+    const d = await r.json();
+    if (d.drafts) { setDrafts(d.drafts); setDraftsTotal(d.total || d.drafts.length); }
+  };
   useEffect(() => { if (auth && tab === "drafts") fetchDrafts(); }, [auth, tab]);
 
-  // ── Keyboard shortcuts ──
-  useEffect(() => {
-    const handler = (e) => {
-      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT") return;
-      // shortcuts only on email tab
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  });
-
-  // ── Classify ──
+  // ── Derived state ──
   const emailsByBucket = {};
   emails.forEach(e => { const b = classifyEmail(e); if (!emailsByBucket[b]) emailsByBucket[b] = []; emailsByBucket[b].push(e); });
   const sortedBuckets = Object.entries(emailsByBucket).sort((a, b) => (BUCKETS[a[0]]?.priority || 99) - (BUCKETS[b[0]]?.priority || 99));
@@ -554,12 +732,24 @@ export default function Home() {
   const dayOfWeek = new Date().getDay();
   const showPrepButton = dayOfWeek === 0 || dayOfWeek === 1 || dayOfWeek === 5;
 
-  // ── Helpers ──
+  // Detect Debbie's finance details email
+  const debbieDetailsEmail = emails.find(e => {
+    const from = (e.from || "").toLowerCase();
+    const subj = (e.subject || "").toLowerCase();
+    return (from.includes("debbie") || from.includes("nash")) &&
+      (subj.includes("detail") || subj.includes("financial") || subj.includes("finance") || subj.includes("review") || subj.includes("statement"));
+  });
+
+  // Daily quote
+  const dailyQuote = QUOTES[new Date().getDate() % QUOTES.length];
+
+  // ── Formatters ──
   const fmtTime = (dt) => { if (!dt) return ""; return new Date(dt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }); };
   const fmtDate = (dt) => { if (!dt) return ""; return new Date(dt).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }); };
   const fmtRel = (ds) => { if (!ds) return ""; const d = new Date(ds); const diff = Date.now() - d; const m = Math.floor(diff / 60000); if (m < 60) return `${m}m ago`; const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`; const dy = Math.floor(h / 24); if (dy < 7) return `${dy}d ago`; return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
   const draftAge = (ds) => { if (!ds) return ""; const days = Math.floor((Date.now() - new Date(ds).getTime()) / 86400000); if (days === 0) return "Today"; if (days === 1) return "1 day"; return `${days} days`; };
 
+  // ── Drag/drop tasks ──
   const handleTaskDragStart = (task) => setDragTask(task);
   const handleTaskDragOver = (e, overTask, overCat) => { e.preventDefault(); setDragOverTask(overTask?.id || null); setDragOverCategory(overCat || null); };
   const handleTaskDrop = (e, targetTask, targetCategory) => {
@@ -576,35 +766,50 @@ export default function Home() {
     setDragTask(null); setDragOverTask(null); setDragOverCategory(null);
   };
 
-  // ── Action button style ──
   const abtn = (color, bg) => ({ padding: "8px 15px", background: bg, color, border: `1px solid ${color}30`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500, whiteSpace: "nowrap" });
 
   // ═══════════════════════════════════════════════
-  //  RENDER EMAIL ROW — with clickable HTML links
+  //  RENDER EMAIL ROW
+  //  - Hover to reveal quick action bar
+  //  - Click row to expand full email + buttons
+  //  - Calendar invites get RSVP buttons
+  //  - Debbie finance emails get "Run Finance Review" button
   // ═══════════════════════════════════════════════
   const renderEmailRow = (email, idx, showActions = true) => {
     const isExp = expandedEmail === email.id;
+    const isHov = hoveredEmail === email.id;
     const age = emailAge(email.date);
     const dot = ageDot(age);
     const bucket = classifyEmail(email);
     const isDonation = bucket === "classy-onetime";
+    const isCalInvite = bucket === "calendar-notif" || (email.from || "").toLowerCase().includes("calendar-notification");
     const isDropboxSign = (email.from || "").toLowerCase().includes("dropboxsign") || (email.from || "").toLowerCase().includes("hellosign");
+    const isDebbieFinance = (email.from || "").toLowerCase().includes("debbie") || (email.from || "").toLowerCase().includes("nash");
     const fromName = email.from?.replace(/<.*>/, "").trim() || email.from || "";
     const fromAddr = email.from?.match(/<(.+)>/)?.[1] || email.from || "";
     const cInfo = contactHistory[fromAddr];
     const body = emailBody[email.id];
+    const rsvpLinks = isCalInvite && body?.bodyHtml ? extractCalendarRsvpLinks(body.bodyHtml) : {};
 
     return (
-      <div key={email.id} style={{
-        background: isExp ? T.cardHover : T.card, border: `1px solid ${isDropboxSign ? T.urgentCoral : isDonation ? T.calGreenBorder : isExp ? T.accent : T.border}`,
-        borderRadius: 10, marginBottom: 10, overflow: "visible",
-        borderLeft: isDropboxSign ? `4px solid ${T.urgentCoral}` : isDonation ? `4px solid ${T.calGreen}` : dot ? `4px solid ${dot.color}` : undefined, transition: "all 0.15s",
-      }}>
+      <div key={email.id}
+        onMouseEnter={() => setHoveredEmail(email.id)}
+        onMouseLeave={() => setHoveredEmail(null)}
+        style={{
+          background: isExp ? T.cardHover : T.card,
+          border: `1px solid ${isDropboxSign ? T.urgentCoral : isDonation ? T.calGreenBorder : isExp ? T.accent : T.border}`,
+          borderRadius: 10, marginBottom: 10, overflow: "visible",
+          borderLeft: isDropboxSign ? `4px solid ${T.urgentCoral}` : isDonation ? `4px solid ${T.calGreen}` : isCalInvite ? `4px solid ${T.calGreen}` : dot ? `4px solid ${dot.color}` : undefined,
+          transition: "all 0.15s",
+        }}>
+
+        {/* Row — click to expand */}
         <div onClick={() => { if (isExp) setExpandedEmail(null); else { setExpandedEmail(email.id); fetchEmailBody(email.id); fetchContactHistory(email.from); } }}
           style={{ padding: "16px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
           {dot && <div style={{ width: 10, height: 10, borderRadius: "50%", background: dot.color, flexShrink: 0 }} title={dot.label} />}
           {isDropboxSign && <span style={{ fontSize: 18, flexShrink: 0 }} title="DropboxSign — needs your signature">🔏</span>}
           {isDonation && <span style={{ fontSize: 18, flexShrink: 0 }}>💚</span>}
+          {isCalInvite && !isExp && <span style={{ fontSize: 18, flexShrink: 0 }}>📅</span>}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
               <span style={{ fontWeight: 600, fontSize: 16, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fromName}</span>
@@ -613,16 +818,52 @@ export default function Home() {
             <div style={{ fontSize: 16, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{email.subject}</div>
             {!isExp && <div style={{ fontSize: 15, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 3 }}>{email.snippet}</div>}
           </div>
-          {cInfo && <div style={{ fontSize: 13, color: T.textDim, textAlign: "right", flexShrink: 0, lineHeight: 1.4 }}><div>{cInfo.totalMessages} emails</div><div>Last: {fmtRel(cInfo.lastContact)}</div></div>}
+          {cInfo && !isExp && <div style={{ fontSize: 13, color: T.textDim, textAlign: "right", flexShrink: 0, lineHeight: 1.4 }}><div>{cInfo.totalMessages} emails</div><div>Last: {fmtRel(cInfo.lastContact)}</div></div>}
         </div>
 
+        {/* Hover quick-action bar (collapsed only) */}
+        {!isExp && isHov && showActions && (
+          <div style={{ padding: "8px 20px 12px", borderTop: `1px solid ${T.borderLight}`, display: "flex", flexWrap: "wrap", gap: 6 }}
+            onClick={e => e.stopPropagation()}>
+            {isCalInvite ? (
+              <>
+                {rsvpLinks.accept && <a href={rsvpLinks.accept} target="_blank" rel="noopener noreferrer" style={abtn(T.calGreen, T.calGreenBg)}>✓ Accept</a>}
+                {rsvpLinks.decline && <a href={rsvpLinks.decline} target="_blank" rel="noopener noreferrer" style={abtn(T.danger, T.dangerBg)}>✗ Decline</a>}
+                {rsvpLinks.maybe && <a href={rsvpLinks.maybe} target="_blank" rel="noopener noreferrer" style={abtn(T.info, T.infoBg)}>? Maybe</a>}
+                <a href="https://calendar.google.com/calendar/r" target="_blank" rel="noopener noreferrer" style={abtn(T.calGreen, T.calGreenBg)}>📅 View Calendar</a>
+                <button onClick={() => emailAction("archive", email.id)} style={abtn(T.textMuted, T.bg)}>📦 Archive</button>
+              </>
+            ) : (
+              <>
+                <button onClick={() => { setExpandedEmail(email.id); fetchEmailBody(email.id); fetchContactHistory(email.from); setComposing({ mode: "reply", email }); }} style={abtn(T.emailBlue, T.emailBlueBg)}>↩ Reply</button>
+                <button onClick={() => emailAction("archive", email.id)} style={abtn(T.textMuted, T.bg)}>📦 Archive</button>
+                <button onClick={() => emailAction("markRead", email.id)} style={abtn(T.textMuted, T.bg)}>✓ Read</button>
+                <button onClick={() => emailAction("star", email.id)} style={abtn(T.gold, T.goldBg)}>⭐ Star</button>
+                {isDebbieFinance && <button onClick={() => setFinancePanel(email)} style={abtn(T.taskAmber, T.taskAmberBg)}>📊 Finance Review</button>}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Expanded email body + full actions */}
         {isExp && (
           <div style={{ padding: "0 20px 18px", borderTop: `1px solid ${T.borderLight}` }}>
             {cInfo && <div style={{ padding: "10px 0", fontSize: 14, color: T.textMuted, display: "flex", gap: 16, borderBottom: `1px solid ${T.borderLight}`, marginBottom: 12 }}>
               <span>📧 {cInfo.totalMessages} total messages</span><span>Last contact: {fmtRel(cInfo.lastContact)}</span>
             </div>}
 
-            {/* Email body — render HTML with clickable links */}
+            {/* Calendar RSVP bar */}
+            {isCalInvite && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "12px 0", borderBottom: `1px solid ${T.borderLight}`, marginBottom: 12 }}>
+                <span style={{ fontSize: 14, color: T.calGreen, fontWeight: 600, marginRight: 4 }}>📅 Calendar Invite:</span>
+                {rsvpLinks.accept ? <a href={rsvpLinks.accept} target="_blank" rel="noopener noreferrer" style={{ ...abtn(T.calGreen, T.calGreenBg), textDecoration: "none" }}>✓ Accept</a> : null}
+                {rsvpLinks.decline ? <a href={rsvpLinks.decline} target="_blank" rel="noopener noreferrer" style={{ ...abtn(T.danger, T.dangerBg), textDecoration: "none" }}>✗ Decline</a> : null}
+                {rsvpLinks.maybe ? <a href={rsvpLinks.maybe} target="_blank" rel="noopener noreferrer" style={{ ...abtn(T.info, T.infoBg), textDecoration: "none" }}>? Maybe</a> : null}
+                <a href="https://calendar.google.com/calendar/r" target="_blank" rel="noopener noreferrer" style={{ ...abtn(T.calGreen, T.calGreenBg), textDecoration: "none" }}>Open Calendar</a>
+              </div>
+            )}
+
+            {/* Email body */}
             <div style={{ padding: "14px 0", fontSize: 16, lineHeight: 1.7, color: T.text, maxHeight: 420, overflowY: "auto" }}>
               {body?.bodyHtml ? (
                 <div dangerouslySetInnerHTML={{ __html: body.bodyHtml }} style={{ wordBreak: "break-word" }} />
@@ -640,7 +881,7 @@ export default function Home() {
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
                   {getQuickReplies(email).map((qr, i) => (
                     <button key={i} onClick={() => setComposing({ mode: "reply", email, prefillBody: qr.text })}
-                      style={{ padding: "9px 16px", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 500, maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={qr.text}>
+                      style={{ padding: "9px 16px", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 500 }} title={qr.text}>
                       {qr.label}
                     </button>
                   ))}
@@ -648,7 +889,7 @@ export default function Home() {
               </div>
             )}
 
-            {/* Action buttons */}
+            {/* Full action buttons */}
             {showActions && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14, paddingTop: 14, borderTop: `1px solid ${T.borderLight}` }}>
                 <button onClick={() => setComposing({ mode: "reply", email })} style={abtn(T.emailBlue, T.emailBlueBg)}>↩ Reply</button>
@@ -663,13 +904,14 @@ export default function Home() {
                 </div>
                 <button onClick={() => setShowTaskForm({ prefillFromEmail: email })} style={abtn(T.taskAmber, T.taskAmberBg)}>📋 Make Task</button>
                 <button onClick={() => setShowEventForm({ prefillFromEmail: email })} style={abtn(T.calGreen, T.calGreenBg)}>📅 Make Event</button>
+                {isDebbieFinance && <button onClick={() => setFinancePanel(email)} style={abtn(T.taskAmber, T.taskAmberBg)}>📊 Finance Review</button>}
                 {email.listUnsubscribe && <button onClick={() => { window.open(email.listUnsubscribe.replace(/[<>]/g, ""), "_blank"); showToast("Opening unsubscribe link..."); }} style={abtn(T.danger, T.dangerBg)}>🚫 Unsubscribe</button>}
               </div>
             )}
 
             {composing && composing.email?.id === email.id && (
               <div style={{ marginTop: 14 }}>
-                <ComposeForm mode={composing.mode} email={email} onSend={sendEmail} onCancel={() => setComposing(null)} signature={signature} prefillBody={composing.prefillBody || ""} />
+                <ComposeForm mode={composing.mode} email={email} onSend={sendEmail} onCancel={() => setComposing(null)} signature={signature} prefillBody={composing.prefillBody || ""} contacts={contacts} />
               </div>
             )}
           </div>
@@ -692,7 +934,7 @@ export default function Home() {
   ];
 
   // ═══════════════════════════════════════════════
-  //  RENDER
+  //  LOADING / AUTH SCREENS
   // ═══════════════════════════════════════════════
   if (loading) return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: T.bg }}>
@@ -724,17 +966,25 @@ export default function Home() {
       `}</style>
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "22px 26px" }}>
-        {/* HEADER */}
+
+        {/* HEADER with daily quote */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 26 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <LeafIcon size={32} />
-            <span style={{ fontSize: 24, fontWeight: 700, color: T.text }}>Fresh Food Connect</span>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+              <LeafIcon size={32} />
+              <span style={{ fontSize: 24, fontWeight: 700, color: T.text }}>Fresh Food Connect</span>
+            </div>
+            <div style={{ fontSize: 13, color: T.textMuted, fontStyle: "italic", paddingLeft: 44 }}>{dailyQuote}</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <button onClick={() => setComposing("compose")} style={{ padding: "10px 22px", background: T.accent, color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 16, cursor: "pointer" }}>+ Compose</button>
-            <div style={{ fontSize: 13, color: T.textMuted, padding: "7px 14px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8 }}>⌨️ j/k r e f t</div>
           </div>
         </div>
+
+        {/* Finance Review Panel (modal-style overlay) */}
+        {financePanel && (
+          <FinanceReviewPanel email={financePanel} onClose={() => setFinancePanel(null)} showToast={showToast} />
+        )}
 
         {/* TABS */}
         <div style={{ display: "flex", gap: 4, marginBottom: 26, borderBottom: `2px solid ${T.border}`, paddingBottom: 0, overflowX: "auto" }}>
@@ -754,7 +1004,7 @@ export default function Home() {
         </div>
 
         {/* Global compose */}
-        {composing === "compose" && <ComposeForm mode="compose" onSend={sendEmail} onCancel={() => setComposing(null)} signature={signature} />}
+        {composing === "compose" && <ComposeForm mode="compose" onSend={sendEmail} onCancel={() => setComposing(null)} signature={signature} contacts={contacts} />}
         {showTaskForm && <TaskForm prefillFromEmail={showTaskForm.prefillFromEmail} onSave={(task) => { setTasks(prev => [...prev, task]); setShowTaskForm(null); showToast("Task created!"); }} onCancel={() => setShowTaskForm(null)} />}
         {showEventForm && <EventForm prefillFromEmail={showEventForm.prefillFromEmail} onSave={(data) => { calendarAction("create", { event: data }); setShowEventForm(null); }} onCancel={() => setShowEventForm(null)} />}
 
@@ -778,7 +1028,23 @@ export default function Home() {
               {digest && <div style={{ marginTop: 12, padding: "12px 16px", background: "rgba(255,255,255,0.7)", borderRadius: 8, fontSize: 15, color: T.text }}>{digest.digest}</div>}
             </div>
 
-            {/* Prep for Next Week */}
+            {/* Finance review banner — shows when Debbie's details email is in inbox */}
+            {debbieDetailsEmail && !financePanel && (
+              <div style={{ background: T.taskAmberBg, border: `2px solid ${T.taskAmberBorder}`, borderRadius: 12, padding: "16px 22px", marginBottom: 22, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 22 }}>📊</span>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 16, color: T.taskAmber }}>Finance details email from Debbie</div>
+                    <div style={{ fontSize: 14, color: T.textMuted, marginTop: 2 }}>{debbieDetailsEmail.subject}</div>
+                  </div>
+                </div>
+                <button onClick={() => setFinancePanel(debbieDetailsEmail)} style={{ padding: "10px 22px", background: T.taskAmber, color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: "pointer", flexShrink: 0 }}>
+                  Run Finance Review →
+                </button>
+              </div>
+            )}
+
+            {/* Prep for week button */}
             {showPrepButton && <button onClick={() => fetchWeekPrep(dayOfWeek === 5)} style={{ width: "100%", padding: "15px 22px", marginBottom: 22, background: T.calGreenBg, color: T.calGreen, border: `2px solid ${T.calGreenBorder}`, borderRadius: 12, cursor: "pointer", fontSize: 17, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
               <span>🗓</span> {dayOfWeek === 5 ? "Prep for Next Week" : "Week Ahead Prep"}
             </button>}
@@ -855,8 +1121,8 @@ export default function Home() {
                       {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "8px 18px", background: T.calGreen, color: "#fff", borderRadius: 7, textDecoration: "none", fontSize: 15, fontWeight: 600 }}>Join Call</a>}
                       {isRealMeeting(ev) && (
                         <>
-                          {!preppedEvents[ev.id] && <button onClick={() => { /* navigate to prep */ }} style={{ padding: "8px 16px", background: T.calGreenBg, color: T.calGreen, border: `1px solid ${T.calGreenBorder}`, borderRadius: 7, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Prepare</button>}
-                          <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "8px 16px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 7, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                          {!preppedEvents[ev.id] && <button onClick={() => { setTab("drive"); setDriveSearch(ev.title); fetchDrive("search", ev.title); }} style={{ padding: "8px 16px", background: T.calGreenBg, color: T.calGreen, border: `1px solid ${T.calGreenBorder}`, borderRadius: 7, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Prepare</button>}
+                          <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "8px 16px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>
                             {preppedEvents[ev.id] ? "✓ Prepped" : "Prep Done"}
                           </button>
                         </>
@@ -867,7 +1133,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* End of Day Wrap Up */}
+            {/* End of Day */}
             {new Date().getHours() >= 16 && (
               <div style={{ background: T.goldBg, border: `1px solid ${T.taskAmberBorder}`, borderRadius: 12, padding: "20px 24px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -945,11 +1211,20 @@ export default function Home() {
               </div>
             )}
 
+            {/* This Week — only remaining days */}
             {calView === "week" && (
               <div>{(() => {
+                const today = new Date(); today.setHours(0, 0, 0, 0);
                 const days = {};
-                weekEvents.forEach(ev => { const day = new Date(ev.start).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }); if (!days[day]) days[day] = []; days[day].push(ev); });
-                return Object.entries(days).map(([day, dayEvents]) => (
+                weekEvents.forEach(ev => {
+                  if (new Date(ev.start) < today) return; // skip past days
+                  const day = new Date(ev.start).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+                  if (!days[day]) days[day] = [];
+                  days[day].push(ev);
+                });
+                const entries = Object.entries(days);
+                if (entries.length === 0) return <div style={{ padding: 32, textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, fontSize: 16 }}>No more events this week</div>;
+                return entries.map(([day, dayEvents]) => (
                   <div key={day} style={{ marginBottom: 24 }}>
                     <h4 style={{ fontSize: 17, fontWeight: 700, color: T.calGreen, marginBottom: 12, paddingBottom: 6, borderBottom: `2px solid ${T.calGreenBorder}` }}>{day}</h4>
                     {dayEvents.map(ev => (
@@ -1045,20 +1320,30 @@ export default function Home() {
         {tab === "drafts" && (
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22 }}>
-              <span style={{ fontSize: 18, fontWeight: 700, color: T.info }}>Drafts</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 18, fontWeight: 700, color: T.info }}>Drafts</span>
+                {draftsTotal > 0 && <span style={{ fontSize: 14, color: T.info, background: T.infoBg, padding: "3px 11px", borderRadius: 8, fontWeight: 600 }}>{draftsTotal} total</span>}
+              </div>
               <button onClick={fetchDrafts} style={{ padding: "8px 18px", background: T.infoBg, color: T.info, border: `1px solid ${T.info}30`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>Refresh</button>
             </div>
-            {drafts.length === 0 ? <div style={{ padding: 44, textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}` }}><div style={{ fontSize: 17, marginBottom: 8 }}>No drafts</div><div style={{ fontSize: 15 }}>Drafts from Gmail will appear here</div></div>
-              : drafts.map(d => (
+            {drafts.length === 0 ? (
+              <div style={{ padding: 44, textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 17, marginBottom: 8 }}>Loading drafts...</div>
+                <div style={{ fontSize: 15 }}>If nothing appears, click Refresh above</div>
+              </div>
+            ) : drafts.map(d => (
               <div key={d.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "18px 22px", marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-                  <div style={{ flex: 1 }}><div style={{ fontWeight: 600, fontSize: 16, color: T.text }}>{d.subject || "(No subject)"}</div><div style={{ fontSize: 15, color: T.textMuted }}>To: {d.to || "(no recipient)"}</div></div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 16, color: T.text }}>{d.subject || "(No subject)"}</div>
+                    <div style={{ fontSize: 15, color: T.textMuted }}>To: {d.to || "(no recipient)"}</div>
+                  </div>
                   <div style={{ fontSize: 14, color: T.textDim, textAlign: "right" }}>Sitting for <strong style={{ color: emailAge(d.date) > 48 ? T.danger : T.textMuted }}>{draftAge(d.date)}</strong></div>
                 </div>
                 <div style={{ fontSize: 15, color: T.textMuted, marginBottom: 14 }}>{d.snippet}</div>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={async () => { const r = await fetch("/api/drafts", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draftId: d.id }) }); const res = await r.json(); if (res.success) { showToast("Draft sent!"); fetchDrafts(); } }} style={{ padding: "8px 18px", background: T.accent, color: "#fff", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Send Now</button>
-                  <button onClick={() => window.open(`https://mail.google.com/mail/#drafts/${d.messageId}`, "_blank")} style={{ padding: "8px 18px", background: T.infoBg, color: T.info, border: `1px solid ${T.info}30`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>Edit & Send</button>
+                  <button onClick={async () => { const r = await fetch("/api/drafts", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draftId: d.id }) }); const res = await r.json(); if (res.success) { showToast("Draft sent!"); fetchDrafts(); } else { showToast("Send failed — try Edit & Send"); } }} style={{ padding: "8px 18px", background: T.accent, color: "#fff", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Send Now</button>
+                  <button onClick={() => window.open(`https://mail.google.com/mail/#drafts/${d.messageId}`, "_blank")} style={{ padding: "8px 18px", background: T.infoBg, color: T.info, border: `1px solid ${T.info}30`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>Edit in Gmail</button>
                   <button onClick={async () => { const r = await fetch(`/api/drafts?id=${d.id}`, { method: "DELETE" }); const res = await r.json(); if (res.success) { showToast("Draft deleted"); fetchDrafts(); } }} style={{ padding: "8px 18px", background: T.dangerBg, color: T.danger, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>Delete</button>
                 </div>
               </div>
@@ -1074,8 +1359,6 @@ export default function Home() {
               <span style={{ fontSize: 18, fontWeight: 700, color: "#B8A030" }}>Quick Capture</span>
               <span style={{ fontSize: 14, color: T.textMuted, marginLeft: 8 }}>Jot it down now, sort it out later</span>
             </div>
-
-            {/* New sticky input */}
             <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
               <textarea placeholder="Type anything — a thought, a to-do, a reminder, whatever's in your head..." value={newStickyText} onChange={e => setNewStickyText(e.target.value)} rows={2}
                 style={{ flex: 1, padding: "14px 18px", border: `2px solid ${T.stickyYellowBorder}`, borderRadius: 10, fontSize: 16, background: T.stickyYellowBg, color: T.text, outline: "none", resize: "vertical", fontFamily: "inherit" }}
@@ -1083,8 +1366,6 @@ export default function Home() {
               <button onClick={() => { if (!newStickyText.trim()) return; setStickyNotes(prev => [{ id: Date.now().toString(), text: newStickyText.trim(), createdAt: new Date().toISOString(), processed: false }, ...prev]); setNewStickyText(""); showToast("Captured!"); }}
                 style={{ padding: "14px 24px", background: "#B8A030", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 16, alignSelf: "flex-end" }}>Capture</button>
             </div>
-
-            {/* Sticky notes list */}
             {stickyNotes.length === 0 ? <div style={{ padding: 44, textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, fontSize: 16 }}>Nothing here yet. Type something above to capture a quick thought.</div>
               : stickyNotes.map(note => (
               <div key={note.id} style={{ background: note.processed ? T.bg : T.stickyYellowBg, border: `1px solid ${note.processed ? T.border : T.stickyYellowBorder}`, borderRadius: 10, padding: "16px 20px", marginBottom: 10, opacity: note.processed ? 0.6 : 1 }}>
