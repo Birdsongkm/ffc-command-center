@@ -854,6 +854,7 @@ export default function Home() {
   const [emailActionHistory, setEmailActionHistory] = useState(() => {
     try { return JSON.parse(localStorage.getItem("ffc_action_history") || "{}"); } catch { return {}; }
   });
+  const [selectedEmailIds, setSelectedEmailIds] = useState(new Set());
   const [docModal, setDocModal] = useState(null); // { title, content } or null
   const [docSaving, setDocSaving] = useState(false);
   const [docFolderUrl, setDocFolderUrl] = useState("");
@@ -1065,7 +1066,7 @@ export default function Home() {
       if (tab === "emails") {
         if (e.key === "j") { setFocusedIdx(i => Math.min(i + 1, emails.length - 1)); return; }
         if (e.key === "k") { setFocusedIdx(i => Math.max(i - 1, 0)); return; }
-        if (e.key === "e") { const em = emails[focusedIdx]; if (em) emailAction("archive", em.id); return; }
+        if (e.key === "e") { const em = emails[focusedIdx]; if (em) emailAction("trash", em.id); return; }
         if (e.key === "r") { const em = emails[focusedIdx]; if (em) setComposing({ mode: "reply", email: em }); return; }
       }
       const n = parseInt(e.key);
@@ -1187,6 +1188,13 @@ export default function Home() {
         {/* Row — click to expand */}
         <div onClick={() => { if (isExp) setExpandedEmail(null); else { setExpandedEmail(email.id); fetchEmailBody(email.id); fetchContactHistory(email.from); } }}
           style={{ padding: "16px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
+          {/* Checkbox — shown on hover or when anything is selected */}
+          {(isHov || selectedEmailIds.size > 0) && (
+            <div onClick={e => { e.stopPropagation(); setSelectedEmailIds(prev => { const n = new Set(prev); n.has(email.id) ? n.delete(email.id) : n.add(email.id); return n; }); }}
+              style={{ flexShrink: 0, width: 20, height: 20, borderRadius: 4, border: `2px solid ${selectedEmailIds.has(email.id) ? T.emailBlue : T.border}`, background: selectedEmailIds.has(email.id) ? T.emailBlue : "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.1s" }}>
+              {selectedEmailIds.has(email.id) && <span style={{ color: "#fff", fontSize: 13, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+            </div>
+          )}
           {/* Sender avatar */}
           <div style={{ width: 38, height: 38, borderRadius: "50%", background: avatar.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14, flexShrink: 0, position: "relative" }}>
             {avatar.initials}
@@ -1216,7 +1224,7 @@ export default function Home() {
                 {rsvpLinks.decline && <a href={rsvpLinks.decline} target="_blank" rel="noopener noreferrer" style={abtn(T.danger, T.dangerBg)}>✗ Decline</a>}
                 {rsvpLinks.maybe && <a href={rsvpLinks.maybe} target="_blank" rel="noopener noreferrer" style={abtn(T.info, T.infoBg)}>? Maybe</a>}
                 <a href="https://calendar.google.com/calendar/r" target="_blank" rel="noopener noreferrer" style={abtn(T.calGreen, T.calGreenBg)}>📅 View Calendar</a>
-                <button onClick={() => emailAction("archive", email.id)} style={abtn(T.textMuted, T.bg)}>📦 Archive</button>
+                <button onClick={() => emailAction("trash", email.id)} style={abtn(T.danger, T.dangerBg)}>🗑 Delete</button>
               </>
             ) : (
               <>
@@ -1228,7 +1236,7 @@ export default function Home() {
                   </button>
                 )}
                 <button onClick={() => { setExpandedEmail(email.id); fetchEmailBody(email.id); fetchContactHistory(email.from); setComposing({ mode: "reply", email }); }} style={abtn(T.emailBlue, T.emailBlueBg)}>↩ Reply</button>
-                <button onClick={() => emailAction("archive", email.id)} style={abtn(T.textMuted, T.bg)}>📦 Archive</button>
+                <button onClick={() => emailAction("trash", email.id)} style={abtn(T.danger, T.dangerBg)}>🗑 Delete</button>
                 <button onClick={() => emailAction("markRead", email.id)} style={abtn(T.textMuted, T.bg)}>✓ Read</button>
                 <button onClick={() => emailAction("star", email.id)} style={abtn(T.gold, T.goldBg)}>⭐ Star</button>
                 {isDebbieFinance && <button onClick={() => setFinancePanel(email)} style={abtn(T.taskAmber, T.taskAmberBg)}>📊 Finance Review</button>}
@@ -1287,7 +1295,6 @@ export default function Home() {
                 <button onClick={() => setComposing({ mode: "reply", email })} style={abtn(T.emailBlue, T.emailBlueBg)}>↩ Reply</button>
                 <button onClick={() => setComposing({ mode: "forward", email })} style={abtn(T.driveViolet, T.driveVioletBg)}>↗ Forward</button>
                 <button onClick={() => emailAction("markRead", email.id)} style={abtn(T.textMuted, T.bg)}>✓ Mark Read</button>
-                <button onClick={() => emailAction("archive", email.id)} style={abtn(T.textMuted, T.bg)}>📦 Archive</button>
                 <button onClick={() => emailAction("trash", email.id)} style={abtn(T.danger, T.dangerBg)}>🗑 Delete</button>
                 <button onClick={() => emailAction("star", email.id)} style={abtn(T.gold, T.goldBg)}>⭐ Star</button>
                 <div style={{ position: "relative" }}>
@@ -1562,6 +1569,15 @@ export default function Home() {
               <div style={{ fontSize: 15, color: T.textMuted }}>{emails.length} unread · sorted by most recent · drag to reclassify</div>
               {nextPage && <button onClick={() => fetchData(nextPage)} style={{ padding: "6px 16px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>Load More</button>}
             </div>
+            {/* Selection action toolbar */}
+            {selectedEmailIds.size > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", background: T.emailBlueBg, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 10, marginBottom: 16 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: T.emailBlue }}>{selectedEmailIds.size} selected</span>
+                <button onClick={async () => { await batchAction("trash", [...selectedEmailIds]); setSelectedEmailIds(new Set()); }} style={{ padding: "7px 16px", background: T.danger, color: "#fff", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>🗑 Delete selected</button>
+                <button onClick={async () => { await batchAction("markRead", [...selectedEmailIds]); setSelectedEmailIds(new Set()); }} style={{ padding: "7px 16px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>✓ Mark read</button>
+                <button onClick={() => setSelectedEmailIds(new Set())} style={{ marginLeft: "auto", padding: "7px 14px", background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14 }}>✕ Clear</button>
+              </div>
+            )}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 18 }}>
               {sortedBuckets.map(([bucket, bucketEmails]) => {
                 const info = BUCKETS[bucket] || { label: bucket, icon: "📧", color: T.textMuted, bg: T.bg, border: T.border };
@@ -1593,6 +1609,17 @@ export default function Home() {
                         <span style={{ fontSize: 13, color: info.color, background: info.bg, padding: "2px 9px", borderRadius: 6, fontWeight: 600 }}>{bucketEmails.length}</span>
                       </div>
                       <div style={{ display: "flex", gap: 4 }}>
+                        <button onClick={() => {
+                          const allSelected = bucketEmails.length > 0 && bucketEmails.every(e => selectedEmailIds.has(e.id));
+                          setSelectedEmailIds(prev => {
+                            const n = new Set(prev);
+                            if (allSelected) bucketEmails.forEach(e => n.delete(e.id));
+                            else bucketEmails.forEach(e => n.add(e.id));
+                            return n;
+                          });
+                        }} style={{ padding: "4px 10px", background: "transparent", color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>
+                          {bucketEmails.every(e => selectedEmailIds.has(e.id)) && bucketEmails.length > 0 ? "✓ All" : "☐ Select"}
+                        </button>
                         <button onClick={() => batchAction("markRead", bucketEmails.map(e => e.id))} style={{ padding: "4px 10px", background: "transparent", color: T.textDim, border: `1px solid ${T.border}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>Read all</button>
                         {canBatchDelete && <button onClick={() => batchAction("trash", bucketEmails.map(e => e.id))} style={{ padding: "4px 10px", background: "transparent", color: T.danger, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>Delete all</button>}
                       </div>
@@ -2000,7 +2027,7 @@ export default function Home() {
               { key: "Esc", desc: "Close overlays" },
               { section: "Email (Emails tab)" },
               { key: "j / k", desc: "Move focus down / up through emails" },
-              { key: "e", desc: "Archive focused email" },
+              { key: "e", desc: "Delete focused email" },
               { key: "r", desc: "Reply to focused email" },
             ].map((row, i) => row.section ? (
               <div key={i} style={{ fontSize: 12, fontWeight: 700, color: T.textDim, textTransform: "uppercase", letterSpacing: "0.08em", marginTop: i === 0 ? 0 : 14, marginBottom: 6 }}>{row.section}</div>
