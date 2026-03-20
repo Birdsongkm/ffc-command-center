@@ -737,6 +737,7 @@ export default function Home() {
   const [weekPrepEvents, setWeekPrepEvents] = useState([]);
   const [digest, setDigest] = useState(null);
   const [financePanel, setFinancePanel] = useState(null); // null or email object
+  const [aiPrep, setAiPrep] = useState({}); // eventId → { loading, text, error }
   const [auditLog, setAuditLog] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
 
@@ -849,6 +850,22 @@ export default function Home() {
     const r = await fetch(`/api/contact-history?email=${encodeURIComponent(addr)}`);
     const d = await r.json();
     setContactHistory(prev => ({ ...prev, [addr]: d }));
+  };
+
+  const fetchAiPrep = async (ev) => {
+    if (aiPrep[ev.id]?.text || aiPrep[ev.id]?.loading) return;
+    setAiPrep(prev => ({ ...prev, [ev.id]: { loading: true } }));
+    try {
+      const r = await fetch("/api/ai-prep", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: ev.title, date: ev.start, attendees: ev.attendees, location: ev.location, description: ev.description }),
+      });
+      const d = await r.json();
+      if (d.prep) setAiPrep(prev => ({ ...prev, [ev.id]: { text: d.prep } }));
+      else setAiPrep(prev => ({ ...prev, [ev.id]: { error: d.error || "Failed to generate prep" } }));
+    } catch (e) {
+      setAiPrep(prev => ({ ...prev, [ev.id]: { error: e.message } }));
+    }
   };
 
   const calendarAction = async (action, data) => {
@@ -1239,19 +1256,38 @@ export default function Home() {
                 {weekPrepEvents.filter(isRealMeeting).map(ev => {
                   const prepped = preppedEvents[ev.id];
                   return (
-                    <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: `1px solid ${T.borderLight}` }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, fontSize: 16, color: prepped ? T.calGreen : T.text }}>{ev.title}</div>
-                        <div style={{ fontSize: 15, color: T.textMuted }}>{fmtDate(ev.start)} · {fmtTime(ev.start)}</div>
+                    <div key={ev.id}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: aiPrep[ev.id]?.text ? "none" : `1px solid ${T.borderLight}` }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, fontSize: 16, color: prepped ? T.calGreen : T.text }}>{ev.title}</div>
+                          <div style={{ fontSize: 15, color: T.textMuted }}>{fmtDate(ev.start)} · {fmtTime(ev.start)}</div>
+                        </div>
+                        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                          {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "7px 16px", background: T.calGreenBg, color: T.calGreen, border: `1px solid ${T.calGreenBorder}`, borderRadius: 6, textDecoration: "none", fontSize: 14, fontWeight: 600 }}>Join Call</a>}
+                          {!ev.description?.includes("agenda") && <button onClick={() => { setTab("drive"); setDriveSearch(ev.title); fetchDrive("search", ev.title); }} style={{ padding: "7px 16px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Find Agenda</button>}
+                          <button onClick={() => fetchAiPrep(ev)}
+                            style={{ padding: "7px 16px", background: aiPrep[ev.id]?.text ? T.goldBg : T.accentBg, color: aiPrep[ev.id]?.text ? T.gold : T.accent, border: `1px solid ${aiPrep[ev.id]?.text ? T.taskAmberBorder : T.border}`, borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                            {aiPrep[ev.id]?.loading ? "✨ Prepping..." : aiPrep[ev.id]?.text ? "✨ View Prep" : "✨ AI Prep"}
+                          </button>
+                          <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })}
+                            style={{ padding: "7px 16px", background: prepped ? T.calGreenBg : T.bg, color: prepped ? T.calGreen : T.textMuted, border: `1px solid ${prepped ? T.calGreenBorder : T.border}`, borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                            {prepped ? "✓ Prepped" : "Prep Done"}
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                        {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "7px 16px", background: T.calGreenBg, color: T.calGreen, border: `1px solid ${T.calGreenBorder}`, borderRadius: 6, textDecoration: "none", fontSize: 14, fontWeight: 600 }}>Join Call</a>}
-                        {!ev.description?.includes("agenda") && <button onClick={() => { setTab("drive"); setDriveSearch(ev.title); fetchDrive("search", ev.title); }} style={{ padding: "7px 16px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Find Agenda</button>}
-                        <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })}
-                          style={{ padding: "7px 16px", background: prepped ? T.calGreenBg : T.bg, color: prepped ? T.calGreen : T.textMuted, border: `1px solid ${prepped ? T.calGreenBorder : T.border}`, borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-                          {prepped ? "✓ Prepped" : "Prep Done"}
-                        </button>
-                      </div>
+                      {aiPrep[ev.id]?.text && (
+                        <div style={{ background: T.goldBg, border: `1px solid ${T.taskAmberBorder}`, borderRadius: 10, padding: "16px 20px", marginBottom: 12, borderBottom: `1px solid ${T.borderLight}` }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                            <span>✨</span>
+                            <span style={{ fontWeight: 700, fontSize: 15, color: T.gold }}>AI Prep — {ev.title}</span>
+                            <button onClick={() => setAiPrep(prev => { const n = { ...prev }; delete n[ev.id]; return n; })} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: T.textMuted, fontSize: 18 }}>×</button>
+                          </div>
+                          <div style={{ fontSize: 14, color: T.text, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{aiPrep[ev.id].text}</div>
+                        </div>
+                      )}
+                      {aiPrep[ev.id]?.error && (
+                        <div style={{ color: T.danger, fontSize: 13, padding: "8px 12px", background: T.dangerBg, borderRadius: 8, marginBottom: 8 }}>{aiPrep[ev.id].error}</div>
+                      )}
                     </div>
                   );
                 })}
