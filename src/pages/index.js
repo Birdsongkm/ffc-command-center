@@ -196,6 +196,53 @@ function senderAvatar(from) {
   return { initials, color: AVATAR_COLORS[hash % AVATAR_COLORS.length] };
 }
 
+// ── Sprint 2: Priority scoring + Relationship badges + Label suggestions ──────
+function senderTier(fromAddr, contactHistory) {
+  const addr = (fromAddr || "").toLowerCase();
+  if (addr.includes("@freshfoodconnect.org") || addr.includes("@ffc.")) return "team";
+  const hist = contactHistory?.[fromAddr] || contactHistory?.[addr];
+  if (!hist) return "unknown";
+  if (hist.totalMessages >= 5) return "frequent";
+  return "known";
+}
+function priorityScore(email, contactHistory) {
+  const fromAddr = email.from?.match(/<(.+)>/)?.[1] || email.from || "";
+  const tier = senderTier(fromAddr, contactHistory);
+  const tierWeight = { team: 3, frequent: 2, known: 1.2, unknown: 1 };
+  const tw = tierWeight[tier] || 1;
+  const ageDays = email.internalDate ? Math.floor((Date.now() - parseInt(email.internalDate)) / 86400000) : 0;
+  const ageWeight = Math.min(ageDays, 14);
+  const subj = (email.subject || "").toLowerCase();
+  const urgencyBonus = subj.includes("urgent") || subj.includes("asap") || subj.includes("critical") ? 10 :
+    subj.includes("grant") || subj.includes("deadline") || subj.includes("sign") ? 6 :
+    subj.includes("follow up") || subj.includes("invoice") ? 3 : 0;
+  return Math.round(tw * (1 + ageWeight * 0.5) + urgencyBonus);
+}
+function relationshipBadge(fromAddr, contactHistory) {
+  const addr = (fromAddr || "").toLowerCase();
+  const hist = contactHistory?.[fromAddr] || contactHistory?.[addr];
+  if (!hist) return "First contact";
+  const lastMs = hist.lastContact ? new Date(hist.lastContact).getTime() : 0;
+  const daysSinceLast = lastMs ? Math.floor((Date.now() - lastMs) / 86400000) : 999;
+  if (daysSinceLast > 60) return "Lapsed";
+  if (hist.totalMessages >= 5) return "Frequent";
+  return null;
+}
+function suggestArchiveLabel(email) {
+  const from = (email.from || "").toLowerCase();
+  const subj = (email.subject || "").toLowerCase();
+  const snippet = (email.snippet || "").toLowerCase();
+  const text = from + " " + subj + " " + snippet;
+  if (text.includes("donation") || text.includes("donor") || text.includes("fundrais") || text.includes("classy") || text.includes("gift")) return "Fundraising";
+  if (text.includes("grant") || text.includes("proposal") || text.includes("loi") || text.includes("rfp")) return "Grants";
+  if (text.includes("board") || text.includes("trustee") || text.includes("director")) return "Board";
+  if (text.includes("invoice") || text.includes("payment") || text.includes("finance") || text.includes("budget")) return "Finance";
+  if (text.includes("calendar") || text.includes("meeting") || text.includes("invite") || text.includes("rsvp")) return "Meetings";
+  if (text.includes("@freshfoodconnect.org") || text.includes("team") || text.includes("staff")) return "Team";
+  if (text.includes("unsubscribe") || text.includes("newsletter") || text.includes("list-id")) return "Newsletter";
+  return null;
+}
+
 // ── Action learning helpers ───────────────────────────────────────────────────
 function recordEmailAction(history, bucket, action) {
   const updated = { ...history };
@@ -863,6 +910,7 @@ export default function Home() {
   const [hsContactSearch, setHsContactSearch] = useState("");
   const [hsContactId, setHsContactId] = useState("");
   const [hsSaving, setHsSaving] = useState(false);
+  const [aiDraftLoading, setAiDraftLoading] = useState(null); // emailId being drafted
 
   // ── Persist ──
   useEffect(() => {
@@ -932,9 +980,7 @@ export default function Home() {
     const d = await r.json();
     if (d.success) {
       if (["markRead", "archive", "trash", "snooze"].includes(action)) setEmails(prev => prev.filter(e => e.id !== messageId));
-      const labels = { archive: "Archived", markRead: "Marked as read", trash: "Deleted", star: "Starred", unstar: "Unstarred", snooze: "Snoozed" };
-      showToast(labels[action] || "Done");
-      // Record action for learning
+      // Record action for learning + show label suggestion on archive/trash
       if (["archive", "trash", "markRead", "snooze"].includes(action)) {
         const email = emails.find(e => e.id === messageId);
         if (email) {
@@ -944,8 +990,19 @@ export default function Home() {
             try { localStorage.setItem("ffc_action_history", JSON.stringify(updated)); } catch {}
             return updated;
           });
+          if (action === "trash" || action === "archive") {
+            const label = suggestArchiveLabel(email);
+            const labels = { archive: "Archived", markRead: "Marked as read", trash: "Deleted", star: "Starred", unstar: "Unstarred", snooze: "Snoozed" };
+            showToast(label ? `${labels[action] || "Done"} · Label suggestion: ${label}` : (labels[action] || "Done"));
+          } else {
+            const labels = { markRead: "Marked as read", snooze: "Snoozed" };
+            showToast(labels[action] || "Done");
+          }
+          return d;
         }
       }
+      const labels = { archive: "Archived", markRead: "Marked as read", trash: "Deleted", star: "Starred", unstar: "Unstarred", snooze: "Snoozed" };
+      showToast(labels[action] || "Done");
     }
     return d;
   };
@@ -970,6 +1027,35 @@ export default function Home() {
         fetch("/api/email-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "markRead", messageId: payload.originalMessageId }) });
       }
     } else { showToast("Failed: " + (d.error || "Unknown error")); }
+  };
+
+  const fetchAiDraft = async (email) => {
+    setAiDraftLoading(email.id);
+    try {
+      const body = emailBody[email.id];
+      const r = await fetch("/api/ai-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          from: email.from,
+          subject: email.subject,
+          snippet: email.snippet,
+          body: body?.body || body?.bodyHtml || email.snippet || "",
+        }),
+      });
+      const d = await r.json();
+      if (d.draft) {
+        setComposing({ mode: "reply", email, prefillBody: d.draft });
+        showToast("✨ AI draft ready — review before sending");
+      } else {
+        showToast("AI draft failed: " + (d.error || "Unknown error"));
+      }
+    } catch (err) {
+      showToast("AI draft failed: " + err.message);
+    } finally {
+      setAiDraftLoading(null);
+    }
   };
 
   const fetchEmailBody = async (id) => {
@@ -1172,6 +1258,8 @@ export default function Home() {
     const suggestion = getSuggestedAction(emailActionHistory, effectiveBucket);
     const body = emailBody[email.id];
     const rsvpLinks = isCalInvite && body?.bodyHtml ? extractCalendarRsvpLinks(body.bodyHtml) : {};
+    const score = effectiveBucket === "needs-response" ? priorityScore(email, contactHistory) : null;
+    const relBadge = relationshipBadge(fromAddr, contactHistory);
 
     return (
       <div key={email.id}
@@ -1211,7 +1299,11 @@ export default function Home() {
             <div style={{ fontSize: 16, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{email.subject}</div>
             {!isExp && <div style={{ fontSize: 15, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 3 }}>{email.snippet}</div>}
           </div>
-          {cInfo && !isExp && <div style={{ fontSize: 13, color: T.textDim, textAlign: "right", flexShrink: 0, lineHeight: 1.4 }}><div>{cInfo.totalMessages} emails</div><div>Last: {fmtRel(cInfo.lastContact)}</div></div>}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+            {score !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: score >= 10 ? T.urgentCoralBg : score >= 5 ? T.taskAmberBg : T.bg, color: score >= 10 ? T.urgentCoral : score >= 5 ? T.taskAmber : T.textMuted, border: `1px solid ${score >= 10 ? T.urgentCoral : score >= 5 ? T.taskAmber : T.border}30` }} title="Priority score">P{score}</span>}
+            {relBadge && <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 8, background: relBadge === "Lapsed" ? T.dangerBg : relBadge === "Frequent" ? T.accentBg : T.infoBg, color: relBadge === "Lapsed" ? T.danger : relBadge === "Frequent" ? T.accent : T.info }}>{relBadge}</span>}
+            {cInfo && !isExp && <div style={{ fontSize: 12, color: T.textDim, textAlign: "right", lineHeight: 1.4 }}><div>{cInfo.totalMessages} emails</div><div>Last: {fmtRel(cInfo.lastContact)}</div></div>}
+          </div>
         </div>
 
         {/* Hover quick-action bar (collapsed only) */}
@@ -1236,6 +1328,7 @@ export default function Home() {
                   </button>
                 )}
                 <button onClick={() => { setExpandedEmail(email.id); fetchEmailBody(email.id); fetchContactHistory(email.from); setComposing({ mode: "reply", email }); }} style={abtn(T.emailBlue, T.emailBlueBg)}>↩ Reply</button>
+                <button onClick={() => { setExpandedEmail(email.id); fetchEmailBody(email.id); fetchContactHistory(email.from); fetchAiDraft(email); }} style={{ ...abtn(T.accent, T.accentBg), fontWeight: 700 }} disabled={aiDraftLoading === email.id} title="AI writes a first draft for you to review">{aiDraftLoading === email.id ? "✨ Drafting..." : "✨ Draft Reply"}</button>
                 <button onClick={() => emailAction("trash", email.id)} style={abtn(T.danger, T.dangerBg)}>🗑 Delete</button>
                 <button onClick={() => emailAction("markRead", email.id)} style={abtn(T.textMuted, T.bg)}>✓ Read</button>
                 <button onClick={() => emailAction("star", email.id)} style={abtn(T.gold, T.goldBg)}>⭐ Star</button>
@@ -1293,6 +1386,7 @@ export default function Home() {
             {showActions && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14, paddingTop: 14, borderTop: `1px solid ${T.borderLight}` }}>
                 <button onClick={() => setComposing({ mode: "reply", email })} style={abtn(T.emailBlue, T.emailBlueBg)}>↩ Reply</button>
+                <button onClick={() => fetchAiDraft(email)} style={{ ...abtn(T.accent, T.accentBg), fontWeight: 700 }} disabled={aiDraftLoading === email.id} title="AI writes a first draft for you to review">{aiDraftLoading === email.id ? "✨ Drafting..." : "✨ Draft Reply"}</button>
                 <button onClick={() => setComposing({ mode: "forward", email })} style={abtn(T.driveViolet, T.driveVioletBg)}>↗ Forward</button>
                 <button onClick={() => emailAction("markRead", email.id)} style={abtn(T.textMuted, T.bg)}>✓ Mark Read</button>
                 <button onClick={() => emailAction("trash", email.id)} style={abtn(T.danger, T.dangerBg)}>🗑 Delete</button>
