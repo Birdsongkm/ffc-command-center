@@ -46,22 +46,33 @@ const URGENCY = [
   { id: "low", label: "Low", color: "#6B8068", bg: "#F0F5EE", dot: "#6B8068" },
 ];
 
-// Daily motivational quote — rotates by day of month
+// Daily quote — rotates by day of month
 const QUOTES = [
-  "Every connection you make today reduces hunger tomorrow.",
-  "Your leadership is building a more resilient food system.",
-  "Small actions, scaled with heart — that's Fresh Food Connect.",
-  "Leading with purpose is its own kind of strength.",
-  "You're not just running operations — you're changing lives.",
-  "Progress over perfection. Keep moving forward.",
-  "Communities thrive when leaders show up.",
-  "The work you do matters more than you know.",
-  "Nourishing communities, one connection at a time.",
-  "Today's inbox is tomorrow's impact.",
-  "Great leaders make space for what matters most.",
-  "Your mission is your compass. Trust it.",
-  "Sustainable change takes sustained effort. You're doing it.",
-  "Showing up every day IS the strategy.",
+  // New Girl
+  { text: "I'm not convinced I know how to read. I've just memorized a lot of words.", attr: "Nick Miller, New Girl" },
+  { text: "I'm a grown-ass man! ...I want to go home and I want pancakes.", attr: "Nick Miller, New Girl" },
+  { text: "My hoodie is my house.", attr: "Nick Miller, New Girl" },
+  { text: "I brake for birds. I rock a lot of polka dots. I have touched glitter in the last 24 hours.", attr: "Jess Day, New Girl" },
+  // The Office
+  { text: "Would I rather be feared or loved? Easy. Both. I want people to be afraid of how much they love me.", attr: "Michael Scott, The Office" },
+  { text: "I am running away from my responsibilities. And it feels good.", attr: "Michael Scott, The Office" },
+  { text: "I'm not superstitious, but I am a little stitious.", attr: "Michael Scott, The Office" },
+  { text: "Wikipedia is the best thing ever. Anyone in the world can write anything they want about any subject. So you know you are getting the best possible information.", attr: "Michael Scott, The Office" },
+  { text: "Identity theft is not a joke, Jim! Millions of families suffer every year!", attr: "Dwight Schrute, The Office" },
+  { text: "Through concentration, I can raise and lower my cholesterol at will.", attr: "Dwight Schrute, The Office" },
+  // Arrested Development
+  { text: "I've made a huge mistake.", attr: "Gob Bluth, Arrested Development" },
+  { text: "Her?", attr: "George Michael Bluth, Arrested Development" },
+  { text: "There's always money in the banana stand.", attr: "George Bluth Sr., Arrested Development" },
+  { text: "I don't understand the question and I won't respond to it.", attr: "Lucille Bluth, Arrested Development" },
+  // Parks and Rec
+  { text: "I am big enough to admit that I am often inspired by myself.", attr: "Leslie Knope, Parks and Rec" },
+  { text: "Treat yo self!", attr: "Tom Haverford & Donna Meagle, Parks and Rec" },
+  { text: "I have no idea what I'm doing, but I know I'm doing it really, really well.", attr: "Andy Dwyer, Parks and Rec" },
+  { text: "Everything hurts and I'm dying.", attr: "Leslie Knope, Parks and Rec" },
+  { text: "The key to a good meeting is to end it at a high point. So let's end with waffles.", attr: "Leslie Knope, Parks and Rec" },
+  { text: "I typed your symptoms into the thing up here and it says you could have network connectivity problems.", attr: "Tom Haverford, Parks and Rec" },
+  { text: "Oh my god, this is so sad. Alexa, play Despacito.", attr: "April Ludgate, Parks and Rec" },
 ];
 
 // ═══════════════════════════════════════════════
@@ -1289,7 +1300,7 @@ export default function Home() {
               <LeafIcon size={32} />
               <span style={{ fontSize: 24, fontWeight: 700, color: T.text }}>Fresh Food Connect</span>
             </div>
-            <div style={{ fontSize: 13, color: T.textMuted, fontStyle: "italic", paddingLeft: 44 }}>{dailyQuote}</div>
+            <div style={{ fontSize: 13, color: T.textMuted, fontStyle: "italic", paddingLeft: 44 }}>"{dailyQuote.text}" <span style={{ fontStyle: "normal", fontWeight: 600 }}>— {dailyQuote.attr}</span></div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <button onClick={() => setComposing("compose")} style={{ padding: "10px 22px", background: T.accent, color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 16, cursor: "pointer" }}>+ Compose</button>
