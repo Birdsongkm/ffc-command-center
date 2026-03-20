@@ -740,6 +740,14 @@ export default function Home() {
   const [aiPrep, setAiPrep] = useState({}); // eventId → { loading, text, error }
   const [auditLog, setAuditLog] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [docModal, setDocModal] = useState(null); // { title, content } or null
+  const [docSaving, setDocSaving] = useState(false);
+  const [docFolderUrl, setDocFolderUrl] = useState("");
+  const [hsModal, setHsModal] = useState(null); // { note, subject } or null
+  const [hsContacts, setHsContacts] = useState([]);
+  const [hsContactSearch, setHsContactSearch] = useState("");
+  const [hsContactId, setHsContactId] = useState("");
+  const [hsSaving, setHsSaving] = useState(false);
 
   // ── Persist ──
   useEffect(() => {
@@ -1557,9 +1565,11 @@ export default function Home() {
                   <div style={{ fontSize: 14, color: T.textDim, textAlign: "right" }}>Sitting for <strong style={{ color: emailAge(d.date) > 48 ? T.danger : T.textMuted }}>{draftAge(d.date)}</strong></div>
                 </div>
                 <div style={{ fontSize: 15, color: T.textMuted, marginBottom: 14 }}>{d.snippet}</div>
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button onClick={async () => { const r = await fetch("/api/drafts", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draftId: d.id }) }); const res = await r.json(); if (res.success) { showToast("Draft sent!"); fetchDrafts(); } else { showToast("Send failed — try Edit & Send"); } }} style={{ padding: "8px 18px", background: T.accent, color: "#fff", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Send Now</button>
                   <button onClick={() => window.open(`https://mail.google.com/mail/#drafts/${d.messageId}`, "_blank")} style={{ padding: "8px 18px", background: T.infoBg, color: T.info, border: `1px solid ${T.info}30`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>Edit in Gmail</button>
+                  <button onClick={() => setDocModal({ title: d.subject || "Draft", content: `To: ${d.to || ""}\nSubject: ${d.subject || ""}\n\n${d.snippet || ""}` })} style={{ padding: "8px 18px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>📄 Google Doc</button>
+                  <button onClick={() => setHsModal({ note: `Draft email\nTo: ${d.to || ""}\nSubject: ${d.subject || ""}\n\n${d.snippet || ""}`, subject: d.subject || "Draft" })} style={{ padding: "8px 18px", background: "#FFF4F0", color: "#FF7A59", border: "1px solid #FFB8A0", borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>🏢 HubSpot</button>
                   <button onClick={async () => { const r = await fetch(`/api/drafts?id=${d.id}`, { method: "DELETE" }); const res = await r.json(); if (res.success) { showToast("Draft deleted"); fetchDrafts(); } }} style={{ padding: "8px 18px", background: T.dangerBg, color: T.danger, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>Delete</button>
                 </div>
               </div>
@@ -1594,6 +1604,8 @@ export default function Home() {
                     <button onClick={() => { setShowTaskForm({ prefillFromEmail: { subject: note.text } }); setStickyNotes(prev => prev.map(n => n.id === note.id ? { ...n, processed: true } : n)); }} style={{ padding: "6px 12px", background: T.taskAmberBg, color: T.taskAmber, border: `1px solid ${T.taskAmberBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>→ Task</button>
                     <button onClick={() => { setComposing("compose"); }} style={{ padding: "6px 12px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>→ Email</button>
                     <button onClick={() => { setShowEventForm({ prefillFromEmail: { subject: note.text } }); setStickyNotes(prev => prev.map(n => n.id === note.id ? { ...n, processed: true } : n)); }} style={{ padding: "6px 12px", background: T.calGreenBg, color: T.calGreen, border: `1px solid ${T.calGreenBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>→ Event</button>
+                    <button onClick={() => setDocModal({ title: note.text.slice(0, 60) || "Quick Capture", content: note.text })} style={{ padding: "6px 12px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 500 }}>📄 Doc</button>
+                    <button onClick={() => setHsModal({ note: note.text, subject: note.text.slice(0, 60) || "Quick Capture" })} style={{ padding: "6px 12px", background: "#FFF4F0", color: "#FF7A59", border: "1px solid #FFB8A0", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 500 }}>🏢 HubSpot</button>
                     <button onClick={() => setStickyNotes(prev => prev.filter(n => n.id !== note.id))} style={{ padding: "6px 12px", background: T.dangerBg, color: T.danger, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 500 }}>Delete</button>
                   </div>
                 </div>
@@ -1653,6 +1665,122 @@ export default function Home() {
       </div>
 
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}
+
+      {/* ═══════════ GOOGLE DOC MODAL ═══════════ */}
+      {docModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: T.card, borderRadius: 14, padding: "28px 32px", width: 480, maxWidth: "92vw", boxShadow: "0 12px 48px rgba(0,0,0,0.22)" }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: T.text, marginBottom: 6 }}>📄 Save as Google Doc</div>
+            <div style={{ fontSize: 14, color: T.textMuted, marginBottom: 20 }}>"{docModal.title}"</div>
+            <label style={{ fontSize: 14, fontWeight: 600, color: T.text, display: "block", marginBottom: 6 }}>
+              Save to folder <span style={{ fontWeight: 400, color: T.textMuted }}>(paste Drive folder URL or leave blank for My Drive)</span>
+            </label>
+            <input
+              value={docFolderUrl}
+              onChange={e => setDocFolderUrl(e.target.value)}
+              placeholder="https://drive.google.com/drive/folders/..."
+              style={{ width: "100%", padding: "11px 14px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 15, marginBottom: 20, boxSizing: "border-box", outline: "none", color: T.text, background: T.bg }}
+            />
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                disabled={docSaving}
+                onClick={async () => {
+                  setDocSaving(true);
+                  let folderId = null;
+                  const m = docFolderUrl.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+                  if (m) folderId = m[1];
+                  const r = await fetch("/api/create-doc", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ title: docModal.title, content: docModal.content, folderId }),
+                  });
+                  const data = await r.json();
+                  setDocSaving(false);
+                  if (data.url) {
+                    showToast("Doc created!");
+                    window.open(data.url, "_blank");
+                    setDocModal(null);
+                    setDocFolderUrl("");
+                  } else {
+                    showToast("Failed: " + (data.error || "Unknown error"));
+                  }
+                }}
+                style={{ flex: 1, padding: "11px", background: T.accent, color: "#fff", border: "none", borderRadius: 8, cursor: docSaving ? "default" : "pointer", fontWeight: 600, fontSize: 15 }}
+              >{docSaving ? "Creating..." : "Create Doc & Open"}</button>
+              <button onClick={() => { setDocModal(null); setDocFolderUrl(""); }} style={{ padding: "11px 20px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15 }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════ HUBSPOT NOTE MODAL ═══════════ */}
+      {hsModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: T.card, borderRadius: 14, padding: "28px 32px", width: 500, maxWidth: "92vw", boxShadow: "0 12px 48px rgba(0,0,0,0.22)" }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: T.text, marginBottom: 6 }}>🏢 Log to HubSpot</div>
+            <div style={{ fontSize: 14, color: T.textMuted, marginBottom: 20 }}>Log as a note under a contact in HubSpot</div>
+            <label style={{ fontSize: 14, fontWeight: 600, color: T.text, display: "block", marginBottom: 6 }}>Search contact</label>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <input
+                value={hsContactSearch}
+                onChange={e => setHsContactSearch(e.target.value)}
+                placeholder="Name or email..."
+                onKeyDown={async e => {
+                  if (e.key === "Enter" && hsContactSearch.trim()) {
+                    const r = await fetch(`/api/hubspot-search?q=${encodeURIComponent(hsContactSearch)}`);
+                    const d = await r.json();
+                    setHsContacts(d.contacts || []);
+                  }
+                }}
+                style={{ flex: 1, padding: "10px 14px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 15, outline: "none", color: T.text, background: T.bg }}
+              />
+              <button onClick={async () => {
+                if (!hsContactSearch.trim()) return;
+                const r = await fetch(`/api/hubspot-search?q=${encodeURIComponent(hsContactSearch)}`);
+                const d = await r.json();
+                setHsContacts(d.contacts || []);
+              }} style={{ padding: "10px 16px", background: T.infoBg, color: T.info, border: `1px solid ${T.info}30`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Search</button>
+            </div>
+            {hsContacts.length > 0 && (
+              <div style={{ border: `1px solid ${T.border}`, borderRadius: 8, marginBottom: 16, maxHeight: 180, overflowY: "auto" }}>
+                {hsContacts.map(c => (
+                  <div key={c.id} onClick={() => { setHsContactId(c.id); setHsContacts([]); setHsContactSearch(c.label); }}
+                    style={{ padding: "10px 14px", cursor: "pointer", borderBottom: `1px solid ${T.borderLight}`, fontSize: 15, color: T.text, background: hsContactId === c.id ? T.accentBg : "transparent" }}>
+                    {c.label}
+                  </div>
+                ))}
+              </div>
+            )}
+            {hsContactId && <div style={{ fontSize: 13, color: T.calGreen, marginBottom: 14, fontWeight: 600 }}>✓ Contact selected: {hsContactSearch}</div>}
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                disabled={hsSaving || !hsContactId}
+                onClick={async () => {
+                  setHsSaving(true);
+                  const r = await fetch("/api/hubspot-note", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ contactId: hsContactId, note: hsModal.note, subject: hsModal.subject }),
+                  });
+                  const data = await r.json();
+                  setHsSaving(false);
+                  if (data.id || data.status === "ok") {
+                    showToast("Logged to HubSpot!");
+                    setHsModal(null);
+                    setHsContactId("");
+                    setHsContactSearch("");
+                  } else {
+                    showToast("Failed: " + (data.error || "Unknown error"));
+                  }
+                }}
+                style={{ flex: 1, padding: "11px", background: hsContactId ? "#FF7A59" : T.border, color: hsContactId ? "#fff" : T.textMuted, border: "none", borderRadius: 8, cursor: hsContactId && !hsSaving ? "pointer" : "default", fontWeight: 600, fontSize: 15 }}
+              >{hsSaving ? "Logging..." : "Log Note"}</button>
+              <button onClick={() => { setHsModal(null); setHsContactId(""); setHsContactSearch(""); setHsContacts([]); }} style={{ padding: "11px 20px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15 }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <LightbulbFAB />
     </>
   );
