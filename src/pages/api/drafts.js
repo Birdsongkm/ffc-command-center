@@ -122,6 +122,25 @@ async function handleDelete(token, draftId) {
   return { success: true };
 }
 
+async function handleUpdate(token, draftId, { to, subject, body }) {
+  const { buildRawEmail } = require('../../lib/email');
+  const raw = buildRawEmail({ to, subject, body: body || '' });
+  const response = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/drafts/${draftId}`,
+    {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: { raw } }),
+    }
+  );
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    console.error('drafts:update', { draftId, status: response.status, message: err.error?.message });
+    throw new Error(err.error?.message || 'Failed to update draft');
+  }
+  return { success: true };
+}
+
 async function handleSend(token, draftId) {
   const response = await fetch(
     `https://gmail.googleapis.com/gmail/v1/users/me/drafts/${draftId}/send`,
@@ -157,6 +176,13 @@ export default async function handler(req, res) {
       const { draftId } = req.body;
       if (!draftId) return res.status(400).json({ error: 'Missing draft ID' });
       return res.status(200).json(await handleSend(token, draftId));
+    }
+    if (req.method === 'PATCH') {
+      const { draftId, to, subject, body } = req.body;
+      if (!draftId) return res.status(400).json({ error: 'Missing draftId' });
+      if (!to) return res.status(400).json({ error: 'Missing to' });
+      if (!subject) return res.status(400).json({ error: 'Missing subject' });
+      return res.status(200).json(await handleUpdate(token, draftId, { to, subject, body }));
     }
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {

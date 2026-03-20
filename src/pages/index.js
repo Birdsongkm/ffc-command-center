@@ -740,6 +740,8 @@ export default function Home() {
   const [aiPrep, setAiPrep] = useState({}); // eventId → { loading, text, error }
   const [auditLog, setAuditLog] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [editingDraft, setEditingDraft] = useState(null); // { id, to, subject, body } or null
+  const [draftSaving, setDraftSaving] = useState(false);
   const [docModal, setDocModal] = useState(null); // { title, content } or null
   const [docSaving, setDocSaving] = useState(false);
   const [docFolderUrl, setDocFolderUrl] = useState("");
@@ -1555,8 +1557,10 @@ export default function Home() {
                 <div style={{ fontSize: 17, marginBottom: 8 }}>Loading drafts...</div>
                 <div style={{ fontSize: 15 }}>If nothing appears, click Refresh above</div>
               </div>
-            ) : drafts.map(d => (
-              <div key={d.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "18px 22px", marginBottom: 12 }}>
+            ) : drafts.map(d => {
+              const isEditing = editingDraft?.id === d.id;
+              return (
+              <div key={d.id} style={{ background: T.card, border: `1px solid ${isEditing ? T.info : T.border}`, borderRadius: 10, padding: "18px 22px", marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600, fontSize: 16, color: T.text }}>{d.subject || "(No subject)"}</div>
@@ -1564,16 +1568,51 @@ export default function Home() {
                   </div>
                   <div style={{ fontSize: 14, color: T.textDim, textAlign: "right" }}>Sitting for <strong style={{ color: emailAge(d.date) > 48 ? T.danger : T.textMuted }}>{draftAge(d.date)}</strong></div>
                 </div>
-                <div style={{ fontSize: 15, color: T.textMuted, marginBottom: 14 }}>{d.snippet}</div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button onClick={async () => { const r = await fetch("/api/drafts", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draftId: d.id }) }); const res = await r.json(); if (res.success) { showToast("Draft sent!"); fetchDrafts(); } else { showToast("Send failed — try Edit & Send"); } }} style={{ padding: "8px 18px", background: T.accent, color: "#fff", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Send Now</button>
-                  <button onClick={() => window.open(`https://mail.google.com/mail/#drafts/${d.messageId}`, "_blank")} style={{ padding: "8px 18px", background: T.infoBg, color: T.info, border: `1px solid ${T.info}30`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>Edit in Gmail</button>
-                  <button onClick={() => setDocModal({ title: d.subject || "Draft", content: `To: ${d.to || ""}\nSubject: ${d.subject || ""}\n\n${d.snippet || ""}` })} style={{ padding: "8px 18px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>📄 Google Doc</button>
-                  <button onClick={() => setHsModal({ note: `Draft email\nTo: ${d.to || ""}\nSubject: ${d.subject || ""}\n\n${d.snippet || ""}`, subject: d.subject || "Draft" })} style={{ padding: "8px 18px", background: "#FFF4F0", color: "#FF7A59", border: "1px solid #FFB8A0", borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>🏢 HubSpot</button>
-                  <button onClick={async () => { const r = await fetch(`/api/drafts?id=${d.id}`, { method: "DELETE" }); const res = await r.json(); if (res.success) { showToast("Draft deleted"); fetchDrafts(); } }} style={{ padding: "8px 18px", background: T.dangerBg, color: T.danger, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>Delete</button>
-                </div>
+                {isEditing ? (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ marginBottom: 10 }}>
+                      <label style={{ fontSize: 13, fontWeight: 600, color: T.textMuted, display: "block", marginBottom: 4 }}>To</label>
+                      <input value={editingDraft.to} onChange={e => setEditingDraft(prev => ({ ...prev, to: e.target.value }))}
+                        style={{ width: "100%", padding: "9px 13px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 15, boxSizing: "border-box", outline: "none", color: T.text, background: T.bg }} />
+                    </div>
+                    <div style={{ marginBottom: 10 }}>
+                      <label style={{ fontSize: 13, fontWeight: 600, color: T.textMuted, display: "block", marginBottom: 4 }}>Subject</label>
+                      <input value={editingDraft.subject} onChange={e => setEditingDraft(prev => ({ ...prev, subject: e.target.value }))}
+                        style={{ width: "100%", padding: "9px 13px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 15, boxSizing: "border-box", outline: "none", color: T.text, background: T.bg }} />
+                    </div>
+                    <div style={{ marginBottom: 12 }}>
+                      <label style={{ fontSize: 13, fontWeight: 600, color: T.textMuted, display: "block", marginBottom: 4 }}>Body</label>
+                      <textarea value={editingDraft.body} onChange={e => setEditingDraft(prev => ({ ...prev, body: e.target.value }))}
+                        rows={8} style={{ width: "100%", padding: "9px 13px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 15, boxSizing: "border-box", outline: "none", color: T.text, background: T.bg, resize: "vertical", fontFamily: "inherit", lineHeight: 1.6 }} />
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button disabled={draftSaving} onClick={async () => {
+                        setDraftSaving(true);
+                        const r = await fetch("/api/drafts", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draftId: d.id, to: editingDraft.to, subject: editingDraft.subject, body: editingDraft.body }) });
+                        const res = await r.json();
+                        setDraftSaving(false);
+                        if (res.success) { showToast("Draft saved!"); setEditingDraft(null); fetchDrafts(); }
+                        else { showToast("Save failed: " + (res.error || "Unknown error")); }
+                      }} style={{ padding: "9px 22px", background: T.accent, color: "#fff", border: "none", borderRadius: 7, cursor: draftSaving ? "default" : "pointer", fontWeight: 600, fontSize: 15 }}>{draftSaving ? "Saving..." : "Save Draft"}</button>
+                      <button onClick={() => setEditingDraft(null)} style={{ padding: "9px 18px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 15 }}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 15, color: T.textMuted, marginBottom: 14 }}>{d.snippet}</div>
+                )}
+                {!isEditing && (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button onClick={async () => { const r = await fetch("/api/drafts", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draftId: d.id }) }); const res = await r.json(); if (res.success) { showToast("Draft sent!"); fetchDrafts(); } else { showToast("Send failed — try Edit & Send"); } }} style={{ padding: "8px 18px", background: T.accent, color: "#fff", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Send Now</button>
+                    <button onClick={() => setEditingDraft({ id: d.id, to: d.to || "", subject: d.subject || "", body: d.body || d.snippet || "" })} style={{ padding: "8px 18px", background: T.infoBg, color: T.info, border: `1px solid ${T.info}30`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>✏️ Edit</button>
+                    <button onClick={() => window.open(`https://mail.google.com/mail/#drafts/${d.messageId}`, "_blank")} style={{ padding: "8px 18px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>Edit in Gmail</button>
+                    <button onClick={() => setDocModal({ title: d.subject || "Draft", content: `To: ${d.to || ""}\nSubject: ${d.subject || ""}\n\n${d.snippet || ""}` })} style={{ padding: "8px 18px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>📄 Google Doc</button>
+                    <button onClick={() => setHsModal({ note: `Draft email\nTo: ${d.to || ""}\nSubject: ${d.subject || ""}\n\n${d.snippet || ""}`, subject: d.subject || "Draft" })} style={{ padding: "8px 18px", background: "#FFF4F0", color: "#FF7A59", border: "1px solid #FFB8A0", borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>🏢 HubSpot</button>
+                    <button onClick={async () => { const r = await fetch(`/api/drafts?id=${d.id}`, { method: "DELETE" }); const res = await r.json(); if (res.success) { showToast("Draft deleted"); fetchDrafts(); } }} style={{ padding: "8px 18px", background: T.dangerBg, color: T.danger, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>Delete</button>
+                  </div>
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
