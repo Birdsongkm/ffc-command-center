@@ -1145,7 +1145,7 @@ export default function Home() {
     setDragTask(null); setDragOverTask(null); setDragOverCategory(null);
   };
 
-  const abtn = (color, bg) => ({ padding: "8px 15px", background: bg, color, border: `1px solid ${color}30`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500, whiteSpace: "nowrap" });
+  const abtn = (color, bg) => ({ padding: "4px 9px", background: bg, color, border: `1px solid ${color}30`, borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 500, whiteSpace: "nowrap" });
 
   // ═══════════════════════════════════════════════
   //  RENDER EMAIL ROW
@@ -1355,7 +1355,7 @@ export default function Home() {
         a { color: ${T.emailBlue}; }
       `}</style>
 
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "22px 26px" }}>
+      <div style={{ maxWidth: 1600, margin: "0 auto", padding: "22px 18px" }}>
 
         {/* HEADER with daily quote */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 26 }}>
