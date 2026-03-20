@@ -684,6 +684,8 @@ export default function Home() {
   const [weekPrepEvents, setWeekPrepEvents] = useState([]);
   const [digest, setDigest] = useState(null);
   const [financePanel, setFinancePanel] = useState(null); // null or email object
+  const [auditLog, setAuditLog] = useState([]);
+  const [auditLoading, setAuditLoading] = useState(false);
 
   // ── Persist ──
   useEffect(() => {
@@ -847,6 +849,12 @@ export default function Home() {
     if (d.drafts) { setDrafts(d.drafts); setDraftsTotal(d.total || d.drafts.length); }
   };
   useEffect(() => { if (auth && tab === "drafts") fetchDrafts(); }, [auth, tab]);
+  useEffect(() => {
+    if (auth && tab === "audit") {
+      setAuditLoading(true);
+      fetch("/api/audit-log").then(r => r.json()).then(d => { if (d.entries) setAuditLog(d.entries); }).finally(() => setAuditLoading(false));
+    }
+  }, [auth, tab]);
 
   // ── Derived state ──
   const emailsByBucket = {};
@@ -1058,6 +1066,7 @@ export default function Home() {
     { id: "drive", label: "Drive", color: T.driveViolet, icon: "📁" },
     { id: "drafts", label: "Drafts", color: T.info, icon: "✏️" },
     { id: "sticky", label: "Quick Capture", color: "#B8A030", icon: "📌" },
+    { id: "audit", label: "Audit Log", color: T.textMuted, icon: "🔍" },
   ];
 
   // ═══════════════════════════════════════════════
@@ -1510,6 +1519,55 @@ export default function Home() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* ═══════════ AUDIT LOG TAB ═══════════ */}
+        {tab === "audit" && (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 22 }}>
+              <span style={{ fontSize: 19 }}>🔍</span>
+              <span style={{ fontSize: 18, fontWeight: 700, color: T.text }}>Audit Log</span>
+              <span style={{ fontSize: 14, color: T.textMuted, marginLeft: 8 }}>All feedback requests and their status</span>
+              <button onClick={() => {
+                setAuditLoading(true);
+                fetch("/api/audit-log").then(r => r.json()).then(d => { if (d.entries) setAuditLog(d.entries); }).finally(() => setAuditLoading(false));
+              }} style={{ marginLeft: "auto", padding: "6px 14px", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 13, color: T.textMuted, fontWeight: 600 }}>
+                {auditLoading ? "Refreshing..." : "↻ Refresh"}
+              </button>
+            </div>
+            {auditLoading && auditLog.length === 0 ? (
+              <div style={{ padding: 44, textAlign: "center", color: T.textMuted }}>Loading...</div>
+            ) : auditLog.length === 0 ? (
+              <div style={{ padding: 44, textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, fontSize: 16 }}>No feedback submitted yet. Use the 💡 button to request changes.</div>
+            ) : auditLog.map(entry => {
+              const deployed = entry.status === "deployed";
+              const statusColor = deployed ? T.calGreen : T.gold;
+              const statusBg = deployed ? T.calGreenBg : T.goldBg;
+              const statusLabel = deployed ? "Deployed" : "Pending";
+              const submitted = new Date(entry.createdAt);
+              const deployedAt = entry.closedAt ? new Date(entry.closedAt) : null;
+              return (
+                <div key={entry.number} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "18px 22px", marginBottom: 12 }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                        <span style={{ fontSize: 13, color: T.textDim, fontWeight: 600 }}>#{entry.number}</span>
+                        <span style={{ fontWeight: 700, fontSize: 16, color: T.text }}>{entry.title}</span>
+                      </div>
+                      <div style={{ fontSize: 13, color: T.textMuted }}>
+                        Submitted {submitted.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        {deployedAt && <span> · Deployed {deployedAt.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                      <span style={{ padding: "4px 12px", background: statusBg, color: statusColor, borderRadius: 20, fontSize: 13, fontWeight: 700 }}>{statusLabel}</span>
+                      <a href={entry.url} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: T.info, textDecoration: "none", fontWeight: 600 }}>GitHub →</a>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
