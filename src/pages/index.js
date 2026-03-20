@@ -190,9 +190,25 @@ const BUCKETS = {
 // ═══════════════════════════════════════════════
 function LightbulbFAB() {
   const [open, setOpen] = useState(false);
+  const [fabTab, setFabTab] = useState("feedback"); // "feedback" | "audit"
   const [text, setText] = useState("");
   const [status, setStatus] = useState(null); // null | "sending" | "sent" | "error"
   const [issueUrl, setIssueUrl] = useState(null);
+  const [auditLog, setAuditLog] = useState([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+
+  function loadAudit() {
+    setAuditLoading(true);
+    fetch("/api/audit-log")
+      .then(r => r.json())
+      .then(d => { if (d.entries) setAuditLog(d.entries); })
+      .finally(() => setAuditLoading(false));
+  }
+
+  function switchTab(t) {
+    setFabTab(t);
+    if (t === "audit" && auditLog.length === 0) loadAudit();
+  }
 
   async function submit() {
     if (!text.trim()) return;
@@ -218,20 +234,24 @@ function LightbulbFAB() {
     }
   }
 
+  const tabStyle = (active) => ({
+    flex: 1, padding: "7px 0", fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer",
+    borderRadius: 6, background: active ? T.accent : "transparent",
+    color: active ? "#fff" : T.textMuted, transition: "background 0.15s",
+  });
+
   return (
     <>
-      {/* FAB button */}
       <button
         onClick={() => { setOpen(o => !o); setStatus(null); setText(""); }}
-        title="Product feedback"
+        title="Feedback & audit log"
         style={{
           position: "fixed", bottom: 28, right: 28, width: 52, height: 52,
           borderRadius: "50%", border: "none", cursor: "pointer",
           background: T.accent, color: "#fff",
           boxShadow: "0 4px 18px rgba(74,155,74,0.35)",
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 24, zIndex: 1000,
-          transition: "transform 0.15s, box-shadow 0.15s",
+          fontSize: 24, zIndex: 1000, transition: "transform 0.15s, box-shadow 0.15s",
         }}
         onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.08)"; e.currentTarget.style.boxShadow = "0 6px 24px rgba(74,155,74,0.45)"; }}
         onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 18px rgba(74,155,74,0.35)"; }}
@@ -239,64 +259,111 @@ function LightbulbFAB() {
         💡
       </button>
 
-      {/* Feedback panel */}
       {open && (
         <div style={{
-          position: "fixed", bottom: 90, right: 28, width: 340,
+          position: "fixed", bottom: 90, right: 28, width: 380,
           background: T.card, borderRadius: 14, padding: 20,
           boxShadow: "0 8px 36px rgba(0,0,0,0.16)", border: `1px solid ${T.border}`,
           zIndex: 1001,
         }}>
-          <div style={{ fontWeight: 700, fontSize: 16, color: T.text, marginBottom: 4 }}>Product feedback</div>
-          <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 14 }}>
-            What should be built, fixed, or changed? Creates a GitHub issue automatically.
+          {/* Tab switcher */}
+          <div style={{ display: "flex", gap: 4, background: T.bg, borderRadius: 8, padding: 4, marginBottom: 16 }}>
+            <button style={tabStyle(fabTab === "feedback")} onClick={() => switchTab("feedback")}>💡 Feedback</button>
+            <button style={tabStyle(fabTab === "audit")} onClick={() => switchTab("audit")}>🔍 Audit Log</button>
           </div>
 
-          {status === "sent" ? (
-            <div style={{ textAlign: "center", padding: "16px 0" }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>✅</div>
-              <div style={{ fontWeight: 600, color: T.accent }}>Issue created!</div>
-              {issueUrl && (
-                <a href={issueUrl} target="_blank" rel="noreferrer"
-                  style={{ fontSize: 13, color: T.info, display: "block", marginTop: 6 }}>
-                  View on GitHub →
-                </a>
-              )}
-            </div>
-          ) : (
+          {fabTab === "feedback" && (
             <>
-              <textarea
-                value={text}
-                onChange={e => setText(e.target.value)}
-                placeholder="Describe the feature, bug, or idea..."
-                rows={5}
-                style={{
-                  width: "100%", boxSizing: "border-box", padding: "10px 12px",
-                  border: `1px solid ${T.border}`, borderRadius: 8, resize: "vertical",
-                  fontSize: 14, color: T.text, background: T.bg, fontFamily: "inherit",
-                  marginBottom: 10,
-                }}
-                onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit(); }}
-              />
-              {status === "error" && (
-                <div style={{ color: T.danger, fontSize: 13, marginBottom: 8 }}>
-                  Failed to create issue. Check GITHUB_TOKEN and GITHUB_REPO env vars.
+              <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 12 }}>
+                What should be built, fixed, or changed? Creates a GitHub issue automatically.
+              </div>
+              {status === "sent" ? (
+                <div style={{ textAlign: "center", padding: "16px 0" }}>
+                  <div style={{ fontSize: 28, marginBottom: 8 }}>✅</div>
+                  <div style={{ fontWeight: 600, color: T.accent }}>Issue created!</div>
+                  {issueUrl && (
+                    <a href={issueUrl} target="_blank" rel="noreferrer"
+                      style={{ fontSize: 13, color: T.info, display: "block", marginTop: 6 }}>
+                      View on GitHub →
+                    </a>
+                  )}
                 </div>
+              ) : (
+                <>
+                  <textarea
+                    value={text}
+                    onChange={e => setText(e.target.value)}
+                    placeholder="Describe the feature, bug, or idea..."
+                    rows={5}
+                    style={{
+                      width: "100%", boxSizing: "border-box", padding: "10px 12px",
+                      border: `1px solid ${T.border}`, borderRadius: 8, resize: "vertical",
+                      fontSize: 14, color: T.text, background: T.bg, fontFamily: "inherit",
+                      marginBottom: 10,
+                    }}
+                    onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit(); }}
+                  />
+                  {status === "error" && (
+                    <div style={{ color: T.danger, fontSize: 13, marginBottom: 8 }}>
+                      Failed to create issue. Check GITHUB_TOKEN and GITHUB_REPO env vars.
+                    </div>
+                  )}
+                  <button
+                    onClick={submit}
+                    disabled={status === "sending" || !text.trim()}
+                    style={{
+                      width: "100%", padding: "11px", borderRadius: 8, border: "none",
+                      background: text.trim() ? T.accent : T.border,
+                      color: text.trim() ? "#fff" : T.textMuted,
+                      fontWeight: 600, fontSize: 15, cursor: text.trim() ? "pointer" : "default",
+                      transition: "background 0.15s",
+                    }}
+                  >
+                    {status === "sending" ? "Creating issue..." : "Submit feedback  ⌘↵"}
+                  </button>
+                </>
               )}
-              <button
-                onClick={submit}
-                disabled={status === "sending" || !text.trim()}
-                style={{
-                  width: "100%", padding: "11px", borderRadius: 8, border: "none",
-                  background: text.trim() ? T.accent : T.border,
-                  color: text.trim() ? "#fff" : T.textMuted,
-                  fontWeight: 600, fontSize: 15, cursor: text.trim() ? "pointer" : "default",
-                  transition: "background 0.15s",
-                }}
-              >
-                {status === "sending" ? "Creating issue..." : "Submit feedback  ⌘↵"}
-              </button>
             </>
+          )}
+
+          {fabTab === "audit" && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <span style={{ fontSize: 13, color: T.textMuted }}>All feedback requests and their status</span>
+                <button onClick={loadAudit} style={{ padding: "4px 10px", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 12, color: T.textMuted, fontWeight: 600 }}>
+                  {auditLoading ? "..." : "↻"}
+                </button>
+              </div>
+              <div style={{ maxHeight: 340, overflowY: "auto" }}>
+                {auditLoading && auditLog.length === 0 ? (
+                  <div style={{ padding: 24, textAlign: "center", color: T.textMuted, fontSize: 14 }}>Loading...</div>
+                ) : auditLog.length === 0 ? (
+                  <div style={{ padding: 24, textAlign: "center", color: T.textMuted, fontSize: 14 }}>No feedback submitted yet.</div>
+                ) : auditLog.map(entry => {
+                  const deployed = entry.status === "deployed";
+                  return (
+                    <div key={entry.number} style={{ borderBottom: `1px solid ${T.borderLight}`, paddingBottom: 10, marginBottom: 10 }}>
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: T.text, lineHeight: 1.4 }}>
+                            <span style={{ color: T.textDim, marginRight: 6 }}>#{entry.number}</span>{entry.title}
+                          </div>
+                          <div style={{ fontSize: 12, color: T.textDim, marginTop: 3 }}>
+                            {new Date(entry.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                          <span style={{ padding: "2px 8px", background: deployed ? T.calGreenBg : T.goldBg, color: deployed ? T.calGreen : T.gold, borderRadius: 12, fontSize: 11, fontWeight: 700 }}>
+                            {deployed ? "Deployed" : "Pending"}
+                          </span>
+                          <a href={entry.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: T.info, textDecoration: "none" }}>↗</a>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -738,8 +805,6 @@ export default function Home() {
   const [digest, setDigest] = useState(null);
   const [financePanel, setFinancePanel] = useState(null); // null or email object
   const [aiPrep, setAiPrep] = useState({}); // eventId → { loading, text, error }
-  const [auditLog, setAuditLog] = useState([]);
-  const [auditLoading, setAuditLoading] = useState(false);
   const [editingDraft, setEditingDraft] = useState(null); // { id, to, subject, body } or null
   const [draftSaving, setDraftSaving] = useState(false);
   const [docModal, setDocModal] = useState(null); // { title, content } or null
@@ -929,12 +994,6 @@ export default function Home() {
     if (d.drafts) { setDrafts(d.drafts); setDraftsTotal(d.total || d.drafts.length); }
   };
   useEffect(() => { if (auth && tab === "drafts") fetchDrafts(); }, [auth, tab]);
-  useEffect(() => {
-    if (auth && tab === "audit") {
-      setAuditLoading(true);
-      fetch("/api/audit-log").then(r => r.json()).then(d => { if (d.entries) setAuditLog(d.entries); }).finally(() => setAuditLoading(false));
-    }
-  }, [auth, tab]);
 
   // ── Derived state ──
   const emailsByBucket = {};
@@ -1146,7 +1205,6 @@ export default function Home() {
     { id: "drive", label: "Drive", color: T.driveViolet, icon: "📁" },
     { id: "drafts", label: "Drafts", color: T.info, icon: "✏️" },
     { id: "sticky", label: "Quick Capture", color: "#B8A030", icon: "📌" },
-    { id: "audit", label: "Audit Log", color: T.textMuted, icon: "🔍" },
   ];
 
   // ═══════════════════════════════════════════════
@@ -1653,54 +1711,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* ═══════════ AUDIT LOG TAB ═══════════ */}
-        {tab === "audit" && (
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 22 }}>
-              <span style={{ fontSize: 19 }}>🔍</span>
-              <span style={{ fontSize: 18, fontWeight: 700, color: T.text }}>Audit Log</span>
-              <span style={{ fontSize: 14, color: T.textMuted, marginLeft: 8 }}>All feedback requests and their status</span>
-              <button onClick={() => {
-                setAuditLoading(true);
-                fetch("/api/audit-log").then(r => r.json()).then(d => { if (d.entries) setAuditLog(d.entries); }).finally(() => setAuditLoading(false));
-              }} style={{ marginLeft: "auto", padding: "6px 14px", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 13, color: T.textMuted, fontWeight: 600 }}>
-                {auditLoading ? "Refreshing..." : "↻ Refresh"}
-              </button>
-            </div>
-            {auditLoading && auditLog.length === 0 ? (
-              <div style={{ padding: 44, textAlign: "center", color: T.textMuted }}>Loading...</div>
-            ) : auditLog.length === 0 ? (
-              <div style={{ padding: 44, textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, fontSize: 16 }}>No feedback submitted yet. Use the 💡 button to request changes.</div>
-            ) : auditLog.map(entry => {
-              const deployed = entry.status === "deployed";
-              const statusColor = deployed ? T.calGreen : T.gold;
-              const statusBg = deployed ? T.calGreenBg : T.goldBg;
-              const statusLabel = deployed ? "Deployed" : "Pending";
-              const submitted = new Date(entry.createdAt);
-              const deployedAt = entry.closedAt ? new Date(entry.closedAt) : null;
-              return (
-                <div key={entry.number} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "18px 22px", marginBottom: 12 }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                        <span style={{ fontSize: 13, color: T.textDim, fontWeight: 600 }}>#{entry.number}</span>
-                        <span style={{ fontWeight: 700, fontSize: 16, color: T.text }}>{entry.title}</span>
-                      </div>
-                      <div style={{ fontSize: 13, color: T.textMuted }}>
-                        Submitted {submitted.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                        {deployedAt && <span> · Deployed {deployedAt.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                      <span style={{ padding: "4px 12px", background: statusBg, color: statusColor, borderRadius: 20, fontSize: 13, fontWeight: 700 }}>{statusLabel}</span>
-                      <a href={entry.url} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: T.info, textDecoration: "none", fontWeight: 600 }}>GitHub →</a>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}
