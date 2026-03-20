@@ -405,7 +405,7 @@ function ComposeForm({ mode = "compose", email = null, onSend, onCancel, signatu
     setSending(true);
     try {
       const payload = { to, cc, subject, body: body + (signature ? `\n--\n${signature.replace(/<[^>]*>/g, "")}` : "") };
-      if (mode === "reply" && email) { payload.threadId = email.threadId; payload.inReplyTo = email.messageId; payload.references = email.messageId; }
+      if (mode === "reply" && email) { payload.threadId = email.threadId; payload.inReplyTo = email.messageId; payload.references = email.messageId; payload.originalMessageId = email.id; }
       if (mode === "forward" && email) { payload.forward = true; payload.originalBody = email.snippet || ""; }
       await onSend(payload);
     } finally { setSending(false); }
@@ -771,7 +771,14 @@ export default function Home() {
   const sendEmail = async (payload) => {
     const r = await fetch("/api/send-email", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const d = await r.json();
-    if (d.success) { showToast("Email sent!"); setComposing(null); } else { showToast("Failed: " + (d.error || "Unknown error")); }
+    if (d.success) {
+      showToast("Email sent!");
+      setComposing(null);
+      if (payload.originalMessageId) {
+        setEmails(prev => prev.filter(e => e.id !== payload.originalMessageId));
+        fetch("/api/email-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "markRead", messageId: payload.originalMessageId }) });
+      }
+    } else { showToast("Failed: " + (d.error || "Unknown error")); }
   };
 
   const fetchEmailBody = async (id) => {
