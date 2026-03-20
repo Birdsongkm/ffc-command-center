@@ -807,6 +807,8 @@ export default function Home() {
   const [aiPrep, setAiPrep] = useState({}); // eventId → { loading, text, error }
   const [editingDraft, setEditingDraft] = useState(null); // { id, to, subject, body } or null
   const [draftSaving, setDraftSaving] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [focusedIdx, setFocusedIdx] = useState(0);
   const [docModal, setDocModal] = useState(null); // { title, content } or null
   const [docSaving, setDocSaving] = useState(false);
   const [docFolderUrl, setDocFolderUrl] = useState("");
@@ -995,6 +997,27 @@ export default function Home() {
   };
   useEffect(() => { if (auth && tab === "drafts") fetchDrafts(); }, [auth, tab]);
 
+  // ── Keyboard shortcuts ──
+  const TAB_IDS = ["today", "emails", "calendar", "tasks", "drive", "drafts", "sticky"];
+  useEffect(() => {
+    function onKey(e) {
+      const tag = (e.target.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || e.target.isContentEditable) return;
+      if (e.key === "?") { setShowShortcuts(s => !s); return; }
+      if (e.key === "Escape") { setShowShortcuts(false); return; }
+      if (tab === "emails") {
+        if (e.key === "j") { setFocusedIdx(i => Math.min(i + 1, emails.length - 1)); return; }
+        if (e.key === "k") { setFocusedIdx(i => Math.max(i - 1, 0)); return; }
+        if (e.key === "e") { const em = emails[focusedIdx]; if (em) emailAction("archive", em.id); return; }
+        if (e.key === "r") { const em = emails[focusedIdx]; if (em) setComposing({ mode: "reply", email: em }); return; }
+      }
+      const n = parseInt(e.key);
+      if (n >= 1 && n <= TAB_IDS.length && !e.metaKey && !e.ctrlKey && !e.altKey) setTab(TAB_IDS[n - 1]);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [tab, emails, focusedIdx]);
+
   // ── Derived state ──
   const emailsByBucket = {};
   emails.forEach(e => { const b = classifyEmail(e); if (!emailsByBucket[b]) emailsByBucket[b] = []; emailsByBucket[b].push(e); });
@@ -1003,6 +1026,14 @@ export default function Home() {
   const donationAlerts = emailsByBucket["classy-onetime"] || [];
   const todayMeetings = events.filter(isRealMeeting);
   const overdueTasks = tasks.filter(t => !t.done && t.due && new Date(t.due) < new Date());
+  const pendingTasks = tasks.filter(t => !t.done).length;
+  const oldestWaitingDays = (() => {
+    const reply = emailsByBucket["needs-response"] || [];
+    if (!reply.length) return null;
+    const dates = reply.map(e => e.internalDate ? parseInt(e.internalDate) : new Date(e.date || 0).getTime()).filter(ts => ts > 0);
+    if (!dates.length) return null;
+    return Math.floor((Date.now() - Math.min(...dates)) / (1000 * 60 * 60 * 24));
+  })();
   const dayOfWeek = new Date().getDay();
   const showPrepButton = dayOfWeek === 0 || dayOfWeek === 1 || dayOfWeek === 5;
 
@@ -1263,6 +1294,8 @@ export default function Home() {
             }}>
               <span>{t.icon}</span> {t.label}
               {t.id === "emails" && emails.length > 0 && <span style={{ background: T.emailBlue, color: "#fff", borderRadius: 10, padding: "2px 9px", fontSize: 13, fontWeight: 700 }}>{emails.length}</span>}
+              {t.id === "tasks" && pendingTasks > 0 && <span style={{ background: T.taskAmber, color: "#fff", borderRadius: 10, padding: "2px 9px", fontSize: 13, fontWeight: 700 }}>{pendingTasks}</span>}
+              {t.id === "drafts" && draftsTotal > 0 && <span style={{ background: T.info, color: "#fff", borderRadius: 10, padding: "2px 9px", fontSize: 13, fontWeight: 700 }}>{draftsTotal}</span>}
               {t.id === "sticky" && stickyNotes.length > 0 && <span style={{ background: "#B8A030", color: "#fff", borderRadius: 10, padding: "2px 9px", fontSize: 13, fontWeight: 700 }}>{stickyNotes.length}</span>}
             </button>
           ))}
@@ -1289,6 +1322,7 @@ export default function Home() {
                 {(needsReply.length > 0 || todayMeetings.length > 0) && overdueTasks.length > 0 && <span style={{ color: T.textMuted }}> · </span>}
                 {overdueTasks.length > 0 && <span style={{ fontWeight: 600, color: T.danger }}>{overdueTasks.length} overdue task{overdueTasks.length !== 1 ? "s" : ""}</span>}
                 {needsReply.length === 0 && todayMeetings.length === 0 && overdueTasks.length === 0 && <span style={{ color: T.calGreen }}>All clear — you're on top of things!</span>}
+                {oldestWaitingDays !== null && oldestWaitingDays > 0 && <div style={{ marginTop: 8, fontSize: 14, color: oldestWaitingDays > 7 ? T.danger : T.gold }}> Oldest reply waiting: <strong>{oldestWaitingDays} day{oldestWaitingDays !== 1 ? "s" : ""}</strong></div>}
               </div>
               {digest && <div style={{ marginTop: 12, padding: "12px 16px", background: "rgba(255,255,255,0.7)", borderRadius: 8, fontSize: 15, color: T.text }}>{digest.digest}</div>}
             </div>
@@ -1826,6 +1860,36 @@ export default function Home() {
               >{hsSaving ? "Logging..." : "Log Note"}</button>
               <button onClick={() => { setHsModal(null); setHsContactId(""); setHsContactSearch(""); setHsContacts([]); }} style={{ padding: "11px 20px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15 }}>Cancel</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════ KEYBOARD SHORTCUTS OVERLAY ═══════════ */}
+      {showShortcuts && (
+        <div onClick={() => setShowShortcuts(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1200, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: 16, padding: "28px 36px", width: 420, maxWidth: "92vw", boxShadow: "0 12px 48px rgba(0,0,0,0.25)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+              <span style={{ fontSize: 18, fontWeight: 700, color: T.text }}>⌨️ Keyboard Shortcuts</span>
+              <button onClick={() => setShowShortcuts(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: T.textMuted }}>×</button>
+            </div>
+            {[
+              { section: "Navigation" },
+              { key: "1 – 7", desc: "Switch tabs (Today → Quick Capture)" },
+              { key: "?", desc: "Toggle this shortcuts panel" },
+              { key: "Esc", desc: "Close overlays" },
+              { section: "Email (Emails tab)" },
+              { key: "j / k", desc: "Move focus down / up through emails" },
+              { key: "e", desc: "Archive focused email" },
+              { key: "r", desc: "Reply to focused email" },
+            ].map((row, i) => row.section ? (
+              <div key={i} style={{ fontSize: 12, fontWeight: 700, color: T.textDim, textTransform: "uppercase", letterSpacing: "0.08em", marginTop: i === 0 ? 0 : 14, marginBottom: 6 }}>{row.section}</div>
+            ) : (
+              <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `1px solid ${T.borderLight}` }}>
+                <code style={{ background: T.bg, padding: "3px 10px", borderRadius: 6, fontSize: 14, fontWeight: 700, color: T.text, fontFamily: "monospace" }}>{row.key}</code>
+                <span style={{ fontSize: 14, color: T.textMuted }}>{row.desc}</span>
+              </div>
+            ))}
+            <div style={{ marginTop: 18, fontSize: 13, color: T.textDim, textAlign: "center" }}>Shortcuts disabled when typing in inputs</div>
           </div>
         </div>
       )}
