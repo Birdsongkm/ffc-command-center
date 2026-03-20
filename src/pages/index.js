@@ -184,6 +184,34 @@ const SNOOZE_OPTIONS = [
   { label: "Custom...", getValue: () => null },
 ];
 
+// ── Sender avatar: initials + deterministic color ────────────────────────────
+const AVATAR_COLORS = ["#4A9B4A","#3B82C4","#C4942A","#D45555","#7C5AC4","#3A9B5A","#C44A8B","#C47A3A"];
+function senderAvatar(from) {
+  const name = (from || "").replace(/<.*>/, "").trim() || "?";
+  const parts = name.split(/\s+/).filter(Boolean);
+  const initials = parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : (parts[0]?.[0] || "?").toUpperCase();
+  const hash = [...name].reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return { initials, color: AVATAR_COLORS[hash % AVATAR_COLORS.length] };
+}
+
+// ── Action learning helpers ───────────────────────────────────────────────────
+function recordEmailAction(history, bucket, action) {
+  const updated = { ...history };
+  if (!updated[bucket]) updated[bucket] = {};
+  updated[bucket] = { ...updated[bucket], [action]: (updated[bucket][action] || 0) + 1 };
+  return updated;
+}
+function getSuggestedAction(history, bucket, threshold = 3) {
+  const bh = history?.[bucket];
+  if (!bh) return null;
+  const entries = Object.entries(bh);
+  if (!entries.length) return null;
+  const [topAction, count] = entries.sort(([, a], [, b]) => b - a)[0];
+  return count >= threshold ? { action: topAction, count } : null;
+}
+
 const BUCKETS = {
   "needs-response": { label: "Needs Your Reply", icon: "✉️", color: T.urgentCoral, bg: T.urgentCoralBg, border: T.urgentCoralBorder, priority: 1 },
   "fyi-mass": { label: "FYI / Mass Sends", icon: "📋", color: T.info, bg: T.infoBg, border: T.emailBlueBorder, priority: 2 },
@@ -823,6 +851,9 @@ export default function Home() {
   const [draggingEmail, setDraggingEmail] = useState(null);
   const [dragOverEmailBucket, setDragOverEmailBucket] = useState(null);
   const [emailBucketOverrides, setEmailBucketOverrides] = useState({});
+  const [emailActionHistory, setEmailActionHistory] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("ffc_action_history") || "{}"); } catch { return {}; }
+  });
   const [docModal, setDocModal] = useState(null); // { title, content } or null
   const [docSaving, setDocSaving] = useState(false);
   const [docFolderUrl, setDocFolderUrl] = useState("");
@@ -902,6 +933,18 @@ export default function Home() {
       if (["markRead", "archive", "trash", "snooze"].includes(action)) setEmails(prev => prev.filter(e => e.id !== messageId));
       const labels = { archive: "Archived", markRead: "Marked as read", trash: "Deleted", star: "Starred", unstar: "Unstarred", snooze: "Snoozed" };
       showToast(labels[action] || "Done");
+      // Record action for learning
+      if (["archive", "trash", "markRead", "snooze"].includes(action)) {
+        const email = emails.find(e => e.id === messageId);
+        if (email) {
+          const bucket = emailBucketOverrides[email.id] || classifyEmail(email);
+          setEmailActionHistory(prev => {
+            const updated = recordEmailAction(prev, bucket, action);
+            try { localStorage.setItem("ffc_action_history", JSON.stringify(updated)); } catch {}
+            return updated;
+          });
+        }
+      }
     }
     return d;
   };
@@ -1123,6 +1166,9 @@ export default function Home() {
     const fromName = email.from?.replace(/<.*>/, "").trim() || email.from || "";
     const fromAddr = email.from?.match(/<(.+)>/)?.[1] || email.from || "";
     const cInfo = contactHistory[fromAddr];
+    const avatar = senderAvatar(email.from);
+    const effectiveBucket = emailBucketOverrides[email.id] || classifyEmail(email);
+    const suggestion = getSuggestedAction(emailActionHistory, effectiveBucket);
     const body = emailBody[email.id];
     const rsvpLinks = isCalInvite && body?.bodyHtml ? extractCalendarRsvpLinks(body.bodyHtml) : {};
 
@@ -1141,10 +1187,14 @@ export default function Home() {
         {/* Row — click to expand */}
         <div onClick={() => { if (isExp) setExpandedEmail(null); else { setExpandedEmail(email.id); fetchEmailBody(email.id); fetchContactHistory(email.from); } }}
           style={{ padding: "16px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
-          {dot && <div style={{ width: 10, height: 10, borderRadius: "50%", background: dot.color, flexShrink: 0 }} title={dot.label} />}
-          {isDropboxSign && <span style={{ fontSize: 18, flexShrink: 0 }} title="DropboxSign — needs your signature">🔏</span>}
-          {isDonation && <span style={{ fontSize: 18, flexShrink: 0 }}>💚</span>}
-          {isCalInvite && !isExp && <span style={{ fontSize: 18, flexShrink: 0 }}>📅</span>}
+          {/* Sender avatar */}
+          <div style={{ width: 38, height: 38, borderRadius: "50%", background: avatar.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14, flexShrink: 0, position: "relative" }}>
+            {avatar.initials}
+            {isDropboxSign && <span style={{ position: "absolute", bottom: -2, right: -2, fontSize: 13 }}>🔏</span>}
+            {isDonation && <span style={{ position: "absolute", bottom: -2, right: -2, fontSize: 13 }}>💚</span>}
+            {isCalInvite && <span style={{ position: "absolute", bottom: -2, right: -2, fontSize: 13 }}>📅</span>}
+            {dot && <div style={{ position: "absolute", top: 0, right: 0, width: 10, height: 10, borderRadius: "50%", background: dot.color, border: "2px solid #fff" }} title={dot.label} />}
+          </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
               <span style={{ fontWeight: 600, fontSize: 16, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fromName}</span>
@@ -1170,6 +1220,13 @@ export default function Home() {
               </>
             ) : (
               <>
+                {suggestion && (
+                  <button onClick={() => emailAction(suggestion.action, email.id)}
+                    style={{ ...abtn(T.accent, T.accentBg), fontWeight: 700 }}
+                    title={`Suggested based on ${suggestion.count} similar emails`}>
+                    ✨ {suggestion.action === "archive" ? "Archive" : suggestion.action === "trash" ? "Delete" : suggestion.action === "markRead" ? "Mark Read" : suggestion.action === "snooze" ? "Snooze" : suggestion.action}
+                  </button>
+                )}
                 <button onClick={() => { setExpandedEmail(email.id); fetchEmailBody(email.id); fetchContactHistory(email.from); setComposing({ mode: "reply", email }); }} style={abtn(T.emailBlue, T.emailBlueBg)}>↩ Reply</button>
                 <button onClick={() => emailAction("archive", email.id)} style={abtn(T.textMuted, T.bg)}>📦 Archive</button>
                 <button onClick={() => emailAction("markRead", email.id)} style={abtn(T.textMuted, T.bg)}>✓ Read</button>
