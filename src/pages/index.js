@@ -809,6 +809,9 @@ export default function Home() {
   const [draftSaving, setDraftSaving] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [focusedIdx, setFocusedIdx] = useState(0);
+  const [draggingEmail, setDraggingEmail] = useState(null);
+  const [dragOverEmailBucket, setDragOverEmailBucket] = useState(null);
+  const [emailBucketOverrides, setEmailBucketOverrides] = useState({});
   const [docModal, setDocModal] = useState(null); // { title, content } or null
   const [docSaving, setDocSaving] = useState(false);
   const [docFolderUrl, setDocFolderUrl] = useState("");
@@ -1019,9 +1022,25 @@ export default function Home() {
   }, [tab, emails, focusedIdx]);
 
   // ── Derived state ──
+  const BUCKET_ORDER = ['needs-response','team','classy-onetime','fyi-mass','classy-recurring','calendar-notif','docs-activity','automated','newsletter'];
   const emailsByBucket = {};
-  emails.forEach(e => { const b = classifyEmail(e); if (!emailsByBucket[b]) emailsByBucket[b] = []; emailsByBucket[b].push(e); });
-  const sortedBuckets = Object.entries(emailsByBucket).sort((a, b) => (BUCKETS[a[0]]?.priority || 99) - (BUCKETS[b[0]]?.priority || 99));
+  emails.forEach(e => {
+    const b = emailBucketOverrides[e.id] || classifyEmail(e);
+    if (!emailsByBucket[b]) emailsByBucket[b] = [];
+    emailsByBucket[b].push(e);
+  });
+  // Sort each bucket by most recent first
+  for (const b of Object.keys(emailsByBucket)) {
+    emailsByBucket[b].sort((a, x) => {
+      const ta = a.internalDate ? parseInt(a.internalDate) : new Date(a.date || 0).getTime();
+      const tx = x.internalDate ? parseInt(x.internalDate) : new Date(x.date || 0).getTime();
+      return tx - ta;
+    });
+  }
+  const sortedBuckets = Object.entries(emailsByBucket).sort(([a], [b]) => {
+    const ia = BUCKET_ORDER.indexOf(a); const ib = BUCKET_ORDER.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
   const needsReply = emailsByBucket["needs-response"] || [];
   const donationAlerts = emailsByBucket["classy-onetime"] || [];
   const todayMeetings = events.filter(isRealMeeting);
@@ -1471,28 +1490,62 @@ export default function Home() {
         {/* ═══════════ EMAILS TAB ═══════════ */}
         {tab === "emails" && (
           <div>
-            <div style={{ fontSize: 15, color: T.textMuted, marginBottom: 18 }}>Showing {emails.length} unread emails · Only unread messages appear here</div>
-            {sortedBuckets.map(([bucket, bucketEmails]) => {
-              const info = BUCKETS[bucket] || { label: bucket, icon: "📧", color: T.textMuted, bg: T.bg, border: T.border };
-              const canBatchDelete = ["automated", "calendar-notif", "docs-activity", "classy-recurring"].includes(bucket);
-              return (
-                <div key={bucket} style={{ marginBottom: 30 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 19 }}>{info.icon}</span>
-                      <span style={{ fontSize: 18, fontWeight: 700, color: info.color }}>{info.label}</span>
-                      <span style={{ fontSize: 14, color: info.color, background: info.bg, padding: "3px 11px", borderRadius: 8, fontWeight: 600, border: `1px solid ${info.border}` }}>{bucketEmails.length}</span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+              <div style={{ fontSize: 15, color: T.textMuted }}>{emails.length} unread · sorted by most recent · drag to reclassify</div>
+              {nextPage && <button onClick={() => fetchData(nextPage)} style={{ padding: "6px 16px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>Load More</button>}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 18 }}>
+              {sortedBuckets.map(([bucket, bucketEmails]) => {
+                const info = BUCKETS[bucket] || { label: bucket, icon: "📧", color: T.textMuted, bg: T.bg, border: T.border };
+                const isOver = dragOverEmailBucket === bucket;
+                const canBatchDelete = ["automated", "calendar-notif", "docs-activity", "classy-recurring"].includes(bucket);
+                return (
+                  <div key={bucket}
+                    onDragOver={e => { e.preventDefault(); setDragOverEmailBucket(bucket); }}
+                    onDragLeave={() => setDragOverEmailBucket(null)}
+                    onDrop={e => {
+                      e.preventDefault();
+                      if (draggingEmail && draggingEmail.id) {
+                        setEmailBucketOverrides(prev => ({ ...prev, [draggingEmail.id]: bucket }));
+                      }
+                      setDraggingEmail(null); setDragOverEmailBucket(null);
+                    }}
+                    style={{
+                      background: isOver ? info.bg : T.card,
+                      border: `2px solid ${isOver ? info.color : T.border}`,
+                      borderTop: `4px solid ${info.color}`,
+                      borderRadius: 14, padding: 18, minHeight: 120,
+                      transition: "all 0.15s",
+                    }}>
+                    {/* Bucket header */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 17 }}>{info.icon}</span>
+                        <span style={{ fontWeight: 700, fontSize: 16, color: info.color }}>{info.label}</span>
+                        <span style={{ fontSize: 13, color: info.color, background: info.bg, padding: "2px 9px", borderRadius: 6, fontWeight: 600 }}>{bucketEmails.length}</span>
+                      </div>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button onClick={() => batchAction("markRead", bucketEmails.map(e => e.id))} style={{ padding: "4px 10px", background: "transparent", color: T.textDim, border: `1px solid ${T.border}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>Read all</button>
+                        {canBatchDelete && <button onClick={() => batchAction("trash", bucketEmails.map(e => e.id))} style={{ padding: "4px 10px", background: "transparent", color: T.danger, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>Delete all</button>}
+                      </div>
                     </div>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button onClick={() => batchAction("markRead", bucketEmails.map(e => e.id))} style={{ padding: "6px 14px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 14 }}>Mark all read</button>
-                      {canBatchDelete && <button onClick={() => batchAction("trash", bucketEmails.map(e => e.id))} style={{ padding: "6px 14px", background: T.dangerBg, color: T.danger, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 14 }}>Delete all</button>}
-                    </div>
+                    {/* Email cards */}
+                    {bucketEmails.length === 0 && (
+                      <div style={{ fontSize: 14, color: T.textDim, textAlign: "center", padding: "16px 0" }}>Drop emails here</div>
+                    )}
+                    {bucketEmails.map((e, i) => (
+                      <div key={e.id}
+                        draggable
+                        onDragStart={() => setDraggingEmail(e)}
+                        onDragEnd={() => { setDraggingEmail(null); setDragOverEmailBucket(null); }}
+                        style={{ cursor: "grab" }}>
+                        {renderEmailRow(e, i)}
+                      </div>
+                    ))}
                   </div>
-                  {bucketEmails.map((e, i) => renderEmailRow(e, i))}
-                </div>
-              );
-            })}
-            {nextPage && <button onClick={() => fetchData(nextPage)} style={{ width: "100%", padding: "15px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 10, cursor: "pointer", fontSize: 16, fontWeight: 600 }}>Load More Emails</button>}
+                );
+              })}
+            </div>
           </div>
         )}
 
