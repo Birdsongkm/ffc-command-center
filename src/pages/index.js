@@ -626,6 +626,59 @@ function FinanceReviewPanel({ email, onClose, showToast }) {
 // ═══════════════════════════════════════════════
 //  MAIN APP
 // ═══════════════════════════════════════════════
+function MagicLoginScreen() {
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState(null);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setStatus("sending");
+    setErrorMsg("");
+    const r = await fetch("/api/auth/magic", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim() }),
+    });
+    if (r.redirected) { window.location.href = r.url; return; }
+    const d = await r.json().catch(() => ({}));
+    setErrorMsg(d.error || "Access restricted.");
+    setStatus("error");
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: T.bg }}>
+      <div style={{ textAlign: "center", maxWidth: 400, width: "100%", padding: "0 24px" }}>
+        <LeafIcon size={52} style={{ marginBottom: 18 }} />
+        <h1 style={{ fontSize: 28, color: T.text, marginBottom: 8, fontWeight: 700 }}>Fresh Food Connect</h1>
+        <p style={{ color: T.textMuted, marginBottom: 36, fontSize: 16 }}>CEO Command Center</p>
+        <form onSubmit={handleSubmit} style={{ textAlign: "left" }}>
+          <label style={{ fontSize: 14, fontWeight: 600, color: T.text, display: "block", marginBottom: 8 }}>Your email address</label>
+          <input
+            type="email" value={email} onChange={e => setEmail(e.target.value)}
+            placeholder="kayla@freshfoodconnect.org" required autoFocus
+            style={{ width: "100%", padding: "14px 16px", border: `1.5px solid ${T.border}`, borderRadius: 10,
+              fontSize: 16, color: T.text, background: "#fff", marginBottom: 12, boxSizing: "border-box",
+              outline: "none", fontFamily: "inherit" }}
+          />
+          {errorMsg && (
+            <div style={{ color: T.danger, fontSize: 14, marginBottom: 12, padding: "10px 14px", background: T.dangerBg, borderRadius: 8 }}>
+              {errorMsg}
+            </div>
+          )}
+          <button type="submit" disabled={status === "sending" || !email.trim()}
+            style={{ width: "100%", padding: "15px", background: email.trim() ? T.accent : T.border,
+              color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 16,
+              cursor: email.trim() ? "pointer" : "default", transition: "background 0.15s" }}>
+            {status === "sending" ? "Signing you in..." : "Continue with Google →"}
+          </button>
+        </form>
+        <p style={{ fontSize: 13, color: T.textDim, marginTop: 20 }}>Access restricted to authorized users only.</p>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [auth, setAuth] = useState(null);
   const [tab, setTab] = useState("today");
@@ -1078,16 +1131,7 @@ export default function Home() {
     </div>
   );
 
-  if (auth === false) return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: T.bg }}>
-      <div style={{ textAlign: "center", maxWidth: 420 }}>
-        <LeafIcon size={52} style={{ marginBottom: 18 }} />
-        <h1 style={{ fontSize: 28, color: T.text, marginBottom: 10, fontWeight: 700 }}>Fresh Food Connect</h1>
-        <p style={{ color: T.textMuted, marginBottom: 30, fontSize: 17 }}>CEO Command Center</p>
-        <a href="/api/auth/login" style={{ display: "inline-block", padding: "15px 40px", background: T.accent, color: "#fff", borderRadius: 10, textDecoration: "none", fontWeight: 600, fontSize: 17 }}>Sign in with Google</a>
-      </div>
-    </div>
-  );
+  if (auth === false) return <MagicLoginScreen />;
 
   return (
     <>
