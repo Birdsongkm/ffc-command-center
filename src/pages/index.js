@@ -92,9 +92,10 @@ function classifyEmail(e) {
   }
   if (from.includes("calendar-notification") || from.includes("calendar.google.com")) return "calendar-notif";
   if (from.includes("drive-shares-dm") || from.includes("comments-noreply") || from.includes("docs.google.com") || from.includes("drive.google.com")) return "docs-activity";
-  if (from.includes("noreply") || from.includes("no-reply") || from.includes("notifications@") || from.includes("mailer-daemon") || from.includes("postmaster")) return "automated";
+  // Classy checks must come before the generic noreply check — Classy sends from noreply addresses
   if ((from.includes("classy") || subj.includes("classy")) && (subj.includes("donation") || subj.includes("gift") || subj.includes("contribut"))) return "classy-onetime";
   if (from.includes("classy")) return "classy-recurring";
+  if (from.includes("noreply") || from.includes("no-reply") || from.includes("notifications@") || from.includes("mailer-daemon") || from.includes("postmaster")) return "automated";
   if (from.includes("freshfoodconnect") || from.includes("@ffc")) return "team";
   if (recipientCount <= 3) return "needs-response";
   return "needs-response";
@@ -183,6 +184,125 @@ const BUCKETS = {
   "automated": { label: "Automated / System", icon: "⚙️", color: T.textMuted, bg: "#F5F5F5", border: T.border, priority: 8 },
   "newsletter": { label: "Newsletters & Lists", icon: "📰", color: T.textMuted, bg: "#F5F5F5", border: T.border, priority: 9 },
 };
+
+// ═══════════════════════════════════════════════
+//  LIGHTBULB FAB — product feedback → GitHub issue
+// ═══════════════════════════════════════════════
+function LightbulbFAB() {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [status, setStatus] = useState(null); // null | "sending" | "sent" | "error"
+  const [issueUrl, setIssueUrl] = useState(null);
+
+  async function submit() {
+    if (!text.trim()) return;
+    setStatus("sending");
+    try {
+      const r = await fetch("/api/github-feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ feedback: text.trim() }),
+      });
+      const data = await r.json();
+      if (data.success) {
+        setStatus("sent");
+        setIssueUrl(data.url);
+        setText("");
+        setTimeout(() => { setOpen(false); setStatus(null); setIssueUrl(null); }, 3500);
+      } else {
+        setStatus("error");
+      }
+    } catch {
+      setStatus("error");
+    }
+  }
+
+  return (
+    <>
+      {/* FAB button */}
+      <button
+        onClick={() => { setOpen(o => !o); setStatus(null); setText(""); }}
+        title="Product feedback"
+        style={{
+          position: "fixed", bottom: 28, right: 28, width: 52, height: 52,
+          borderRadius: "50%", border: "none", cursor: "pointer",
+          background: T.accent, color: "#fff",
+          boxShadow: "0 4px 18px rgba(74,155,74,0.35)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 24, zIndex: 1000,
+          transition: "transform 0.15s, box-shadow 0.15s",
+        }}
+        onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.08)"; e.currentTarget.style.boxShadow = "0 6px 24px rgba(74,155,74,0.45)"; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 18px rgba(74,155,74,0.35)"; }}
+      >
+        💡
+      </button>
+
+      {/* Feedback panel */}
+      {open && (
+        <div style={{
+          position: "fixed", bottom: 90, right: 28, width: 340,
+          background: T.card, borderRadius: 14, padding: 20,
+          boxShadow: "0 8px 36px rgba(0,0,0,0.16)", border: `1px solid ${T.border}`,
+          zIndex: 1001,
+        }}>
+          <div style={{ fontWeight: 700, fontSize: 16, color: T.text, marginBottom: 4 }}>Product feedback</div>
+          <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 14 }}>
+            What should be built, fixed, or changed? Creates a GitHub issue automatically.
+          </div>
+
+          {status === "sent" ? (
+            <div style={{ textAlign: "center", padding: "16px 0" }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>✅</div>
+              <div style={{ fontWeight: 600, color: T.accent }}>Issue created!</div>
+              {issueUrl && (
+                <a href={issueUrl} target="_blank" rel="noreferrer"
+                  style={{ fontSize: 13, color: T.info, display: "block", marginTop: 6 }}>
+                  View on GitHub →
+                </a>
+              )}
+            </div>
+          ) : (
+            <>
+              <textarea
+                value={text}
+                onChange={e => setText(e.target.value)}
+                placeholder="Describe the feature, bug, or idea..."
+                rows={5}
+                style={{
+                  width: "100%", boxSizing: "border-box", padding: "10px 12px",
+                  border: `1px solid ${T.border}`, borderRadius: 8, resize: "vertical",
+                  fontSize: 14, color: T.text, background: T.bg, fontFamily: "inherit",
+                  marginBottom: 10,
+                }}
+                onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit(); }}
+              />
+              {status === "error" && (
+                <div style={{ color: T.danger, fontSize: 13, marginBottom: 8 }}>
+                  Failed to create issue. Check GITHUB_TOKEN and GITHUB_REPO env vars.
+                </div>
+              )}
+              <button
+                onClick={submit}
+                disabled={status === "sending" || !text.trim()}
+                style={{
+                  width: "100%", padding: "11px", borderRadius: 8, border: "none",
+                  background: text.trim() ? T.accent : T.border,
+                  color: text.trim() ? "#fff" : T.textMuted,
+                  fontWeight: 600, fontSize: 15, cursor: text.trim() ? "pointer" : "default",
+                  transition: "background 0.15s",
+                }}
+              >
+                {status === "sending" ? "Creating issue..." : "Submit feedback  ⌘↵"}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
 
 // ═══════════════════════════════════════════════
 //  SMALL COMPONENTS
@@ -1388,6 +1508,7 @@ export default function Home() {
       </div>
 
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}
+      <LightbulbFAB />
     </>
   );
 }
