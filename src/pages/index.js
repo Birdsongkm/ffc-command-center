@@ -5,7 +5,7 @@ import Head from "next/head";
 //  THEME
 // ═══════════════════════════════════════════════
 const T = {
-  bg: "#F7FAF5", surface: "#FFFFFF", card: "#FFFFFF", cardHover: "#F0F5EE",
+  bg: "#F5F5F5", surface: "#FFFFFF", card: "#FFFFFF", cardHover: "#EBEBEB",
   border: "#D8E4D2", borderLight: "#E8F0E4", text: "#2C3E2C", textMuted: "#6B8068",
   textDim: "#94AC8E", accent: "#4A9B4A", accentDark: "#357A35", accentBg: "#E8F5E8",
   gold: "#C4942A", goldBg: "#FFF8E8", danger: "#D45555", dangerBg: "#FFF0F0",
