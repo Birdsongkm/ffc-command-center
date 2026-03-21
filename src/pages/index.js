@@ -1505,6 +1505,7 @@ export default function Home() {
           borderRadius: 10, marginBottom: 10, overflow: "visible",
           borderLeft: isDropboxSign ? `4px solid ${T.urgentCoral}` : isDonation ? `4px solid ${T.calGreen}` : isCalInvite ? `4px solid ${T.calGreen}` : dot ? `4px solid ${dot.color}` : undefined,
           transition: "all 0.15s",
+          position: isExp ? "relative" : undefined, zIndex: isExp ? 2 : undefined,
         }}>
 
         {/* Row — click to expand */}
@@ -2576,6 +2577,11 @@ export default function Home() {
         </div>
       )}
 
+      {/* ── Click-away to collapse expanded email ── */}
+      {expandedEmail && (
+        <div onClick={() => setExpandedEmail(null)} style={{ position: "fixed", inset: 0, zIndex: 1, cursor: "default" }} />
+      )}
+
       {/* ── Cmd+K Global Search Palette ── */}
       {searchOpen && (
         <div onClick={() => { setSearchOpen(false); setSearchQuery(""); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 9000, display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 80 }}>
@@ -2635,6 +2641,10 @@ export default function Home() {
             )}
           </div>
         </div>
+      )}
+
+      {expandedEmail && (
+        <div onClick={() => setExpandedEmail(null)} style={{ position: "fixed", inset: 0, zIndex: 1, cursor: "default" }} />
       )}
 
       <LightbulbFAB />
