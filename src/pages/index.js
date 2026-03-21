@@ -1044,6 +1044,11 @@ export default function Home() {
   const [dragTask, setDragTask] = useState(null);
   const [dragOverTask, setDragOverTask] = useState(null);
   const [dragOverCategory, setDragOverCategory] = useState(null);
+  const [teamOrder, setTeamOrder] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('ffc_team_order') || 'null') || []; } catch { return []; }
+  });
+  const [dragTeam, setDragTeam] = useState(null);
+  const [dragOverTeam, setDragOverTeam] = useState(null);
 
   const [driveFiles, setDriveFiles] = useState([]);
   const [driveSearch, setDriveSearch] = useState("");
@@ -2220,7 +2225,13 @@ export default function Home() {
             {/* ── Team Activity Digest ── */}
             {(() => {
               const teamActivity = buildTeamActivity(emails, tasks, TEAM);
-              const active = teamActivity.filter(m => m.recentEmailCount > 0 || m.completedTaskCount > 0 || m.pendingTaskCount > 0);
+              const activeUnsorted = teamActivity.filter(m => m.recentEmailCount > 0 || m.completedTaskCount > 0 || m.pendingTaskCount > 0);
+              const active = teamOrder.length
+                ? [...activeUnsorted].sort((a, b) => {
+                    const ia = teamOrder.indexOf(a.email); const ib = teamOrder.indexOf(b.email);
+                    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+                  })
+                : activeUnsorted;
               if (!active.length) return null;
               return (
                 <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", marginBottom: 26 }}>
@@ -2233,8 +2244,23 @@ export default function Home() {
                       const isOpen = teamNoteOpen === m.email;
                       const teamMember = TEAM.find(t => t.email === m.email);
                       const style = teamMember?.meetingStyle || 'email';
+                      const isDropTarget = dragOverTeam === m.email && dragTeam !== m.email;
                       return (
-                      <div key={m.email} style={{ flex: "1 1 140px", background: T.bg, border: `1px solid ${style === 'notes' ? T.border : isOpen ? T.accent : T.border}`, borderRadius: 10, padding: "12px 14px", position: "relative" }}>
+                      <div key={m.email}
+                        draggable
+                        onDragStart={() => setDragTeam(m.email)}
+                        onDragEnd={() => { setDragTeam(null); setDragOverTeam(null); }}
+                        onDragOver={e => { e.preventDefault(); setDragOverTeam(m.email); }}
+                        onDrop={() => {
+                          if (!dragTeam || dragTeam === m.email) return;
+                          const order = active.map(x => x.email);
+                          const from = order.indexOf(dragTeam); const to = order.indexOf(m.email);
+                          order.splice(from, 1); order.splice(to, 0, dragTeam);
+                          setTeamOrder(order);
+                          try { localStorage.setItem('ffc_team_order', JSON.stringify(order)); } catch {}
+                          setDragTeam(null); setDragOverTeam(null);
+                        }}
+                        style={{ flex: "1 1 140px", background: T.bg, border: `1px solid ${isDropTarget ? T.accent : style === 'notes' ? T.border : isOpen ? T.accent : T.border}`, borderRadius: 10, padding: "12px 14px", position: "relative", cursor: "grab", opacity: dragTeam === m.email ? 0.5 : 1, transition: "opacity 0.15s, border-color 0.15s" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, cursor: style !== 'notes' ? "pointer" : "default" }} onClick={() => style !== 'notes' && setTeamNoteOpen(isOpen ? null : m.email)}>
                           <div style={{ width: 30, height: 30, borderRadius: "50%", background: senderAvatar(m.name).color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{m.initials}</div>
                           <div style={{ fontWeight: 600, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{m.name.split(' ')[0]}</div>
