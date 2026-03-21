@@ -2048,8 +2048,8 @@ export default function Home() {
               </div>
             )}
 
-            {/* Needs Your Reply + Today's Schedule — side by side grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 20, marginBottom: 26 }}>
+            {/* Needs Your Reply + Today's Schedule + Grant Deadlines — 3 equal columns */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 26 }}>
 
               {/* Needs Your Reply */}
               <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", borderTop: `4px solid ${T.urgentCoral}` }}>
@@ -2121,52 +2121,54 @@ export default function Home() {
                 </div>
               </div>
 
-            </div>
-
-            {/* ── Grant Deadline Tracker ── */}
-            <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", marginBottom: 26 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 19 }}>🏆</span>
-                  <span style={{ fontSize: 18, fontWeight: 700, color: T.text }}>Grant Deadlines</span>
-                  {grants.length > 0 && <span style={{ fontSize: 13, color: T.textMuted, background: T.bg, padding: "2px 9px", borderRadius: 8 }}>{grants.length}</span>}
+              {/* Grant Deadlines */}
+              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", borderTop: `4px solid ${T.taskAmber}` }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 19 }}>🏆</span>
+                    <span style={{ fontSize: 18, fontWeight: 700, color: T.text }}>Grant Deadlines</span>
+                    {grants.length > 0 && <span style={{ fontSize: 13, color: T.textMuted, background: T.bg, padding: "2px 9px", borderRadius: 8 }}>{grants.length}</span>}
+                  </div>
+                  <button onClick={() => setShowGrantForm(f => !f)} style={{ padding: "6px 14px", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 7, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>+ Add</button>
                 </div>
-                <button onClick={() => setShowGrantForm(f => !f)} style={{ padding: "6px 14px", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 7, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>+ Add</button>
+                {showGrantForm && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+                    <input value={grantForm.name} onChange={e => setGrantForm(f => ({ ...f, name: e.target.value }))} placeholder="Grant name" style={{ padding: "7px 12px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 14, background: T.bg }} />
+                    <input value={grantForm.deadline} onChange={e => setGrantForm(f => ({ ...f, deadline: e.target.value }))} type="date" style={{ padding: "7px 12px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 14, background: T.bg }} />
+                    <input value={grantForm.amount} onChange={e => setGrantForm(f => ({ ...f, amount: e.target.value }))} placeholder="Amount (optional)" style={{ padding: "7px 12px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 14, background: T.bg }} />
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={() => { if (!grantForm.name || !grantForm.deadline) return; setGrants(prev => [...prev, { id: Date.now(), ...grantForm }]); setGrantForm({ name: "", deadline: "", amount: "" }); setShowGrantForm(false); }} style={{ flex: 1, padding: "7px 0", background: T.accent, color: "#fff", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>Save</button>
+                      <button onClick={() => setShowGrantForm(false)} style={{ padding: "7px 12px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14 }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+                {grants.length === 0 && calendarGrants.length === 0 ? (
+                  <div style={{ padding: "16px 0", color: T.textMuted, fontSize: 14, textAlign: "center" }}>No deadlines yet. Add one or put "deadline" in a calendar event title.</div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {[...grants, ...calendarGrants.filter(cg => !grants.some(g => g.name === cg.name && g.deadline === cg.deadline))].sort((a, b) => new Date(a.deadline) - new Date(b.deadline)).map(g => {
+                      const urgency = grantDeadlineUrgency(g.deadline);
+                      const urgencyColor = urgency === "overdue" || urgency === "red" ? T.danger : urgency === "amber" ? T.taskAmber : T.calGreen;
+                      const urgencyBg = urgency === "overdue" || urgency === "red" ? T.dangerBg : urgency === "amber" ? T.taskAmberBg : T.calGreenBg;
+                      return (
+                        <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: urgencyBg, border: `1px solid ${urgencyColor}30`, borderRadius: 9, borderLeft: `4px solid ${urgencyColor}` }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</div>
+                            {g.amount && <div style={{ fontSize: 12, color: T.textMuted }}>{g.amount}</div>}
+                            {g.source === 'calendar' && <div style={{ fontSize: 11, color: T.textMuted, fontStyle: "italic" }}>📅 calendar</div>}
+                          </div>
+                          <div style={{ textAlign: "right", flexShrink: 0 }}>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: urgencyColor }}>{formatGrantCountdown(g.deadline)}</div>
+                            <div style={{ fontSize: 11, color: T.textMuted }}>{new Date(g.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+                          </div>
+                          {!g.source && <button onClick={() => setGrants(prev => prev.filter(x => x.id !== g.id))} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, fontSize: 18, lineHeight: 1, padding: "0 2px" }} title="Remove">×</button>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-              {showGrantForm && (
-                <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-                  <input value={grantForm.name} onChange={e => setGrantForm(f => ({ ...f, name: e.target.value }))} placeholder="Grant name" style={{ flex: 2, minWidth: 160, padding: "7px 12px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 14, background: T.bg }} />
-                  <input value={grantForm.deadline} onChange={e => setGrantForm(f => ({ ...f, deadline: e.target.value }))} type="date" style={{ flex: 1, minWidth: 130, padding: "7px 12px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 14, background: T.bg }} />
-                  <input value={grantForm.amount} onChange={e => setGrantForm(f => ({ ...f, amount: e.target.value }))} placeholder="Amount (optional)" style={{ flex: 1, minWidth: 120, padding: "7px 12px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 14, background: T.bg }} />
-                  <button onClick={() => { if (!grantForm.name || !grantForm.deadline) return; setGrants(prev => [...prev, { id: Date.now(), ...grantForm }]); setGrantForm({ name: "", deadline: "", amount: "" }); setShowGrantForm(false); }} style={{ padding: "7px 16px", background: T.accent, color: "#fff", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>Save</button>
-                  <button onClick={() => setShowGrantForm(false)} style={{ padding: "7px 12px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14 }}>Cancel</button>
-                </div>
-              )}
-              {grants.length === 0 && calendarGrants.length === 0 ? (
-                <div style={{ padding: "16px 0", color: T.textMuted, fontSize: 15, textAlign: "center" }}>No grant deadlines tracked. Add one above or add calendar events with "deadline" or "due" in the title.</div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {[...grants, ...calendarGrants.filter(cg => !grants.some(g => g.name === cg.name && g.deadline === cg.deadline))].sort((a, b) => new Date(a.deadline) - new Date(b.deadline)).map(g => {
-                    const urgency = grantDeadlineUrgency(g.deadline);
-                    const urgencyColor = urgency === "overdue" || urgency === "red" ? T.danger : urgency === "amber" ? T.taskAmber : T.calGreen;
-                    const urgencyBg = urgency === "overdue" || urgency === "red" ? T.dangerBg : urgency === "amber" ? T.taskAmberBg : T.calGreenBg;
-                    return (
-                      <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: urgencyBg, border: `1px solid ${urgencyColor}30`, borderRadius: 9, borderLeft: `4px solid ${urgencyColor}` }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 600, fontSize: 15, color: T.text }}>{g.name}</div>
-                          {g.amount && <div style={{ fontSize: 13, color: T.textMuted }}>{g.amount}</div>}
-                          {g.source === 'calendar' && <div style={{ fontSize: 11, color: T.textMuted, fontStyle: "italic" }}>📅 from calendar</div>}
-                        </div>
-                        <div style={{ textAlign: "right", flexShrink: 0 }}>
-                          <div style={{ fontWeight: 700, fontSize: 14, color: urgencyColor }}>{formatGrantCountdown(g.deadline)}</div>
-                          <div style={{ fontSize: 12, color: T.textMuted }}>{new Date(g.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
-                        </div>
-                        {!g.source && <button onClick={() => setGrants(prev => prev.filter(x => x.id !== g.id))} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, fontSize: 18, lineHeight: 1, padding: "0 4px" }} title="Remove">×</button>}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+
             </div>
 
             {/* ── Pipeline + Classy side by side ── */}
