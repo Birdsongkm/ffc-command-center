@@ -31,12 +31,12 @@ const CATEGORIES = [
 
 // Fill in real email addresses here
 const TEAM = [
-  { name: "Laura Lavid", initials: "LL", email: "laura@freshfoodconnect.org" },
-  { name: "Gretchen Roberts", initials: "GR", email: "gretchen@freshfoodconnect.org" },
-  { name: "Carmen Alcantara", initials: "CA", email: "carmen@freshfoodconnect.org" },
-  { name: "Adjoa Kittoe", initials: "AK", email: "adjoa@freshfoodconnect.org" },
-  { name: "Debbie Nash", initials: "DN", email: "debbie@freshfoodconnect.org" },
-  { name: "Lone Bryan", initials: "LB", email: "lone@freshfoodconnect.org" },
+  { name: "Laura Lavid", initials: "LL", email: "laura@freshfoodconnect.org", meetingStyle: "notes" },
+  { name: "Gretchen Roberts", initials: "GR", email: "gretchen@freshfoodconnect.org", meetingStyle: "notes" },
+  { name: "Carmen Alcantara", initials: "CA", email: "carmen@freshfoodconnect.org", meetingStyle: "email-chat" },
+  { name: "Adjoa Kittoe", initials: "AK", email: "adjoa@freshfoodconnect.org", meetingStyle: "notes" },
+  { name: "Debbie Nash", initials: "DN", email: "dnash@freshfoodconnect.org", meetingStyle: "email" },
+  { name: "Lone Bryan", initials: "LB", email: "lone@freshfoodconnect.org", meetingStyle: "email" },
 ];
 
 const URGENCY = [
@@ -1084,6 +1084,9 @@ export default function Home() {
   const [grantForm, setGrantForm] = useState({ name: "", deadline: "", amount: "" });
   const [pipeline, setPipeline] = useState([]); // HubSpot deal stages
   const [pipelineLoading, setPipelineLoading] = useState(false);
+  const [teamNoteOpen, setTeamNoteOpen] = useState(null); // email of open team member
+  const [teamNoteText, setTeamNoteText] = useState('');
+  const [teamNoteSaving, setTeamNoteSaving] = useState(false);
   const [classDonations, setClassDonations] = useState([]); // Classy 7-day feed
   const [classDonationsLoading, setClassDonationsLoading] = useState(false);
   const [weeklyBrief, setWeeklyBrief] = useState(null); // { text, boardText } or null
@@ -2025,11 +2028,11 @@ export default function Home() {
               </div>
             )}
 
-            {/* Needs Your Reply + Today's Schedule — side by side */}
-            <div style={{ display: "flex", gap: 20, marginBottom: 26, flexWrap: "wrap" }}>
+            {/* Needs Your Reply + Today's Schedule — side by side grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 20, marginBottom: 26 }}>
 
               {/* Needs Your Reply */}
-              <div style={{ flex: "1 1 420px", background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
+              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", borderTop: `4px solid ${T.urgentCoral}` }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: needsReply.length ? 14 : 0 }}>
                   <span style={{ fontSize: 19 }}>✉️</span>
                   <span style={{ fontSize: 18, fontWeight: 700, color: T.urgentCoral }}>Needs Your Reply</span>
@@ -2059,12 +2062,12 @@ export default function Home() {
               </div>
 
               {/* Today's Schedule */}
-              <div style={{ flex: "1 1 340px" }}>
+              <div style={{ background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 14, padding: "20px 24px", borderTop: `4px solid ${T.calGreen}`, overflow: "hidden" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                   <span style={{ fontSize: 19 }}>📅</span>
                   <span style={{ fontSize: 18, fontWeight: 700, color: T.calGreen }}>Today's Schedule</span>
                 </div>
-                <div style={{ background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 12, overflow: "hidden" }}>
+                <div>
                   {events.length === 0 ? <div style={{ padding: 22, textAlign: "center", color: T.textMuted, fontSize: 16 }}>No events today</div>
                     : events.map(ev => {
                     const real = isRealMeeting(ev);
@@ -2206,9 +2209,13 @@ export default function Home() {
                     <span style={{ fontSize: 18, fontWeight: 700, color: T.text }}>Team This Week</span>
                   </div>
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    {active.map(m => (
-                      <div key={m.email} style={{ flex: "1 1 140px", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    {active.map(m => {
+                      const isOpen = teamNoteOpen === m.email;
+                      const teamMember = TEAM.find(t => t.email === m.email);
+                      const style = teamMember?.meetingStyle || 'email';
+                      return (
+                      <div key={m.email} style={{ flex: "1 1 140px", background: T.bg, border: `1px solid ${isOpen ? T.accent : T.border}`, borderRadius: 10, padding: "12px 14px", position: "relative" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, cursor: "pointer" }} onClick={() => { setTeamNoteOpen(isOpen ? null : m.email); setTeamNoteText(''); }}>
                           <div style={{ width: 30, height: 30, borderRadius: "50%", background: senderAvatar(m.name).color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{m.initials}</div>
                           <div style={{ fontWeight: 600, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name.split(' ')[0]}</div>
                         </div>
@@ -2217,8 +2224,37 @@ export default function Home() {
                           {m.completedTaskCount > 0 && <div style={{ color: T.calGreen }}>✓ {m.completedTaskCount} done</div>}
                           {m.pendingTaskCount > 0 && <div>📋 {m.pendingTaskCount} pending</div>}
                         </div>
+                        {isOpen && (
+                          <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+                            {style === 'notes' && (
+                              <>
+                                <textarea value={teamNoteText} onChange={e => setTeamNoteText(e.target.value)} placeholder={`Add to 1:1 with ${m.name.split(' ')[0]}…`} rows={3} style={{ width: "100%", padding: "7px 10px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit", color: T.text, background: T.surface, boxSizing: "border-box" }} />
+                                <button disabled={!teamNoteText.trim() || teamNoteSaving} onClick={async () => {
+                                  setTeamNoteSaving(true);
+                                  try {
+                                    const r = await fetch('/api/drive-note', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ personName: m.name, note: teamNoteText }) });
+                                    const d = await r.json();
+                                    if (r.ok) { showToast(`Added to ${d.docName}`); setTeamNoteOpen(null); setTeamNoteText(''); }
+                                    else { showToast('Failed: ' + (d.error || 'Unknown error')); }
+                                  } catch (err) { showToast('Error: ' + err.message); }
+                                  finally { setTeamNoteSaving(false); }
+                                }} style={{ marginTop: 6, width: "100%", padding: "6px 0", background: T.accent, color: "#fff", border: "none", borderRadius: 6, cursor: teamNoteText.trim() ? "pointer" : "default", fontSize: 13, fontWeight: 600 }}>{teamNoteSaving ? "Saving…" : "Add to 1:1 Notes"}</button>
+                              </>
+                            )}
+                            {style === 'email-chat' && (
+                              <div style={{ display: "flex", gap: 6 }}>
+                                <button onClick={() => { setComposing({ to: m.email, subject: '', body: '' }); setTeamNoteOpen(null); }} style={{ flex: 1, padding: "6px 0", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>✉️ Email</button>
+                                <button onClick={() => { window.open(`https://chat.google.com/`, '_blank'); setTeamNoteOpen(null); }} style={{ flex: 1, padding: "6px 0", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>💬 Chat</button>
+                              </div>
+                            )}
+                            {style === 'email' && (
+                              <button onClick={() => { setComposing({ to: m.email, subject: '', body: '' }); setTeamNoteOpen(null); }} style={{ width: "100%", padding: "6px 0", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>✉️ Send Email</button>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );
