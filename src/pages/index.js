@@ -1099,8 +1099,8 @@ export default function Home() {
   const [pipeline, setPipeline] = useState([]); // HubSpot deal stages
   const [pipelineLoading, setPipelineLoading] = useState(false);
   const [teamNoteOpen, setTeamNoteOpen] = useState(null); // email of open team member
-  const [teamNoteText, setTeamNoteText] = useState('');
-  const [teamNoteSaving, setTeamNoteSaving] = useState(false);
+  const [teamNoteTexts, setTeamNoteTexts] = useState({}); // keyed by email
+  const [teamNoteSaving, setTeamNoteSaving] = useState(null); // email currently saving
   const [classDonations, setClassDonations] = useState([]); // Classy 7-day feed
   const [classDonationsLoading, setClassDonationsLoading] = useState(false);
   const [weeklyBrief, setWeeklyBrief] = useState(null); // { text, boardText } or null
@@ -2234,36 +2234,37 @@ export default function Home() {
                       const teamMember = TEAM.find(t => t.email === m.email);
                       const style = teamMember?.meetingStyle || 'email';
                       return (
-                      <div key={m.email} style={{ flex: "1 1 140px", background: T.bg, border: `1px solid ${isOpen ? T.accent : T.border}`, borderRadius: 10, padding: "12px 14px", position: "relative" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                          <div style={{ width: 30, height: 30, borderRadius: "50%", background: senderAvatar(m.name).color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, flexShrink: 0, cursor: "pointer" }} onClick={() => { setTeamNoteOpen(isOpen ? null : m.email); setTeamNoteText(''); }}>{m.initials}</div>
-                          <div style={{ fontWeight: 600, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "pointer", flex: 1 }} onClick={() => { setTeamNoteOpen(isOpen ? null : m.email); setTeamNoteText(''); }}>{m.name.split(' ')[0]}</div>
-                          {style === 'notes' && (
-                            <a href={teamMember?.driveDocUrl || `https://drive.google.com/drive/search?q=${encodeURIComponent('1:1 ' + m.name.split(' ')[0])}`} target="_blank" rel="noopener noreferrer" title="Open 1:1 notes in Drive" style={{ fontSize: 15, textDecoration: "none", flexShrink: 0, opacity: 0.7 }} onClick={e => e.stopPropagation()}>📄</a>
-                          )}
+                      <div key={m.email} style={{ flex: "1 1 140px", background: T.bg, border: `1px solid ${style === 'notes' ? T.border : isOpen ? T.accent : T.border}`, borderRadius: 10, padding: "12px 14px", position: "relative" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, cursor: style !== 'notes' ? "pointer" : "default" }} onClick={() => style !== 'notes' && setTeamNoteOpen(isOpen ? null : m.email)}>
+                          <div style={{ width: 30, height: 30, borderRadius: "50%", background: senderAvatar(m.name).color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{m.initials}</div>
+                          <div style={{ fontWeight: 600, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{m.name.split(' ')[0]}</div>
                         </div>
                         <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.8 }}>
                           {m.recentEmailCount > 0 && <div>✉️ {m.recentEmailCount} email{m.recentEmailCount !== 1 ? "s" : ""}</div>}
                           {m.completedTaskCount > 0 && <div style={{ color: T.calGreen }}>✓ {m.completedTaskCount} done</div>}
                           {m.pendingTaskCount > 0 && <div>📋 {m.pendingTaskCount} pending</div>}
                         </div>
-                        {isOpen && (
+                        {style === 'notes' && (() => {
+                          const noteText = teamNoteTexts[m.email] || '';
+                          const isSaving = teamNoteSaving === m.email;
+                          return (
+                            <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+                              <textarea value={noteText} onChange={e => setTeamNoteTexts(prev => ({ ...prev, [m.email]: e.target.value }))} placeholder={`Add to 1:1 with ${m.name.split(' ')[0]}…`} rows={3} style={{ width: "100%", padding: "7px 10px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit", color: T.text, background: T.surface, boxSizing: "border-box" }} />
+                              <button disabled={!noteText.trim() || isSaving} onClick={async () => {
+                                setTeamNoteSaving(m.email);
+                                try {
+                                  const r = await fetch('/api/drive-note', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ personName: m.name, note: noteText }) });
+                                  const d = await r.json();
+                                  if (r.ok) { showToast(`Added to ${d.docName}`); setTeamNoteTexts(prev => ({ ...prev, [m.email]: '' })); }
+                                  else { showToast('Failed: ' + (d.error || 'Unknown error')); }
+                                } catch (err) { showToast('Error: ' + err.message); }
+                                finally { setTeamNoteSaving(null); }
+                              }} style={{ marginTop: 6, width: "100%", padding: "6px 0", background: T.accent, color: "#fff", border: "none", borderRadius: 6, cursor: noteText.trim() ? "pointer" : "default", fontSize: 13, fontWeight: 600 }}>{isSaving ? "Saving…" : "→ Google Doc"}</button>
+                            </div>
+                          );
+                        })()}
+                        {style !== 'notes' && isOpen && (
                           <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
-                            {style === 'notes' && (
-                              <>
-                                <textarea value={teamNoteText} onChange={e => setTeamNoteText(e.target.value)} placeholder={`Add to 1:1 with ${m.name.split(' ')[0]}…`} rows={3} style={{ width: "100%", padding: "7px 10px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit", color: T.text, background: T.surface, boxSizing: "border-box" }} />
-                                <button disabled={!teamNoteText.trim() || teamNoteSaving} onClick={async () => {
-                                  setTeamNoteSaving(true);
-                                  try {
-                                    const r = await fetch('/api/drive-note', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ personName: m.name, note: teamNoteText }) });
-                                    const d = await r.json();
-                                    if (r.ok) { showToast(`Added to ${d.docName}`); setTeamNoteOpen(null); setTeamNoteText(''); }
-                                    else { showToast('Failed: ' + (d.error || 'Unknown error')); }
-                                  } catch (err) { showToast('Error: ' + err.message); }
-                                  finally { setTeamNoteSaving(false); }
-                                }} style={{ marginTop: 6, width: "100%", padding: "6px 0", background: T.accent, color: "#fff", border: "none", borderRadius: 6, cursor: teamNoteText.trim() ? "pointer" : "default", fontSize: 13, fontWeight: 600 }}>{teamNoteSaving ? "Saving…" : "Add to 1:1 Notes"}</button>
-                              </>
-                            )}
                             {style === 'email-chat' && (
                               <div style={{ display: "flex", gap: 6 }}>
                                 <button onClick={() => { setComposing({ to: m.email, subject: '', body: '' }); setTeamNoteOpen(null); }} style={{ flex: 1, padding: "6px 0", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>✉️ Email</button>
