@@ -2,7 +2,7 @@
 
 **Owner:** Kayla Birdsong, CEO / PM — Fresh Food Connect
 **Executor:** Claude (autonomous, recursive, continuous until Kayla says pause)
-**Last updated:** 2026-03-20
+**Last updated:** 2026-03-20 (Sprint 2 complete, Sprint 3 planned)
 
 ---
 
@@ -141,69 +141,119 @@ COO vote: keyboard shortcuts (6/6)
 
 ---
 
-## Sprint 2 — AI-Assisted Email Drafting & Smart Prioritization
-*Status: PLANNED — next to execute*
+## Sprint 2 — AI-Assisted Email Drafting & Smart Prioritization ✅ COMPLETE
+*Shipped: 2026-03-20 | Commit: e522bf5*
 
-### Pre-sprint panel input
+### Panel deliberation
 
-**ED Users panel:**
-> "I spend 40% of my email time writing replies. If AI can give me a first draft — even 70% right — I'll save an hour a day. The quick replies exist but they're canned. I want a real draft."
+**ED Users panel (6/6):**
+> "I spend 40% of my email time writing replies. If AI can give me a first draft — even 70% right — I'll save an hour a day. The quick replies exist but they're canned. I want a real draft — something context-aware that I can tweak and send."
 
-**UX panel:**
-> "The compose flow is already there. One button that says '✨ Draft Reply' pre-fills it with AI content. User reviews and sends. Zero new UI to learn."
+ED vote: AI draft reply (6/6), priority score (5/6 — "help me see what's actually urgent"), relationship badge (4/6 — "is this someone I know?")
 
-**Unicorn CEO panel:**
-> "AI does the first draft, human does final judgment. That's the right division of labor. Don't make her approve — make her edit. Default to action."
+**UX panel (6/6):**
+> "The compose flow is already there. One button that says '✨ Draft Reply' pre-fills it with AI content. User reviews and sends. Zero new UI to learn. The priority badge needs to be subtle — don't add visual noise. One small colored indicator, not a whole scoring system."
 
-**Data panel:**
-> "Priority scoring: urgency × days-waiting × sender-tier. Tier = freshfoodconnect team > known donors > known vendors > unknown. Weight overdue tasks similarly."
+UX vote: Draft Reply button in hover bar AND expanded view (6/6), subtle P-score badge (5/6 — "keep it small"), relationship badge as colored chip (4/6)
 
-**CFO panel:** "No financial impact. Proceed."
+**Unicorn CEO panel (6/6):**
+> "AI does the first draft, human does final judgment. That's the right division of labor. Don't make her approve — make her edit. Default to action. Inbox-zero as a service. Every email that goes past 7 days should feel like a burn."
 
-**COO panel:**
-> "Auto-label suggestions on archive are gold for ops. Every time Kayla archives something without labeling, that context is lost. Suggest a label based on the email content."
+CEO vote: Draft Reply (6/6), urgency-weighted priority (6/6)
 
-**CRO panel:**
-> "Contact relationship strength: show a simple signal on the email — 'first contact,' 'frequent,' 'hasn't replied in 60 days.' That's a donor relationship cue."
+**Data panel (6/6):**
+> "Priority scoring: urgency × days-waiting × sender-tier. Tier = freshfoodconnect team (3x) > frequent contact (2x) > known (1.2x) > unknown (1x). Cap age at 14 days to prevent ancient emails dominating. Urgency keywords add flat bonus: ASAP/urgent/critical (+10), grant/deadline/sign (+6), follow-up/invoice (+3)."
 
-**Product team plan:**
-- Feature 1: ✨ Draft Reply button — calls `/api/ai-draft` with email context, pre-fills compose
-- Feature 2: Priority score badge on needs-response emails (urgency × age × sender tier)
-- Feature 3: Auto-label suggestion on archive action
-- Feature 4: Sender relationship badge (first contact / frequent / lapsed)
+Data vote: Priority score algorithm as described (6/6), relationship badge (5/6)
 
-**New env vars needed:** None (uses existing ANTHROPIC_API_KEY)
-**New API routes:** `/api/ai-draft` (POST, auth-guarded)
+**CFO panel:** "No financial impact on this sprint. No new env vars needed — good. Proceed."
+
+**COO panel (6/6):**
+> "Auto-label suggestions on archive are gold for ops. Every time Kayla archives something without labeling, that context is lost. Suggest a label based on the email content — show it in the toast message so it doesn't add a step."
+
+COO vote: Label suggestion in toast (6/6 — "in the toast, not a modal")
+
+**CRO panel (6/6):**
+> "Contact relationship strength: show a simple signal on the email — 'First contact,' 'Frequent,' 'Lapsed (60d+).' That's a donor relationship cue. Lapsed is the most important — if a key donor hasn't heard from Kayla in 60 days, that email needs a reply today."
+
+CRO vote: Relationship badge (6/6), lapsed signal highlighted in red/orange (6/6)
+
+**Product team resolution (Kayla as PM):**
+- All four features green-lit
+- Priority score: show only on needs-response bucket emails (not all emails)
+- Label suggestion: in toast message, not blocking UI
+- Relationship badge: Lapsed = orange, Frequent = green, First contact = blue
+- `e` keyboard shortcut mapped to trash (not archive — Kayla doesn't use archive)
+
+### What shipped
+
+| Feature | Panel mandate | Status |
+|---|---|---|-|
+| ✨ Draft Reply button (hover bar + expanded) → `/api/ai-draft` | ED + UX + CEO (6/6) | ✅ |
+| Priority score badge (P-score) on needs-response emails | Data (6/6) | ✅ |
+| Auto-label suggestion in delete/archive toast | COO (6/6) | ✅ |
+| Relationship badge (First contact / Frequent / Lapsed) | CRO (6/6) | ✅ |
+
+**New API route:** `/api/ai-draft` — POST, auth-guarded, calls Anthropic Haiku, returns draft text
+**Pure functions added:** `senderTier`, `priorityScore`, `relationshipBadge`, `suggestArchiveLabel`
+**Tests added:** 43 new tests (sprint2.test.js: 29, aiDraft.test.js: 14) — **242 total passing**
 
 ---
 
 ## Sprint 3 — Fundraising & Development Dashboard
-*Status: PLANNED*
+*Status: PLANNED — next to execute*
 
-### Pre-sprint panel input
+### Panel deliberation (post-Sprint 2 convening)
 
-**CRO panel:**
-> "The ED's primary job is revenue and mission. Neither is visible in this app today. I need to see: what's in the donor pipeline, which grants are closing, what came in this week."
+**CRO panel (6/6):**
+> "The ED's primary job is revenue and mission. Neither is visible in this app today. I need to see: what's in the donor pipeline, which grants are closing, what came in this week. Right now Kayla has to log into Classy, HubSpot, and her email separately. Pull it all into Today."
 
-**CFO panel:**
-> "Grant deadlines are existential. If we miss a LOI deadline, that's $50K gone. It needs to be on the Today tab, not buried in a calendar."
+CRO vote: donation widget (6/6), pipeline funnel (6/6), grant deadlines (5/6)
 
-**ED Users panel:**
-> "I want to see the Classy donation feed without logging into Classy. Just the last 7 days, amounts, names. Momentum visibility."
+**CFO panel (6/6):**
+> "Grant deadlines are existential for a nonprofit our size. Miss an LOI and that's $50K gone. It needs to live on Today tab with a countdown — red when < 7 days, amber when < 30. Manual entry is fine to start; we can connect to a spreadsheet later. Don't block on a data source."
 
-**Data panel:**
-> "Monthly giving trend as a sparkline on Today. Is recurring revenue growing or shrinking? One chart tells me more than a report."
+CFO vote: grant deadline countdown on Today (6/6), manual entry first (6/6 — "don't wait for API"), color-coded urgency (6/6)
 
-**Unicorn CEO panel:**
-> "Pipeline stage matters more than total. Show me: Prospect → Cultivating → Ask Made → Pledge → Received. That's the funnel."
+**ED Users panel (6/6):**
+> "I want to see the Classy donation feed without logging into Classy. Just the last 7 days, amounts, names. Momentum visibility — when I see a $500 donation come in, I send a thank-you within 24 hours. If I'm not watching Classy, I miss that window. Also: grant deadlines belong on my daily view, full stop."
+
+ED vote: Classy widget (6/6), grant deadlines on Today (6/6), pipeline funnel (3/6 — "nice to have but not daily")
+
+**Data panel (5/6):**
+> "The Classy feed is tactical. The strategic view is trend: is monthly giving growing or shrinking? A sparkline on Today — last 6 months of recurring revenue — tells me more than a dollar total. Connect to HubSpot deal data for the pipeline funnel. Don't build custom pipeline tracking when the data already lives in HubSpot."
+
+Data vote: monthly giving sparkline (5/6), HubSpot pipeline (6/6 — "don't reinvent what HubSpot already does")
+
+**UX panel (6/6):**
+> "Two risks: widget sprawl (Today becomes a dashboard nobody reads) and API dependency (Classy/HubSpot goes down, Today breaks). Mitigate: each widget is collapsible. If the API call fails, show 'data unavailable' — never a broken Today tab. Keep the grant tracker above the fold."
+
+UX vote: collapsible widgets (6/6), graceful empty states (6/6), grant tracker at top (6/6)
+
+**COO panel (5/6):**
+> "The grant tracker is ops-critical. I will use this daily. Make sure it persists — localStorage is fine. Pipeline funnel: COO wants to know what's in 'Ask Made' stage — that's where deals die. Surface that count."
+
+COO vote: grant tracker localStorage (6/6), Ask Made stage highlighted (5/6)
+
+**Unicorn CEO panel (4/6):**
+> "Pipeline stage matters more than total. Show me: Prospect → Cultivating → Ask Made → Pledge → Received. That's the funnel. The sparkline is a vanity metric if you can't act on it. Pair it with a trend arrow — up/down vs. prior 6 months."
+
+CEO vote: pipeline funnel stages (6/6), trend arrow on sparkline (4/6 — "only if data is reliable")
+
+**Product team resolution (Kayla as PM):**
+- Feature 1 ships: grant deadline tracker (localStorage, Today tab, color-coded countdown) — no external API needed, ships immediately
+- Feature 2 ships: Classy donation widget — needs `CLASSY_API_TOKEN`; if not available, build the UI with a graceful "Connect Classy" empty state
+- Feature 3 ships: HubSpot pipeline funnel using existing HubSpot MCP (deals by stage)
+- Feature 4 deferred: monthly giving sparkline — requires historical Classy data, too much scope for Sprint 3; move to Sprint 4
+- COO tie-break on sparkline deferral: "ops reality — don't build a chart we can't populate"
 
 **Product team plan:**
-- Feature 1: Grant deadline tracker (manual entry, shows on Today tab countdown)
-- Feature 2: Classy recent donations widget (7-day feed, calls Classy API)
-- Feature 3: Monthly giving sparkline (HubSpot or Classy data)
-- Feature 4: Donor pipeline stages on Today (HubSpot deal stages)
+- Feature 1: Grant deadline tracker (localStorage, Today tab, red/amber countdown, manual add/remove)
+- Feature 2: Classy recent donations widget (7-day feed via Classy API, graceful empty state if no token)
+- Feature 3: HubSpot donor pipeline funnel on Today (deal stages: Prospect → Cultivating → Ask Made → Pledge → Received)
 
-**New env vars needed:** `CLASSY_API_TOKEN` (Kayla to provide)
+**New env vars needed:** `CLASSY_API_TOKEN` (Kayla to provide for Feature 2)
+**New API routes:** `/api/classy-donations` (GET, auth-guarded), `/api/hubspot-pipeline` (GET, auth-guarded)
 
 ---
 
