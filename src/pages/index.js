@@ -256,6 +256,49 @@ function suggestArchiveLabel(email) {
   return null;
 }
 
+// ── Sprint 4: Weekly brief context builder ────────────────────────────────────
+function buildWeeklyBriefContext(emails, tasks, events, donations) {
+  const now = Date.now();
+  const sevenDaysAgo = now - 7 * 24 * 3600 * 1000;
+  const recentEmails = (emails || []).filter(e => {
+    const ts = e.internalDate ? parseInt(e.internalDate) : new Date(e.date || 0).getTime();
+    return ts >= sevenDaysAgo;
+  });
+  const completedTasks = (tasks || []).filter(t => t.done);
+  const overdueTasks = (tasks || []).filter(t => !t.done && t.due && new Date(t.due) < new Date());
+  const pendingTasks = (tasks || []).filter(t => !t.done);
+  const recentMeetings = (events || []).filter(ev => {
+    const ts = new Date(ev.start || 0).getTime();
+    return ts >= sevenDaysAgo && ts <= now;
+  });
+  const totalDonations = (donations || []).reduce((sum, d) => sum + (d.amount || 0), 0);
+  const donationCount = (donations || []).length;
+  return {
+    emailCount: recentEmails.length,
+    completedTaskCount: completedTasks.length,
+    overdueTaskCount: overdueTasks.length,
+    pendingTaskCount: pendingTasks.length,
+    meetingCount: recentMeetings.length,
+    totalDonations,
+    donationCount,
+    topDonation: donationCount ? Math.max(...(donations || []).map(d => d.amount || 0)) : 0,
+  };
+}
+function formatBriefContext(ctx) {
+  const lines = [
+    `Emails in inbox this week: ${ctx.emailCount}`,
+    `Tasks completed: ${ctx.completedTaskCount}`,
+    `Tasks pending: ${ctx.pendingTaskCount}`,
+    `Tasks overdue: ${ctx.overdueTaskCount}`,
+    `Meetings attended: ${ctx.meetingCount}`,
+  ];
+  if (ctx.donationCount > 0) {
+    lines.push(`Donations received (7 days): ${ctx.donationCount} totaling $${ctx.totalDonations.toLocaleString()}`);
+    lines.push(`Largest donation: $${ctx.topDonation.toLocaleString()}`);
+  }
+  return lines.join('\n');
+}
+
 // ── Sprint 3: Grant tracker + Pipeline helpers ────────────────────────────────
 const PIPELINE_STAGE_ORDER = ["Prospect", "Cultivating", "Ask Made", "Pledge", "Received"];
 function grantDaysUntil(deadline) {
@@ -972,6 +1015,9 @@ export default function Home() {
   const [pipelineLoading, setPipelineLoading] = useState(false);
   const [classDonations, setClassDonations] = useState([]); // Classy 7-day feed
   const [classDonationsLoading, setClassDonationsLoading] = useState(false);
+  const [weeklyBrief, setWeeklyBrief] = useState(null); // { text, boardText } or null
+  const [weeklyBriefLoading, setWeeklyBriefLoading] = useState(false);
+  const [boardReportSaving, setBoardReportSaving] = useState(false);
 
   // ── Persist ──
   useEffect(() => {
@@ -1139,6 +1185,53 @@ export default function Home() {
       showToast("AI draft failed: " + err.message);
     } finally {
       setAiDraftLoading(null);
+    }
+  };
+
+  const generateWeeklyBrief = async (boardMode = false) => {
+    setWeeklyBriefLoading(true);
+    try {
+      const ctx = buildWeeklyBriefContext(emails, tasks, events, classDonations);
+      const r = await fetch("/api/weekly-brief", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ context: formatBriefContext(ctx), boardMode }),
+      });
+      const d = await r.json();
+      if (d.brief) {
+        setWeeklyBrief(prev => boardMode ? { ...(prev || {}), boardText: d.brief } : { ...(prev || {}), text: d.brief });
+        showToast(boardMode ? "Board report draft ready" : "✨ Weekly brief generated");
+      } else {
+        showToast("Failed: " + (d.error || "Unknown error"));
+      }
+    } catch (err) {
+      showToast("Brief generation failed: " + err.message);
+    } finally {
+      setWeeklyBriefLoading(false);
+    }
+  };
+
+  const saveBriefToDoc = async (text, title) => {
+    setBoardReportSaving(true);
+    try {
+      const r = await fetch("/api/create-doc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ title, content: text }),
+      });
+      const d = await r.json();
+      if (d.url) {
+        window.open(d.url, "_blank");
+        showToast("Saved to Google Drive!");
+      } else {
+        showToast("Failed: " + (d.error || "Unknown error"));
+      }
+    } catch (err) {
+      showToast("Save failed: " + err.message);
+    } finally {
+      setBoardReportSaving(false);
     }
   };
 
@@ -1603,6 +1696,42 @@ export default function Home() {
                 {oldestWaitingDays !== null && oldestWaitingDays > 0 && <div style={{ marginTop: 8, fontSize: 14, color: oldestWaitingDays > 7 ? T.danger : T.gold }}> Oldest reply waiting: <strong>{oldestWaitingDays} day{oldestWaitingDays !== 1 ? "s" : ""}</strong></div>}
               </div>
               {digest && <div style={{ marginTop: 12, padding: "12px 16px", background: "rgba(255,255,255,0.7)", borderRadius: 8, fontSize: 15, color: T.text }}>{digest.digest}</div>}
+            </div>
+
+            {/* ── Weekly Brief Generator ── */}
+            <div style={{ background: T.card, border: `1px solid ${T.accentBg}`, borderRadius: 14, padding: "20px 24px", marginBottom: 26 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: weeklyBrief ? 16 : 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 19 }}>📋</span>
+                  <span style={{ fontSize: 18, fontWeight: 700, color: T.text }}>Weekly Intelligence</span>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => generateWeeklyBrief(false)} disabled={weeklyBriefLoading} style={{ padding: "7px 16px", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 7, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                    {weeklyBriefLoading ? "✨ Generating..." : "✨ Weekly Brief"}
+                  </button>
+                  <button onClick={() => generateWeeklyBrief(true)} disabled={weeklyBriefLoading} style={{ padding: "7px 16px", background: T.infoBg, color: T.info, border: `1px solid ${T.info}30`, borderRadius: 7, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                    📄 Board Report Draft
+                  </button>
+                </div>
+              </div>
+              {weeklyBrief?.text && (
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: T.textMuted, marginBottom: 8 }}>WEEKLY BRIEF</div>
+                  <div style={{ fontSize: 15, lineHeight: 1.8, color: T.text, whiteSpace: "pre-wrap", padding: "14px 16px", background: T.accentBg, borderRadius: 8 }}>{weeklyBrief.text}</div>
+                  <button onClick={() => saveBriefToDoc(weeklyBrief.text, `Weekly Brief — ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`)} disabled={boardReportSaving} style={{ marginTop: 10, padding: "7px 16px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                    📁 Save to Drive
+                  </button>
+                </div>
+              )}
+              {weeklyBrief?.boardText && (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: T.textMuted, marginBottom: 8 }}>BOARD REPORT DRAFT <span style={{ color: T.danger, fontWeight: 700 }}>— Review before sharing</span></div>
+                  <div style={{ fontSize: 15, lineHeight: 1.8, color: T.text, whiteSpace: "pre-wrap", padding: "14px 16px", background: T.infoBg, borderRadius: 8 }}>{weeklyBrief.boardText}</div>
+                  <button onClick={() => saveBriefToDoc(weeklyBrief.boardText, `DRAFT Board Report — ${new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}`)} disabled={boardReportSaving} style={{ marginTop: 10, padding: "7px 16px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                    📁 Save Board Report to Drive
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Finance review banner — shows when Debbie's details email is in inbox */}
