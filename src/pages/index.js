@@ -1054,7 +1054,13 @@ export default function Home() {
   const [hsContactSearch, setHsContactSearch] = useState("");
   const [hsContactId, setHsContactId] = useState("");
   const [hsSaving, setHsSaving] = useState(false);
+  const [hsSearching, setHsSearching] = useState(false);
+  const [hsSearchError, setHsSearchError] = useState("");
+  const [hsSearchDone, setHsSearchDone] = useState(false);
   const [aiDraftLoading, setAiDraftLoading] = useState(null); // emailId being drafted
+  const [urgentEmailIds, setUrgentEmailIds] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("ffc_urgent_emails") || "[]")); } catch { return new Set(); }
+  });
   const [toDoEmailIds, setToDoEmailIds] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem("ffc_todo_emails") || "[]")); } catch { return new Set(); }
   });
@@ -1095,6 +1101,9 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== "undefined") localStorage.setItem("ffc_todo_emails", JSON.stringify([...toDoEmailIds]));
   }, [toDoEmailIds]);
+  useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem("ffc_urgent_emails", JSON.stringify([...urgentEmailIds]));
+  }, [urgentEmailIds]);
 
   const showToast = useCallback((msg) => setToast(msg), []);
 
@@ -1572,6 +1581,10 @@ export default function Home() {
                   ? <button onClick={() => setToDoEmailIds(prev => { const n = new Set(prev); n.delete(email.id); return n; })} style={abtn(T.calGreen, T.calGreenBg)}>✓ Done</button>
                   : <button onClick={() => setToDoEmailIds(prev => new Set([...prev, email.id]))} style={abtn(T.accent, T.accentBg)}>📌 To Do</button>
                 }
+                {urgentEmailIds.has(email.id)
+                  ? <button onClick={() => setUrgentEmailIds(prev => { const n = new Set(prev); n.delete(email.id); return n; })} style={abtn(T.urgentCoral, T.urgentCoralBg)}>⚡ Urgent</button>
+                  : <button onClick={() => setUrgentEmailIds(prev => new Set([...prev, email.id]))} style={abtn(T.textMuted, T.bg)}>⚡ Urgent</button>
+                }
                 {isDebbieFinance && <button onClick={() => setFinancePanel(email)} style={abtn(T.taskAmber, T.taskAmberBg)}>📊 Finance Review</button>}
               </>
             )}
@@ -1756,6 +1769,50 @@ export default function Home() {
               {digest && <div style={{ marginTop: 12, padding: "12px 16px", background: "rgba(255,255,255,0.7)", borderRadius: 8, fontSize: 15, color: T.text }}>{digest.digest}</div>}
             </div>
 
+            {/* ── Urgent Box ── */}
+            {(() => {
+              const twoDaysAgo = Date.now() - 2 * 24 * 3600 * 1000;
+              const urgentEmails = emails.filter(e => urgentEmailIds.has(e.id));
+              const staleDrafts = drafts.filter(d => {
+                const ts = d.date ? new Date(d.date).getTime() : 0;
+                return ts > 0 && ts < twoDaysAgo;
+              });
+              if (!urgentEmails.length && !staleDrafts.length) return null;
+              return (
+                <div style={{ background: T.urgentCoralBg, border: `2px solid ${T.urgentCoral}`, borderRadius: 14, padding: "18px 22px", marginBottom: 26 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                    <span style={{ fontSize: 19 }}>⚡</span>
+                    <span style={{ fontSize: 17, fontWeight: 700, color: T.urgentCoral }}>Urgent</span>
+                    <span style={{ fontSize: 13, background: T.urgentCoral, color: "#fff", borderRadius: 8, padding: "2px 9px", fontWeight: 700 }}>{urgentEmails.length + staleDrafts.length}</span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {urgentEmails.map(e => (
+                      <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", background: T.card, borderRadius: 8, border: `1px solid ${T.urgentCoral}30` }}>
+                        <span style={{ fontSize: 13 }}>✉️</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{e.from?.match(/^([^<]+)/)?.[1]?.trim() || e.from}</span>
+                          <span style={{ fontSize: 13, color: T.textMuted, marginLeft: 8 }}>{e.subject}</span>
+                        </div>
+                        <button onClick={() => { setTab("emails"); setExpandedEmail(e.id); fetchEmailBody(e.id); }} style={{ ...abtn(T.accent, T.accentBg), flexShrink: 0 }}>Open</button>
+                        <button onClick={() => setUrgentEmailIds(prev => { const n = new Set(prev); n.delete(e.id); return n; })} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, fontSize: 18, lineHeight: 1, padding: "0 2px" }} title="Dismiss">×</button>
+                      </div>
+                    ))}
+                    {staleDrafts.map(d => (
+                      <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", background: T.card, borderRadius: 8, border: `1px solid ${T.urgentCoral}30` }}>
+                        <span style={{ fontSize: 13 }}>✏️</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ fontWeight: 600, fontSize: 14, color: T.taskAmber }}>Stale draft</span>
+                          <span style={{ fontSize: 13, color: T.textMuted, marginLeft: 8 }}>{d.subject || "(no subject)"}</span>
+                          <span style={{ fontSize: 12, color: T.urgentCoral, marginLeft: 8 }}>· {fmtRel(d.date)}</span>
+                        </div>
+                        <button onClick={() => setTab("emails")} style={{ ...abtn(T.taskAmber, T.taskAmberBg), flexShrink: 0 }}>Go to Drafts</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* ── Weekly Brief Generator ── */}
             <div style={{ background: T.card, border: `1px solid ${T.accentBg}`, borderRadius: 14, padding: "20px 24px", marginBottom: 26 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: weeklyBrief ? 16 : 0 }}>
@@ -1869,20 +1926,50 @@ export default function Home() {
                   <span style={{ fontSize: 18, fontWeight: 700, color: T.calGreen }}>Donation Alerts</span>
                   <span style={{ fontSize: 14, color: T.calGreen, background: T.calGreenBg, padding: "3px 11px", borderRadius: 8, fontWeight: 600 }}>{donationAlerts.length}</span>
                 </div>
-                {donationAlerts.slice(0, 3).map((e, i) => renderEmailRow(e, i))}
+                {donationAlerts.slice(0, 3).map(e => {
+                  const av = senderAvatar(e.from);
+                  return (
+                    <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 9, marginBottom: 6, cursor: "pointer" }} onClick={() => { setTab("emails"); setExpandedEmail(e.id); fetchEmailBody(e.id); }}>
+                      <div style={{ width: 32, height: 32, borderRadius: "50%", background: av.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{av.initials}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{e.from?.match(/^([^<]+)/)?.[1]?.trim() || e.from}</span>
+                        <span style={{ fontSize: 13, color: T.textMuted, marginLeft: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.subject}</span>
+                      </div>
+                      <span style={{ fontSize: 12, color: T.textMuted, flexShrink: 0 }}>{fmtRel(e.date)}</span>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
             {/* Needs Your Reply */}
-            <div style={{ marginBottom: 26 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+            <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", marginBottom: 26 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: needsReply.length ? 14 : 0 }}>
                 <span style={{ fontSize: 19 }}>✉️</span>
                 <span style={{ fontSize: 18, fontWeight: 700, color: T.urgentCoral }}>Needs Your Reply</span>
                 <span style={{ fontSize: 14, color: T.urgentCoral, background: T.urgentCoralBg, padding: "3px 11px", borderRadius: 8, fontWeight: 600 }}>{needsReply.length}</span>
               </div>
-              {needsReply.length === 0 ? <div style={{ padding: 22, textAlign: "center", color: T.textMuted, fontSize: 16, background: T.card, borderRadius: 10, border: `1px solid ${T.border}` }}>You're all caught up!</div>
-                : needsReply.slice(0, 5).map((e, i) => renderEmailRow(e, i))}
-              {needsReply.length > 5 && <button onClick={() => setTab("emails")} style={{ width: "100%", padding: "11px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600, marginTop: 8 }}>View all {needsReply.length} emails →</button>}
+              {needsReply.length === 0 ? <div style={{ padding: "10px 0", color: T.calGreen, fontSize: 15 }}>You're all caught up!</div>
+                : needsReply.slice(0, 7).map(e => {
+                  const av = senderAvatar(e.from);
+                  const isUrgent = urgentEmailIds.has(e.id);
+                  return (
+                    <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: isUrgent ? T.urgentCoralBg : T.bg, border: `1px solid ${isUrgent ? T.urgentCoral : T.border}30`, borderRadius: 9, marginBottom: 6, cursor: "pointer", borderLeft: isUrgent ? `3px solid ${T.urgentCoral}` : undefined }} onClick={() => { setTab("emails"); setExpandedEmail(e.id); fetchEmailBody(e.id); }}>
+                      <div style={{ width: 32, height: 32, borderRadius: "50%", background: av.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{av.initials}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.from?.match(/^([^<]+)/)?.[1]?.trim() || e.from}</div>
+                        <div style={{ fontSize: 13, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.subject}</div>
+                      </div>
+                      <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+                        <span style={{ fontSize: 12, color: T.textMuted }}>{fmtRel(e.date)}</span>
+                        <button onClick={ev => { ev.stopPropagation(); setComposing({ to: e.from, subject: `Re: ${e.subject}`, body: "" }); }} style={abtn(T.accent, T.accentBg)}>Reply</button>
+                        <button onClick={ev => { ev.stopPropagation(); emailAction("archive", e.id); }} style={abtn(T.textMuted, T.bg)}>Archive</button>
+                        <button onClick={ev => { ev.stopPropagation(); setUrgentEmailIds(prev => { const n = new Set(prev); isUrgent ? n.delete(e.id) : n.add(e.id); return n; }); }} style={abtn(isUrgent ? T.urgentCoral : T.textMuted, isUrgent ? T.urgentCoralBg : T.bg)} title="Mark urgent">⚡</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              {needsReply.length > 7 && <button onClick={() => setTab("emails")} style={{ width: "100%", padding: "9px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600, marginTop: 6 }}>View all {needsReply.length} →</button>}
             </div>
 
             {/* Today's Schedule */}
@@ -2489,28 +2576,40 @@ export default function Home() {
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               <input
                 value={hsContactSearch}
-                onChange={e => setHsContactSearch(e.target.value)}
+                onChange={e => { setHsContactSearch(e.target.value); setHsSearchDone(false); setHsSearchError(""); }}
                 placeholder="Name or email..."
                 onKeyDown={async e => {
                   if (e.key === "Enter" && hsContactSearch.trim()) {
-                    const r = await fetch(`/api/hubspot-search?q=${encodeURIComponent(hsContactSearch)}`);
-                    const d = await r.json();
-                    setHsContacts(d.contacts || []);
+                    setHsSearching(true); setHsSearchError(""); setHsSearchDone(false);
+                    try {
+                      const r = await fetch(`/api/hubspot-search?q=${encodeURIComponent(hsContactSearch)}`, { credentials: "include" });
+                      const d = await r.json();
+                      if (!r.ok) { setHsSearchError(d.error || "Search failed"); setHsContacts([]); }
+                      else { setHsContacts(d.contacts || []); }
+                    } catch (err) { setHsSearchError("Network error"); }
+                    finally { setHsSearching(false); setHsSearchDone(true); }
                   }
                 }}
                 style={{ flex: 1, padding: "10px 14px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 15, outline: "none", color: T.text, background: T.bg }}
               />
               <button onClick={async () => {
                 if (!hsContactSearch.trim()) return;
-                const r = await fetch(`/api/hubspot-search?q=${encodeURIComponent(hsContactSearch)}`);
-                const d = await r.json();
-                setHsContacts(d.contacts || []);
-              }} style={{ padding: "10px 16px", background: T.infoBg, color: T.info, border: `1px solid ${T.info}30`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Search</button>
+                setHsSearching(true); setHsSearchError(""); setHsSearchDone(false);
+                try {
+                  const r = await fetch(`/api/hubspot-search?q=${encodeURIComponent(hsContactSearch)}`, { credentials: "include" });
+                  const d = await r.json();
+                  if (!r.ok) { setHsSearchError(d.error || "Search failed"); setHsContacts([]); }
+                  else { setHsContacts(d.contacts || []); }
+                } catch (err) { setHsSearchError("Network error"); }
+                finally { setHsSearching(false); setHsSearchDone(true); }
+              }} style={{ padding: "10px 16px", background: T.infoBg, color: T.info, border: `1px solid ${T.info}30`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>{hsSearching ? "…" : "Search"}</button>
             </div>
+            {hsSearchError && <div style={{ fontSize: 13, color: T.danger, marginBottom: 10 }}>⚠ {hsSearchError}</div>}
+            {hsSearchDone && !hsSearchError && hsContacts.length === 0 && !hsSearching && <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 10 }}>No contacts found.</div>}
             {hsContacts.length > 0 && (
               <div style={{ border: `1px solid ${T.border}`, borderRadius: 8, marginBottom: 16, maxHeight: 180, overflowY: "auto" }}>
                 {hsContacts.map(c => (
-                  <div key={c.id} onClick={() => { setHsContactId(c.id); setHsContacts([]); setHsContactSearch(c.label); }}
+                  <div key={c.id} onClick={() => { setHsContactId(c.id); setHsContacts([]); setHsContactSearch(c.label); setHsSearchDone(false); }}
                     style={{ padding: "10px 14px", cursor: "pointer", borderBottom: `1px solid ${T.borderLight}`, fontSize: 15, color: T.text, background: hsContactId === c.id ? T.accentBg : "transparent" }}>
                     {c.label}
                   </div>
@@ -2525,6 +2624,7 @@ export default function Home() {
                   setHsSaving(true);
                   const r = await fetch("/api/hubspot-note", {
                     method: "POST",
+                    credentials: "include",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ contactId: hsContactId, note: hsModal.note, subject: hsModal.subject }),
                   });
@@ -2533,15 +2633,14 @@ export default function Home() {
                   if (data.id || data.status === "ok") {
                     showToast("Logged to HubSpot!");
                     setHsModal(null);
-                    setHsContactId("");
-                    setHsContactSearch("");
+                    setHsContactId(""); setHsContactSearch(""); setHsSearchDone(false); setHsSearchError("");
                   } else {
                     showToast("Failed: " + (data.error || "Unknown error"));
                   }
                 }}
                 style={{ flex: 1, padding: "11px", background: hsContactId ? "#FF7A59" : T.border, color: hsContactId ? "#fff" : T.textMuted, border: "none", borderRadius: 8, cursor: hsContactId && !hsSaving ? "pointer" : "default", fontWeight: 600, fontSize: 15 }}
               >{hsSaving ? "Logging..." : "Log Note"}</button>
-              <button onClick={() => { setHsModal(null); setHsContactId(""); setHsContactSearch(""); setHsContacts([]); }} style={{ padding: "11px 20px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15 }}>Cancel</button>
+              <button onClick={() => { setHsModal(null); setHsContactId(""); setHsContactSearch(""); setHsContacts([]); setHsSearchDone(false); setHsSearchError(""); }} style={{ padding: "11px 20px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15 }}>Cancel</button>
             </div>
           </div>
         </div>

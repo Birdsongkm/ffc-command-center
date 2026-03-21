@@ -2,7 +2,7 @@
 
 **Owner:** Kayla Birdsong, CEO / PM — Fresh Food Connect
 **Executor:** Claude (autonomous, recursive, continuous until Kayla says pause)
-**Last updated:** 2026-03-21 (Sprint 4 complete, Sprint 5 planned)
+**Last updated:** 2026-03-21 (Sprint 5 complete, Sprint 6 planned)
 
 ---
 
@@ -338,8 +338,8 @@ CRO vote: donor highlights in brief (5/6), include lapsed re-engagement signal (
 
 ---
 
-## Sprint 5 — Search & Cross-Content Intelligence
-*Status: PLANNED — next to execute*
+## Sprint 5 — Search & Cross-Content Intelligence ✅ COMPLETE
+*Shipped: 2026-03-21*
 
 ### Panel deliberation (post-Sprint 4 convening)
 
@@ -391,13 +391,17 @@ CEO vote: keyword search now (6/6), semantic search as future enhancement (note 
 **New env vars needed:** None
 **New API routes:** None (search is client-side across loaded data)
 
-**Data panel:**
-> "Thread view across surfaces. Email → task → calendar event → outcome. Closing the loop on every interaction."
+### What shipped (Sprint 5)
 
-**Product team plan:**
-- Feature 1: Global search (Cmd+K palette — emails, tasks, drafts, notes)
-- Feature 2: Contact timeline view (all interactions with one person)
-- Feature 3: Email-task-event thread linking
+| Feature | Status |
+|---|---|
+| Cmd+K global search palette (emails + tasks + drafts) | ✅ |
+| Relevance scoring (`scoreSearchResult`) — subject/title > snippet/notes | ✅ |
+| Keyboard navigation ↑↓ Enter Esc in search palette | ✅ |
+| Team Activity Digest on Today tab (per-member email/task counts) | ✅ |
+| #27: Click outside expanded email to collapse (overlay z-index pattern) | ✅ |
+
+**Tests added:** 24 new tests (sprint5.test.js) — **311 total passing**
 
 ---
 
