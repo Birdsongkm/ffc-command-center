@@ -75,17 +75,6 @@ export default async function handler(req, res) {
     const file = searchData.files?.[0];
     if (!file) return res.status(404).json({ error: `No 1:1 doc found for "${firstName}" — make sure a Google Doc named "1:1 ${firstName}" exists in your Drive` });
 
-    // Get document to find body end index
-    const docRes = await fetch(`https://docs.googleapis.com/v1/documents/${file.id}`, { headers: h });
-    if (!docRes.ok) {
-      const err = await docRes.json().catch(() => ({}));
-      const msg = err.error?.message || err.message || 'Failed to read document';
-      console.error('drive-note:getDoc', { fileId: file.id, docName: file.name, status: docRes.status, message: msg });
-      return res.status(502).json({ error: msg });
-    }
-    const docData = await docRes.json();
-    const endIndex = docData.body?.content?.slice(-1)?.[0]?.endIndex || 2;
-
     // Prepend note at top of document (after title, index 1)
     const dateStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     const insertText = `Next meeting (${dateStr}):\n• ${note}\n\n`;
