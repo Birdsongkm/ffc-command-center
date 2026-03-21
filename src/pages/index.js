@@ -413,6 +413,7 @@ const BUCKETS = {
   "invoices": { label: "Invoices & Receipts", icon: "🧾", color: T.taskAmber, bg: T.taskAmberBg, border: T.taskAmberBorder, priority: 5 },
   "fyi-mass": { label: "FYI / Mass Sends", icon: "📋", color: T.info, bg: T.infoBg, border: T.emailBlueBorder, priority: 6 },
   "classy-recurring": { label: "Classy Platform", icon: "🔄", color: T.driveViolet, bg: T.driveVioletBg, border: T.driveVioletBorder, priority: 7 },
+  "financial": { label: "Financial / Donations", icon: "💰", color: T.taskAmber, bg: T.taskAmberBg, border: T.taskAmberBorder, priority: 4 },
   "calendar-notif": { label: "Calendar Notifications", icon: "📅", color: T.calGreen, bg: T.calGreenBg, border: T.calGreenBorder, priority: 8 },
   "docs-activity": { label: "Docs & Drive Activity", icon: "📄", color: T.driveViolet, bg: T.driveVioletBg, border: T.driveVioletBorder, priority: 9 },
   "automated": { label: "Automated / System", icon: "⚙️", color: T.textMuted, bg: "#F5F5F5", border: T.border, priority: 10 },
@@ -495,7 +496,10 @@ function LightbulbFAB() {
       </button>
 
       {open && (
-        <div style={{
+        <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 1000 }} />
+      )}
+      {open && (
+        <div onClick={e => e.stopPropagation()} style={{
           position: "fixed", bottom: 90, right: 28, width: 380,
           background: T.card, borderRadius: 14, padding: 20,
           boxShadow: "0 8px 36px rgba(0,0,0,0.16)", border: `1px solid ${T.border}`,
@@ -985,6 +989,7 @@ export default function Home() {
   const [auth, setAuth] = useState(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [tab, setTab] = useState("today");
+  const [emailDropdownOpen, setEmailDropdownOpen] = useState(false);
   const [emails, setEmails] = useState([]);
   const [events, setEvents] = useState([]);
   const [nextPage, setNextPage] = useState(null);
@@ -1424,7 +1429,7 @@ export default function Home() {
   }, [tab, emails, focusedIdx]);
 
   // ── Derived state ──
-  const BUCKET_ORDER = ['needs-response','to-do','team','classy-onetime','invoices','fyi-mass','classy-recurring','calendar-notif','docs-activity','automated','newsletter','sales'];
+  const BUCKET_ORDER = ['needs-response','to-do','team','financial','fyi-mass','calendar-notif','docs-activity','automated','newsletter','sales'];
   const emailsByBucket = {};
   emails.forEach(e => {
     // to-do takes priority over other buckets (and overrides)
@@ -1440,7 +1445,12 @@ export default function Home() {
       return tx - ta;
     });
   }
-  const sortedBuckets = Object.entries(emailsByBucket).sort(([a], [b]) => {
+  const FINANCIAL_KEYS = ["classy-onetime", "classy-recurring", "invoices"];
+  const mergedBuckets = { ...emailsByBucket };
+  const financialEmails = FINANCIAL_KEYS.flatMap(k => mergedBuckets[k] || []);
+  FINANCIAL_KEYS.forEach(k => delete mergedBuckets[k]);
+  if (financialEmails.length > 0) mergedBuckets["financial"] = financialEmails;
+  const sortedBuckets = Object.entries(mergedBuckets).sort(([a], [b]) => {
     const ia = BUCKET_ORDER.indexOf(a); const ib = BUCKET_ORDER.indexOf(b);
     return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
   });
@@ -1746,20 +1756,47 @@ export default function Home() {
         {/* TABS */}
         <div style={{ display: "flex", gap: 4, marginBottom: 26, borderBottom: `2px solid ${T.border}`, paddingBottom: 0, overflowX: "auto", alignItems: "flex-end", justifyContent: "center" }}>
           <button onClick={() => { setSearchOpen(true); setSearchQuery(""); setSearchIdx(0); }} style={{ padding: "10px 16px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6, marginRight: 8, marginBottom: 3, whiteSpace: "nowrap" }}>🔍 Search <span style={{ fontSize: 11, opacity: 0.7 }}>⌘K</span></button>
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              padding: "13px 22px", background: tab === t.id ? t.color + "12" : "transparent",
-              color: tab === t.id ? t.color : T.textMuted, border: "none",
-              borderBottom: tab === t.id ? `3px solid ${t.color}` : "3px solid transparent",
-              borderRadius: "8px 8px 0 0", cursor: "pointer", fontSize: 16, fontWeight: tab === t.id ? 700 : 500,
-              display: "flex", alignItems: "center", gap: 7, transition: "all 0.25s", whiteSpace: "nowrap",
-            }}>
-              <span>{t.icon}</span> {t.label}
-              {t.id === "emails" && emails.length > 0 && <span style={{ background: T.emailBlue, color: "#fff", borderRadius: 10, padding: "2px 9px", fontSize: 13, fontWeight: 700 }}>{emails.length}</span>}
-              {t.id === "emails" && draftsTotal > 0 && <span style={{ background: T.info, color: "#fff", borderRadius: 10, padding: "2px 9px", fontSize: 13, fontWeight: 700 }}>✏️ {draftsTotal}</span>}
-              {t.id === "tasks" && pendingTasks > 0 && <span style={{ background: T.taskAmber, color: "#fff", borderRadius: 10, padding: "2px 9px", fontSize: 13, fontWeight: 700 }}>{pendingTasks}</span>}
-            </button>
-          ))}
+          {TABS.map(t => {
+            if (t.id === "emails") {
+              const isEmailActive = tab === "emails" || tab === "drafts";
+              return (
+                <div key="emails" style={{ position: "relative" }}
+                  onMouseEnter={() => setEmailDropdownOpen(true)}
+                  onMouseLeave={() => setEmailDropdownOpen(false)}>
+                  <button onClick={() => setTab("emails")} style={{
+                    padding: "13px 22px", background: isEmailActive ? t.color + "12" : "transparent",
+                    color: isEmailActive ? t.color : T.textMuted, border: "none",
+                    borderBottom: isEmailActive ? `3px solid ${t.color}` : "3px solid transparent",
+                    borderRadius: "8px 8px 0 0", cursor: "pointer", fontSize: 16, fontWeight: isEmailActive ? 700 : 500,
+                    display: "flex", alignItems: "center", gap: 7, transition: "all 0.25s", whiteSpace: "nowrap",
+                  }}>
+                    <span>✉️</span> Emails
+                    {emails.length > 0 && <span style={{ background: T.emailBlue, color: "#fff", borderRadius: 10, padding: "2px 9px", fontSize: 13, fontWeight: 700 }}>{emails.length}</span>}
+                    {draftsTotal > 0 && <span style={{ background: T.info, color: "#fff", borderRadius: 10, padding: "2px 9px", fontSize: 13, fontWeight: 700 }}>✏️ {draftsTotal}</span>}
+                    <span style={{ fontSize: 11, color: "currentColor", marginLeft: 2, opacity: 0.6 }}>▾</span>
+                  </button>
+                  {emailDropdownOpen && (
+                    <div style={{ position: "absolute", top: "100%", left: 0, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 200, minWidth: 150, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", overflow: "hidden" }}>
+                      <button onClick={() => { setTab("emails"); setEmailDropdownOpen(false); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "11px 18px", background: tab === "emails" ? T.emailBlueBg : "transparent", color: T.text, border: "none", cursor: "pointer", fontSize: 15 }}>📥 Inbox</button>
+                      <button onClick={() => { setTab("drafts"); setEmailDropdownOpen(false); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "11px 18px", background: tab === "drafts" ? T.infoBg : "transparent", color: T.text, border: "none", cursor: "pointer", fontSize: 15, borderTop: `1px solid ${T.border}` }}>✏️ Drafts{draftsTotal > 0 ? ` (${draftsTotal})` : ""}</button>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            return (
+              <button key={t.id} onClick={() => setTab(t.id)} style={{
+                padding: "13px 22px", background: tab === t.id ? t.color + "12" : "transparent",
+                color: tab === t.id ? t.color : T.textMuted, border: "none",
+                borderBottom: tab === t.id ? `3px solid ${t.color}` : "3px solid transparent",
+                borderRadius: "8px 8px 0 0", cursor: "pointer", fontSize: 16, fontWeight: tab === t.id ? 700 : 500,
+                display: "flex", alignItems: "center", gap: 7, transition: "all 0.25s", whiteSpace: "nowrap",
+              }}>
+                <span>{t.icon}</span> {t.label}
+                {t.id === "tasks" && pendingTasks > 0 && <span style={{ background: T.taskAmber, color: "#fff", borderRadius: 10, padding: "2px 9px", fontSize: 13, fontWeight: 700 }}>{pendingTasks}</span>}
+              </button>
+            );
+          })}
         </div>
 
         {/* Session expiry banner */}
@@ -2209,42 +2246,6 @@ export default function Home() {
                 <button onClick={() => setSelectedEmailIds(new Set())} style={{ marginLeft: "auto", padding: "7px 14px", background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14 }}>✕ Clear</button>
               </div>
             )}
-            {/* ── Drafts in Email Tab ── */}
-            {drafts.length > 0 && (
-              <div style={{ marginBottom: 22 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                  <span style={{ fontSize: 17 }}>✏️</span>
-                  <span style={{ fontSize: 17, fontWeight: 700, color: T.info }}>Drafts</span>
-                  <span style={{ fontSize: 13, color: T.info, background: T.infoBg, padding: "2px 9px", borderRadius: 6, fontWeight: 600 }}>{drafts.length}</span>
-                  <button onClick={() => setTab("emails")} style={{ marginLeft: "auto", padding: "4px 12px", background: "transparent", color: T.info, border: `1px solid ${T.info}30`, borderRadius: 5, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>View all →</button>
-                </div>
-                <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
-                  {drafts.slice(0, 8).map(d => {
-                    const toAddr = (d.to || "").replace(/<.*>/, "").trim() || d.to || "No recipient";
-                    const dAvatar = senderAvatar(toAddr);
-                    return (
-                      <div key={d.id} style={{ flex: "0 0 280px", background: T.card, border: `1px solid ${T.border}`, borderTop: `3px solid ${T.info}`, borderRadius: 12, padding: "14px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                          <div style={{ width: 32, height: 32, borderRadius: "50%", background: dAvatar.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{dAvatar.initials}</div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{toAddr}</div>
-                            <div style={{ fontSize: 11, color: T.textMuted }}>{draftAge(d.updatedAt)}</div>
-                          </div>
-                        </div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 4 }}>{d.subject || "(no subject)"}</div>
-                        <div style={{ fontSize: 12, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 10 }}>{d.snippet || ""}</div>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={async () => { const r = await fetch(`/api/drafts?id=${d.id}`, { method: "PUT" }); const res = await r.json(); if (res.success) { showToast("Draft sent!"); fetchDrafts(); } else showToast("Send failed: " + (res.error || "error")); }} style={{ flex: 1, padding: "5px 0", background: T.info, color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Send</button>
-                          <button onClick={() => { setTab("emails"); }} style={{ flex: 1, padding: "5px 0", background: T.infoBg, color: T.info, border: `1px solid ${T.info}30`, borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Edit</button>
-                          <button onClick={async () => { const r = await fetch(`/api/drafts?id=${d.id}`, { method: "DELETE" }); const res = await r.json(); if (res.success) { showToast("Deleted"); fetchDrafts(); } }} style={{ padding: "5px 10px", background: T.dangerBg, color: T.danger, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>✕</button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(480px, 1fr))", gap: 18 }}>
               {sortedBuckets.map(([bucket, bucketEmails]) => {
                 const info = BUCKETS[bucket] || { label: bucket, icon: "📧", color: T.textMuted, bg: T.bg, border: T.border };
