@@ -54,18 +54,21 @@ export default async function handler(req, res) {
     const now = new Date();
     const sod = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
     const eod = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
+    const in90days = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 90).toISOString();
 
     // Fetch emails - 50 at a time with pagination (only unread)
     let emailUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=50&q=is:inbox%20is:unread';
     if (page) emailUrl += `&pageToken=${page}`;
 
-    const [eRes, cRes] = await Promise.all([
+    const [eRes, cRes, dRes] = await Promise.all([
       fetch(emailUrl, { headers: h }),
       fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${sod}&timeMax=${eod}&singleEvents=true&orderBy=startTime`, { headers: h }),
+      fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${sod}&timeMax=${in90days}&singleEvents=true&orderBy=startTime`, { headers: h }),
     ]);
 
     const eData = await eRes.json();
     const cData = await cRes.json();
+    const dData = await dRes.json();
 
     let emails = [];
     if (eData.messages) {
@@ -117,10 +120,25 @@ export default async function handler(req, res) {
       htmlLink: e.htmlLink || '',
     }));
 
+    const DEADLINE_KEYWORDS = ['deadline', 'due', 'due date'];
+    const deadlineEvents = (dData.items || [])
+      .filter(e => {
+        const isAllDay = e.start?.date && !e.start?.dateTime;
+        const title = (e.summary || '').toLowerCase();
+        return isAllDay && DEADLINE_KEYWORDS.some(k => title.includes(k));
+      })
+      .map(e => ({
+        id: `cal-${e.id}`,
+        name: e.summary,
+        deadline: e.start.date,
+        source: 'calendar',
+      }));
+
     res.json({
       authenticated: true,
       emails,
       events,
+      deadlineEvents,
       nextPage: eData.nextPageToken || null,
       totalEmails: eData.resultSizeEstimate || emails.length,
     });

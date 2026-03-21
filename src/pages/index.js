@@ -1079,6 +1079,7 @@ export default function Home() {
   const [grants, setGrants] = useState(() => {
     try { return JSON.parse(localStorage.getItem("ffc_grants") || "[]"); } catch { return []; }
   });
+  const [calendarGrants, setCalendarGrants] = useState([]);
   const [showGrantForm, setShowGrantForm] = useState(false);
   const [grantForm, setGrantForm] = useState({ name: "", deadline: "", amount: "" });
   const [pipeline, setPipeline] = useState([]); // HubSpot deal stages
@@ -1149,7 +1150,10 @@ export default function Home() {
       setAuth(true);
       setSessionExpired(false);
       if (pageToken) { setEmails(prev => [...prev, ...d.emails.filter(e => e.unread)]); }
-      else { setEmails(d.emails.filter(e => e.unread)); setEvents(d.events || []); }
+      else {
+        setEmails(d.emails.filter(e => e.unread)); setEvents(d.events || []);
+        if (d.deadlineEvents) setCalendarGrants(d.deadlineEvents);
+      }
       setNextPage(d.nextPage);
       setLoading(false);
     } catch { setLoading(false); }
@@ -2062,23 +2066,29 @@ export default function Home() {
                 </div>
                 <div style={{ background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 12, overflow: "hidden" }}>
                   {events.length === 0 ? <div style={{ padding: 22, textAlign: "center", color: T.textMuted, fontSize: 16 }}>No events today</div>
-                    : events.map(ev => (
-                    <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderBottom: `1px solid ${T.borderLight}`, opacity: isRealMeeting(ev) ? 1 : 0.5 }}>
+                    : events.map(ev => {
+                    const real = isRealMeeting(ev);
+                    const linkedTask = !real && tasks.find(t => !t.done && t.title && ev.title.toLowerCase().includes(t.title.toLowerCase()));
+                    return (
+                    <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderBottom: `1px solid ${T.borderLight}`, opacity: real ? 1 : 0.6 }}>
                       <div style={{ width: 48, textAlign: "center", flexShrink: 0 }}><div style={{ fontSize: 14, fontWeight: 700, color: T.calGreen }}>{fmtTime(ev.start)}</div></div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 600, fontSize: 15, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.title}</div>
                         {ev.location && <div style={{ fontSize: 13, color: T.textMuted }}>📍 {ev.location}</div>}
+                        {!real && !linkedTask && <div style={{ fontSize: 12, color: T.textMuted, fontStyle: "italic" }}>No prep needed</div>}
                       </div>
                       <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
                         {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", background: T.calGreen, color: "#fff", borderRadius: 6, textDecoration: "none", fontSize: 13, fontWeight: 600 }}>Join</a>}
-                        {isRealMeeting(ev) && (
+                        {linkedTask && <button onClick={() => { setTab("drive"); setDriveSearch(linkedTask.title); fetchDrive("search", linkedTask.title); }} style={{ padding: "6px 12px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Do it →</button>}
+                        {real && (
                           <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "6px 10px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
                             {preppedEvents[ev.id] ? "✓" : "Prep"}
                           </button>
                         )}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -2103,11 +2113,11 @@ export default function Home() {
                   <button onClick={() => setShowGrantForm(false)} style={{ padding: "7px 12px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14 }}>Cancel</button>
                 </div>
               )}
-              {grants.length === 0 ? (
-                <div style={{ padding: "16px 0", color: T.textMuted, fontSize: 15, textAlign: "center" }}>No grant deadlines tracked. Add one above.</div>
+              {grants.length === 0 && calendarGrants.length === 0 ? (
+                <div style={{ padding: "16px 0", color: T.textMuted, fontSize: 15, textAlign: "center" }}>No grant deadlines tracked. Add one above or add calendar events with "deadline" or "due" in the title.</div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {[...grants].sort((a, b) => new Date(a.deadline) - new Date(b.deadline)).map(g => {
+                  {[...grants, ...calendarGrants.filter(cg => !grants.some(g => g.name === cg.name && g.deadline === cg.deadline))].sort((a, b) => new Date(a.deadline) - new Date(b.deadline)).map(g => {
                     const urgency = grantDeadlineUrgency(g.deadline);
                     const urgencyColor = urgency === "overdue" || urgency === "red" ? T.danger : urgency === "amber" ? T.taskAmber : T.calGreen;
                     const urgencyBg = urgency === "overdue" || urgency === "red" ? T.dangerBg : urgency === "amber" ? T.taskAmberBg : T.calGreenBg;
@@ -2116,12 +2126,13 @@ export default function Home() {
                         <div style={{ flex: 1 }}>
                           <div style={{ fontWeight: 600, fontSize: 15, color: T.text }}>{g.name}</div>
                           {g.amount && <div style={{ fontSize: 13, color: T.textMuted }}>{g.amount}</div>}
+                          {g.source === 'calendar' && <div style={{ fontSize: 11, color: T.textMuted, fontStyle: "italic" }}>📅 from calendar</div>}
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0 }}>
                           <div style={{ fontWeight: 700, fontSize: 14, color: urgencyColor }}>{formatGrantCountdown(g.deadline)}</div>
                           <div style={{ fontSize: 12, color: T.textMuted }}>{new Date(g.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
                         </div>
-                        <button onClick={() => setGrants(prev => prev.filter(x => x.id !== g.id))} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, fontSize: 18, lineHeight: 1, padding: "0 4px" }} title="Remove">×</button>
+                        {!g.source && <button onClick={() => setGrants(prev => prev.filter(x => x.id !== g.id))} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, fontSize: 18, lineHeight: 1, padding: "0 4px" }} title="Remove">×</button>}
                       </div>
                     );
                   })}
