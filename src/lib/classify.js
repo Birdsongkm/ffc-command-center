@@ -34,6 +34,15 @@ function classifyEmail(e) {
   if (subj.includes("invoice") || subj.includes("receipt") || subj.includes("payment") || subj.includes("billing") || subj.includes("statement") || subj.includes("your order") || subj.includes("charge") || subj.includes("subscription renewal")) return "invoices";
   if (from.includes("noreply") || from.includes("no-reply") || from.includes("notifications@") || from.includes("mailer-daemon") || from.includes("postmaster")) return "automated";
   if (from.includes("freshfoodconnect") || from.includes("@ffc")) return "team";
+  // Sales/spam: cold outreach, B2B pitches, vendor solicitation
+  const salesSignals = [
+    "quick call", "15 minutes", "30 minutes", "hop on a call", "schedule a demo",
+    "just following up", "wanted to connect", "partnership opportunity", "help you grow",
+    "increase your", "we help nonprofits", "we help organizations", "solutions for",
+    "free trial", "limited time", "our platform", "reach out to", "i wanted to reach",
+    "checking in to see", "would love to chat", "can we connect", "business opportunity",
+  ];
+  if (salesSignals.some(s => subj.includes(s) || (e.snippet || "").toLowerCase().includes(s))) return "sales";
   if (recipientCount <= 3) return "needs-response";
   return "needs-response";
 }

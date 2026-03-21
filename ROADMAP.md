@@ -2,7 +2,7 @@
 
 **Owner:** Kayla Birdsong, CEO / PM — Fresh Food Connect
 **Executor:** Claude (autonomous, recursive, continuous until Kayla says pause)
-**Last updated:** 2026-03-21 (Sprint 6 features 1–4 shipped, 313 tests passing)
+**Last updated:** 2026-03-21 (Sprint 6 complete + Claude panel review shipped, 326 tests passing)
 
 ---
 
@@ -405,8 +405,8 @@ CEO vote: keyword search now (6/6), semantic search as future enhancement (note 
 
 ---
 
-## Sprint 6 — UX Polish & Resilience
-*Status: PLANNED — next to execute*
+## Sprint 6 — UX Polish & Resilience ✅ COMPLETE
+*Shipped: 2026-03-21 | 326 tests passing*
 
 Issues #28–35 shipped between sprints (user feedback cycle). Sprint 6 formalizes
 the resilience work plus any remaining polish from that cycle.
@@ -547,4 +547,46 @@ CEO vote: session expiry banner (6/6), auto-retry on token refresh (already buil
 - Anthropic Claude API (Haiku for AI features)
 - GitHub Issues API (feedback pipeline)
 - HubSpot Engagements API (notes)
-- Jest + TDD, 149 tests, 6 test files
+- Jest + TDD, 326 tests, 14 test files
+- Claude Sonnet (7-panel × 6-expert review on every feedback submission)
+
+---
+
+## Sprint 7 — Intelligence & Clarity
+*Status: PLANNED — next to execute*
+
+### Panel deliberation
+
+**ED Users panel:**
+> "The Claude panel on feedback is incredible — it's like having a board room in my pocket. Now I want that intelligence applied to my email inbox. When I open an email, I want Claude to tell me what to do with it. One sentence. No fluff."
+
+ED vote: per-email AI action recommendation (6/6), confidence score on classification (3/6 — secondary)
+
+**UX panel:**
+> "The feedback panel is great, but it only fires when Kayla submits feedback. What if Claude proactively surfaced insights on the Today page? 'You have 3 donor emails and a pipeline review — suggested focus order: 1, 2, 3.' One block, scannable in 10 seconds."
+
+UX vote: daily AI briefing block on Today tab (5/6), email action suggestion on expand (4/6)
+
+**Unicorn CEO panel:**
+> "This is a single-user tool for a nonprofit ED. The 10x version: it knows her patterns, predicts what she'll do with each email, and drafts the response before she even asks. Start with: auto-classify confidence + explain why."
+
+CEO vote: explain classification reasoning on hover (5/6), pattern learning (2/6 — too complex now)
+
+**COO panel:**
+> "The urgent box works. But she still has to manually triage. What if the AI looked at the email list and said: 'These 3 need your attention today, everything else can wait'? That's the delegation view."
+
+COO vote: AI-suggested daily focus list (6/6), batch archive recommendation (4/6)
+
+**CRO panel:**
+> "Every donor email should get a confidence score: 'This looks like a major gift prospect.' Surface it before she replies."
+
+CRO vote: donor intent signal on email row (5/6), HubSpot auto-lookup on open (4/6)
+
+**Product team resolution (Kayla as PM):**
+- Feature 1: AI daily focus briefing on Today tab — Claude looks at inbox + calendar + tasks → generates 3-bullet focus list
+- Feature 2: Per-email classification explanation — "Why is this needs-response?" shown on expand
+- Feature 3: Batch AI triage — button in inbox header: "AI Triage" → Claude recommends archive/respond/defer for each visible email
+- Feature 4: Donor intent signal — if email is from a known HubSpot contact, show deal stage badge on email row
+
+**New env vars needed:** None (ANTHROPIC_API_KEY already in use)
+**New API routes:** POST /api/ai-triage (batch), GET /api/ai-explain?id= (per-email)

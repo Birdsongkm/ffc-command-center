@@ -178,6 +178,31 @@ describe('classifyEmail', () => {
       expect(classifyEmail({ from: 'partner@org.com', recipientCount: 3 })).toBe('needs-response');
     });
   });
+
+  // Sales / cold outreach detection
+  describe('sales', () => {
+    test('subject has "schedule a demo" → sales', () => {
+      expect(classifyEmail({ from: 'rep@vendor.com', subject: 'Schedule a demo with us', recipientCount: 1 })).toBe('sales');
+    });
+    test('subject has "quick call" → sales', () => {
+      expect(classifyEmail({ from: 'sales@company.com', subject: 'Quick call to discuss our platform', recipientCount: 1 })).toBe('sales');
+    });
+    test('snippet has "we help nonprofits" → sales', () => {
+      expect(classifyEmail({ from: 'outreach@agency.com', subject: 'Hello', snippet: 'We help nonprofits like yours increase their impact', recipientCount: 1 })).toBe('sales');
+    });
+    test('snippet has "would love to chat" → sales', () => {
+      expect(classifyEmail({ from: 'biz@dev.com', subject: 'Reaching out', snippet: 'I would love to chat about a business opportunity', recipientCount: 1 })).toBe('sales');
+    });
+    test('subject has "free trial" → sales', () => {
+      expect(classifyEmail({ from: 'hello@saas.io', subject: 'Start your free trial today', recipientCount: 1 })).toBe('sales');
+    });
+    test('noreply sender + no sales signals → automated (not sales)', () => {
+      expect(classifyEmail({ from: 'noreply@system.com', subject: 'Notification', recipientCount: 1 })).toBe('automated');
+    });
+    test('team sender + sales-y subject → team (team check before sales)', () => {
+      expect(classifyEmail({ from: 'staff@freshfoodconnect.org', subject: 'Quick call tomorrow?', recipientCount: 2 })).toBe('team');
+    });
+  });
 });
 
 // ─── isRealMeeting ────────────────────────────────────────────────────────────

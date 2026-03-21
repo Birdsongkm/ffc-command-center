@@ -81,8 +81,6 @@ const QUOTES = [
 function classifyEmail(e) {
   const from = (e.from || "").toLowerCase();
   const subj = (e.subject || "").toLowerCase();
-  const to = (e.to || "").toLowerCase();
-  const cc = (e.cc || "").toLowerCase();
   const listUnsub = e.listUnsubscribe || "";
   const listId = (e.listId || "").toLowerCase();
   const precedence = (e.precedence || "").toLowerCase();
@@ -120,8 +118,6 @@ function classifyEmail(e) {
     "checking in to see", "would love to chat", "can we connect", "business opportunity",
   ];
   if (salesSignals.some(s => subj.includes(s) || (e.snippet || "").toLowerCase().includes(s))) return "sales";
-  // Unknown sender with high recipient count or no clear signal → sales bucket
-  const knownDomains = ["google", "microsoft", "zoom", "docusign", "dropbox", "slack", "quickbooks", "gusto", "stripe"];
   if (recipientCount <= 3) return "needs-response";
   return "needs-response";
 }
