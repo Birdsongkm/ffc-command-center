@@ -2,7 +2,7 @@
 
 **Owner:** Kayla Birdsong, CEO / PM — Fresh Food Connect
 **Executor:** Claude (autonomous, recursive, continuous until Kayla says pause)
-**Last updated:** 2026-03-21 (Sprint 3 complete, Sprint 4 planned)
+**Last updated:** 2026-03-21 (Sprint 4 complete, Sprint 5 planned)
 
 ---
 
@@ -325,26 +325,71 @@ CRO vote: donor highlights in brief (5/6), include lapsed re-engagement signal (
 **New env vars needed:** None (uses existing ANTHROPIC_API_KEY and Google Drive API)
 **New API routes:** `/api/weekly-brief` (POST, auth-guarded)
 
-**Product team plan:**
-- Feature 1: Weekly brief auto-generator (AI-written from week's data, shows on Today Monday AM)
-- Feature 2: Board report draft (AI narrative from metrics, one-click export to Google Doc)
-- Feature 3: Team activity digest (email/task summary per team member)
+### What shipped (Sprint 4 + user issue #26 also shipped this cycle)
+
+| Feature | Status |
+|---|---|
+| Weekly brief generator on Today tab (AI-written, < 300 words) | ✅ |
+| Board report draft mode (structured sections, "DRAFT" watermark) | ✅ |
+| Save to Drive button on both outputs | ✅ |
+| #26: Drafts horizontal strip at top of Email tab (Send/Edit/Delete per card) | ✅ |
+
+**Tests added:** 18 new tests (sprint4.test.js) — **287 total passing**
 
 ---
 
 ## Sprint 5 — Search & Cross-Content Intelligence
-*Status: PLANNED*
+*Status: PLANNED — next to execute*
 
-### Pre-sprint panel input
+### Panel deliberation (post-Sprint 4 convening)
 
-**UX panel:**
-> "Search is the most critical missing feature. Users expect Cmd+K global search everywhere. Without it, the app feels incomplete no matter how many features you add."
+**UX panel (6/6):**
+> "Search is the most critical missing feature. Users expect Cmd+K global search everywhere. Without it, the app feels incomplete no matter how many features you add. Every power user I've interviewed mentions search in the first 30 seconds. It's not optional."
 
-**COO panel:**
-> "I need to find the email I sent about the grant three weeks ago. I need to find the task I created from that email. I need to see them together."
+UX vote: Cmd+K search palette (6/6), fuzzy search across emails+tasks+drafts (6/6), keyboard-navigable results (6/6)
 
-**CRO panel:**
-> "Contact timeline: every touchpoint with one person — emails, meetings, tasks, notes — in one view. That's relationship intelligence."
+**COO panel (6/6):**
+> "I need to find the email I sent about the grant three weeks ago. I need to find the task I created from that email. I need to see them together. Cross-content search is the differentiator. Not just 'here are emails matching X' — but 'here is everything related to X across the app.'"
+
+COO vote: cross-content search (6/6), single search box that returns email + task + draft results (6/6)
+
+**CRO panel (5/6):**
+> "Contact timeline: every touchpoint with one person — emails, meetings, tasks, notes — in one view. That's relationship intelligence. I want to type 'Alice Brown' and see our entire relationship history: when we first emailed, every meeting, all tasks, notes in HubSpot."
+
+CRO vote: contact search in palette (5/6), contact timeline on click (3/6 — "deferred, complex")
+
+**Data panel (4/6):**
+> "The search should be ranked by relevance, not just recency. An email with 'LOI' in the subject is more relevant to a grant search than one with 'LOI' in the body. Weight the title/subject higher."
+
+Data vote: relevance scoring (4/6), recency as tiebreaker (6/6)
+
+**ED Users panel (6/6):**
+> "I just want to type a name or subject and find things. I don't care about the technical architecture. Cmd+K is fine — I've seen that in other apps. Make it fast."
+
+ED vote: fast and simple (6/6), search across everything (6/6)
+
+**CFO panel:** "No financial impact. But search should include tasks — I use tasks as a financial tracking tool."
+
+CFO vote: tasks in search (6/6)
+
+**Unicorn CEO panel (5/6):**
+> "The 10x version is AI-powered search: 'show me all emails related to the Walker Foundation grant' — semantic search, not keyword. But ship keyword first, don't wait for perfect."
+
+CEO vote: keyword search now (6/6), semantic search as future enhancement (note for Sprint 6)
+
+**Product team resolution (Kayla as PM):**
+- Cmd+K search palette: searches emails (subject/from/snippet), tasks (title), drafts (subject/to)
+- Results shown in grouped sections: Emails, Tasks, Drafts
+- Keyboard navigation (↑↓ to move, Enter to open)
+- Contact search: type a name, see matching contacts from email history
+- Team activity digest also ships this sprint (was deferred from Sprint 4)
+
+**Product team plan:**
+- Feature 1: Cmd+K global search palette (emails + tasks + drafts, keyboard-navigable)
+- Feature 2: Team activity digest (per TEAM member: emails from them this week, tasks assigned to them)
+
+**New env vars needed:** None
+**New API routes:** None (search is client-side across loaded data)
 
 **Data panel:**
 > "Thread view across surfaces. Email → task → calendar event → outcome. Closing the loop on every interaction."
