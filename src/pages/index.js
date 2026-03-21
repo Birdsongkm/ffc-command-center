@@ -996,6 +996,7 @@ export default function Home() {
 
   const [calView, setCalView] = useState("today");
   const [weekEvents, setWeekEvents] = useState([]);
+  const [nextWeekEvents, setNextWeekEvents] = useState([]);
   const [showEventForm, setShowEventForm] = useState(null);
   const [preppedEvents, setPreppedEvents] = useState(() => {
     if (typeof window !== "undefined") { try { return JSON.parse(localStorage.getItem("ffc_prepped") || "{}"); } catch { return {}; } }
@@ -1349,6 +1350,16 @@ export default function Home() {
     if (d.success) setWeekEvents(d.events || []);
   };
 
+  const fetchNextWeekEvents = async () => {
+    const now = new Date();
+    const daysToMon = (8 - now.getDay()) % 7 || 7;
+    const start = new Date(now); start.setDate(now.getDate() + daysToMon); start.setHours(0, 0, 0, 0);
+    const end = new Date(start); end.setDate(start.getDate() + 7);
+    const r = await fetch("/api/calendar-actions", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ action: "range", startDate: start.toISOString(), endDate: end.toISOString() }) });
+    const d = await r.json();
+    if (d.success) setNextWeekEvents(d.events || []);
+  };
+
   const fetchWeekPrep = async (prepNext = false) => {
     const now = new Date();
     let start, end;
@@ -1675,8 +1686,6 @@ export default function Home() {
     { id: "calendar", label: "Calendar", color: T.calGreen, icon: "📅" },
     { id: "tasks", label: "Tasks", color: T.taskAmber, icon: "📋" },
     { id: "drive", label: "Drive", color: T.driveViolet, icon: "📁" },
-    { id: "drafts", label: "Drafts", color: T.info, icon: "✏️" },
-    { id: "sticky", label: "Quick Capture", color: "#B8A030", icon: "📌" },
   ];
 
   // ═══════════════════════════════════════════════
@@ -1713,7 +1722,8 @@ export default function Home() {
             </div>
             <div style={{ fontSize: 13, color: T.textMuted, fontStyle: "italic", paddingLeft: 44 }}>"{dailyQuote.text}" <span style={{ fontStyle: "normal", fontWeight: 600 }}>— {dailyQuote.attr}</span></div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={() => setTab("sticky")} style={{ padding: "10px 18px", background: "#FFF8E8", color: "#B8A030", border: "1px solid #E8D890", borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: "pointer" }}>📌 Capture</button>
             <button onClick={() => setComposing("compose")} style={{ padding: "10px 22px", background: T.accent, color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 16, cursor: "pointer" }}>+ Compose</button>
           </div>
         </div>
@@ -1724,7 +1734,7 @@ export default function Home() {
         )}
 
         {/* TABS */}
-        <div style={{ display: "flex", gap: 4, marginBottom: 26, borderBottom: `2px solid ${T.border}`, paddingBottom: 0, overflowX: "auto", alignItems: "flex-end" }}>
+        <div style={{ display: "flex", gap: 4, marginBottom: 26, borderBottom: `2px solid ${T.border}`, paddingBottom: 0, overflowX: "auto", alignItems: "flex-end", justifyContent: "center" }}>
           <button onClick={() => { setSearchOpen(true); setSearchQuery(""); setSearchIdx(0); }} style={{ padding: "10px 16px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6, marginRight: 8, marginBottom: 3, whiteSpace: "nowrap" }}>🔍 Search <span style={{ fontSize: 11, opacity: 0.7 }}>⌘K</span></button>
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
@@ -1732,13 +1742,12 @@ export default function Home() {
               color: tab === t.id ? t.color : T.textMuted, border: "none",
               borderBottom: tab === t.id ? `3px solid ${t.color}` : "3px solid transparent",
               borderRadius: "8px 8px 0 0", cursor: "pointer", fontSize: 16, fontWeight: tab === t.id ? 700 : 500,
-              display: "flex", alignItems: "center", gap: 7, transition: "all 0.15s", whiteSpace: "nowrap",
+              display: "flex", alignItems: "center", gap: 7, transition: "all 0.25s", whiteSpace: "nowrap",
             }}>
               <span>{t.icon}</span> {t.label}
               {t.id === "emails" && emails.length > 0 && <span style={{ background: T.emailBlue, color: "#fff", borderRadius: 10, padding: "2px 9px", fontSize: 13, fontWeight: 700 }}>{emails.length}</span>}
+              {t.id === "emails" && draftsTotal > 0 && <span style={{ background: T.info, color: "#fff", borderRadius: 10, padding: "2px 9px", fontSize: 13, fontWeight: 700 }}>✏️ {draftsTotal}</span>}
               {t.id === "tasks" && pendingTasks > 0 && <span style={{ background: T.taskAmber, color: "#fff", borderRadius: 10, padding: "2px 9px", fontSize: 13, fontWeight: 700 }}>{pendingTasks}</span>}
-              {t.id === "drafts" && draftsTotal > 0 && <span style={{ background: T.info, color: "#fff", borderRadius: 10, padding: "2px 9px", fontSize: 13, fontWeight: 700 }}>{draftsTotal}</span>}
-              {t.id === "sticky" && stickyNotes.length > 0 && <span style={{ background: "#B8A030", color: "#fff", borderRadius: 10, padding: "2px 9px", fontSize: 13, fontWeight: 700 }}>{stickyNotes.length}</span>}
             </button>
           ))}
         </div>
@@ -1827,6 +1836,7 @@ export default function Home() {
                   <button onClick={() => generateWeeklyBrief(true)} disabled={weeklyBriefLoading} style={{ padding: "7px 16px", background: T.infoBg, color: T.info, border: `1px solid ${T.info}30`, borderRadius: 7, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
                     📄 Board Report Draft
                   </button>
+                  {weeklyBrief && <button onClick={() => setWeeklyBrief(null)} style={{ padding: "7px 12px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 16, lineHeight: 1 }} title="Close">×</button>}
                 </div>
               </div>
               {weeklyBrief?.text && (
@@ -2048,57 +2058,57 @@ export default function Home() {
               )}
             </div>
 
-            {/* ── HubSpot Donor Pipeline Funnel ── */}
-            {(pipeline.length > 0 || pipelineLoading) && (
-              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", marginBottom: 26 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                  <span style={{ fontSize: 19 }}>🎯</span>
-                  <span style={{ fontSize: 18, fontWeight: 700, color: T.text }}>Donor Pipeline</span>
+            {/* ── Pipeline + Classy side by side ── */}
+            <div style={{ display: "flex", gap: 20, marginBottom: 26, flexWrap: "wrap" }}>
+              {(pipeline.length > 0 || pipelineLoading) && (
+                <div style={{ flex: "1 1 320px", background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                    <span style={{ fontSize: 19 }}>🎯</span>
+                    <span style={{ fontSize: 18, fontWeight: 700, color: T.text }}>Donor Pipeline</span>
+                  </div>
+                  {pipelineLoading ? (
+                    <div style={{ color: T.textMuted, fontSize: 15 }}>Loading pipeline...</div>
+                  ) : (
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      {parsePipelineStages(pipeline).map(({ stage, count }) => {
+                        const isAskMade = stage === "Ask Made";
+                        return (
+                          <div key={stage} style={{ flex: "1 1 90px", background: isAskMade ? T.urgentCoralBg : T.bg, border: `1px solid ${isAskMade ? T.urgentCoral : T.border}30`, borderRadius: 10, padding: "12px 14px", textAlign: "center" }}>
+                            <div style={{ fontSize: 24, fontWeight: 700, color: isAskMade ? T.urgentCoral : T.accent }}>{count}</div>
+                            <div style={{ fontSize: 12, color: T.textMuted, marginTop: 4 }}>{stage}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                {pipelineLoading ? (
-                  <div style={{ color: T.textMuted, fontSize: 15 }}>Loading pipeline...</div>
+              )}
+              <div style={{ flex: "1 1 320px", background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 14, padding: "20px 24px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                  <span style={{ fontSize: 19 }}>💚</span>
+                  <span style={{ fontSize: 18, fontWeight: 700, color: T.calGreen }}>Recent Donations (7 days)</span>
+                </div>
+                {classDonationsLoading ? (
+                  <div style={{ color: T.textMuted, fontSize: 15 }}>Loading donations...</div>
+                ) : classDonations.length === 0 ? (
+                  <div style={{ padding: "16px 0", color: T.textMuted, fontSize: 15 }}>
+                    {process.env.NEXT_PUBLIC_HAS_CLASSY ? "No donations in the last 7 days." : "Connect Classy to see your recent donations. Add CLASSY_API_TOKEN to your environment variables."}
+                  </div>
                 ) : (
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    {parsePipelineStages(pipeline).map(({ stage, count }) => {
-                      const isAskMade = stage === "Ask Made";
-                      return (
-                        <div key={stage} style={{ flex: "1 1 120px", background: isAskMade ? T.urgentCoralBg : T.bg, border: `1px solid ${isAskMade ? T.urgentCoral : T.border}30`, borderRadius: 10, padding: "14px 16px", textAlign: "center" }}>
-                          <div style={{ fontSize: 26, fontWeight: 700, color: isAskMade ? T.urgentCoral : T.accent }}>{count}</div>
-                          <div style={{ fontSize: 13, color: T.textMuted, marginTop: 4 }}>{stage}</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {classDonations.slice(0, 5).map((d, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: T.calGreenBg, border: `1px solid ${T.calGreenBorder}`, borderRadius: 9 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: "50%", background: T.calGreen, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, flexShrink: 0 }}>{(d.name || "?")[0].toUpperCase()}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name || "Anonymous"}</div>
+                          <div style={{ fontSize: 12, color: T.textMuted }}>{fmtRel(d.date)}</div>
                         </div>
-                      );
-                    })}
+                        <div style={{ fontWeight: 700, fontSize: 15, color: T.calGreen, flexShrink: 0 }}>${(d.amount || 0).toLocaleString()}</div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
-            )}
-
-            {/* ── Classy Recent Donations ── */}
-            <div style={{ background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 14, padding: "20px 24px", marginBottom: 26 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                <span style={{ fontSize: 19 }}>💚</span>
-                <span style={{ fontSize: 18, fontWeight: 700, color: T.calGreen }}>Recent Donations (7 days)</span>
-              </div>
-              {classDonationsLoading ? (
-                <div style={{ color: T.textMuted, fontSize: 15 }}>Loading donations...</div>
-              ) : classDonations.length === 0 ? (
-                <div style={{ padding: "16px 0", color: T.textMuted, fontSize: 15 }}>
-                  {process.env.NEXT_PUBLIC_HAS_CLASSY ? "No donations in the last 7 days." : "Connect Classy to see your recent donations. Add CLASSY_API_TOKEN to your environment variables."}
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {classDonations.slice(0, 10).map((d, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: T.calGreenBg, border: `1px solid ${T.calGreenBorder}`, borderRadius: 9 }}>
-                      <div style={{ width: 38, height: 38, borderRadius: "50%", background: T.calGreen, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14, flexShrink: 0 }}>{(d.name || "?")[0].toUpperCase()}</div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, fontSize: 15, color: T.text }}>{d.name || "Anonymous"}</div>
-                        <div style={{ fontSize: 13, color: T.textMuted }}>{fmtRel(d.date)}</div>
-                      </div>
-                      <div style={{ fontWeight: 700, fontSize: 16, color: T.calGreen }}>${(d.amount || 0).toLocaleString()}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* ── Team Activity Digest ── */}
@@ -2171,7 +2181,7 @@ export default function Home() {
                   <span style={{ fontSize: 17 }}>✏️</span>
                   <span style={{ fontSize: 17, fontWeight: 700, color: T.info }}>Drafts</span>
                   <span style={{ fontSize: 13, color: T.info, background: T.infoBg, padding: "2px 9px", borderRadius: 6, fontWeight: 600 }}>{drafts.length}</span>
-                  <button onClick={() => setTab("drafts")} style={{ marginLeft: "auto", padding: "4px 12px", background: "transparent", color: T.info, border: `1px solid ${T.info}30`, borderRadius: 5, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>View all →</button>
+                  <button onClick={() => setTab("emails")} style={{ marginLeft: "auto", padding: "4px 12px", background: "transparent", color: T.info, border: `1px solid ${T.info}30`, borderRadius: 5, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>View all →</button>
                 </div>
                 <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
                   {drafts.slice(0, 8).map(d => {
@@ -2190,7 +2200,7 @@ export default function Home() {
                         <div style={{ fontSize: 12, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 10 }}>{d.snippet || ""}</div>
                         <div style={{ display: "flex", gap: 6 }}>
                           <button onClick={async () => { const r = await fetch(`/api/drafts?id=${d.id}`, { method: "PUT" }); const res = await r.json(); if (res.success) { showToast("Draft sent!"); fetchDrafts(); } else showToast("Send failed: " + (res.error || "error")); }} style={{ flex: 1, padding: "5px 0", background: T.info, color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Send</button>
-                          <button onClick={() => { setTab("drafts"); }} style={{ flex: 1, padding: "5px 0", background: T.infoBg, color: T.info, border: `1px solid ${T.info}30`, borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Edit</button>
+                          <button onClick={() => { setTab("emails"); }} style={{ flex: 1, padding: "5px 0", background: T.infoBg, color: T.info, border: `1px solid ${T.info}30`, borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Edit</button>
                           <button onClick={async () => { const r = await fetch(`/api/drafts?id=${d.id}`, { method: "DELETE" }); const res = await r.json(); if (res.success) { showToast("Deleted"); fetchDrafts(); } }} style={{ padding: "5px 10px", background: T.dangerBg, color: T.danger, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>✕</button>
                         </div>
                       </div>
@@ -2272,6 +2282,7 @@ export default function Home() {
             <div style={{ display: "flex", gap: 8, marginBottom: 22 }}>
               <button onClick={() => setCalView("today")} style={{ padding: "10px 22px", background: calView === "today" ? T.calGreenBg : T.bg, color: calView === "today" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "today" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Today</button>
               <button onClick={() => { setCalView("week"); fetchWeekEvents(); }} style={{ padding: "10px 22px", background: calView === "week" ? T.calGreenBg : T.bg, color: calView === "week" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "week" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>This Week</button>
+              <button onClick={() => { setCalView("nextWeek"); fetchNextWeekEvents(); }} style={{ padding: "10px 22px", background: calView === "nextWeek" ? T.calGreenBg : T.bg, color: calView === "nextWeek" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "nextWeek" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Next Week</button>
               <div style={{ flex: 1 }} />
               <button onClick={() => setShowEventForm({})} style={{ padding: "10px 22px", background: T.calGreen, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>+ New Event</button>
             </div>
@@ -2312,6 +2323,33 @@ export default function Home() {
                 });
                 const entries = Object.entries(days);
                 if (entries.length === 0) return <div style={{ padding: 32, textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, fontSize: 16 }}>No more events this week</div>;
+                return entries.map(([day, dayEvents]) => (
+                  <div key={day} style={{ marginBottom: 24 }}>
+                    <h4 style={{ fontSize: 17, fontWeight: 700, color: T.calGreen, marginBottom: 12, paddingBottom: 6, borderBottom: `2px solid ${T.calGreenBorder}` }}>{day}</h4>
+                    {dayEvents.map(ev => (
+                      <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", marginBottom: 6, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, opacity: isRealMeeting(ev) ? 1 : 0.5 }}>
+                        <span style={{ fontWeight: 600, fontSize: 15, color: T.calGreen, minWidth: 66 }}>{fmtTime(ev.start)}</span>
+                        <span style={{ fontSize: 16, color: T.text, flex: 1 }}>{ev.title}</span>
+                        {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 14px", background: T.calGreen, color: "#fff", borderRadius: 6, textDecoration: "none", fontSize: 14, fontWeight: 600 }}>Join</a>}
+                        <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "6px 14px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>{preppedEvents[ev.id] ? "✓ Prepped" : "Prep Done"}</button>
+                      </div>
+                    ))}
+                  </div>
+                ));
+              })()}</div>
+            )}
+
+            {/* Next Week */}
+            {calView === "nextWeek" && (
+              <div>{(() => {
+                const days = {};
+                nextWeekEvents.forEach(ev => {
+                  const day = new Date(ev.start).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+                  if (!days[day]) days[day] = [];
+                  days[day].push(ev);
+                });
+                const entries = Object.entries(days);
+                if (entries.length === 0) return <div style={{ padding: 32, textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, fontSize: 16 }}>No events next week</div>;
                 return entries.map(([day, dayEvents]) => (
                   <div key={day} style={{ marginBottom: 24 }}>
                     <h4 style={{ fontSize: 17, fontWeight: 700, color: T.calGreen, marginBottom: 12, paddingBottom: 6, borderBottom: `2px solid ${T.calGreenBorder}` }}>{day}</h4>
@@ -2697,7 +2735,7 @@ export default function Home() {
                   if (e.key === "ArrowUp") { e.preventDefault(); setSearchIdx(i => Math.max(i - 1, 0)); }
                   if (e.key === "Enter" && results[searchIdx]) {
                     const r = results[searchIdx];
-                    if (r.subject !== undefined && r.to !== undefined) { setTab("drafts"); } // draft
+                    if (r.subject !== undefined && r.to !== undefined) { setTab("emails"); } // draft
                     else if (r.subject !== undefined) { setTab("emails"); setExpandedEmail(r.id); fetchEmailBody(r.id); } // email
                     else { setTab("tasks"); } // task
                     setSearchOpen(false); setSearchQuery("");
@@ -2728,7 +2766,7 @@ export default function Home() {
                   </div>}
                   {draftResults.length > 0 && <div>
                     <div style={{ padding: "8px 20px 4px", fontSize: 11, fontWeight: 700, color: T.textMuted, letterSpacing: "0.08em", textTransform: "uppercase" }}>Drafts</div>
-                    {draftResults.map((d, i) => { const idx = globalIdx++; return <div key={d.id} onClick={() => { setTab("drafts"); setSearchOpen(false); setSearchQuery(""); }} style={{ padding: "10px 20px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", background: idx === searchIdx ? T.accentBg : "transparent" }}><span style={{ fontSize: 15 }}>✏️</span><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.subject || "(no subject)"}</div><div style={{ fontSize: 12, color: T.textMuted }}>To: {d.to || "?"}</div></div></div>; })}
+                    {draftResults.map((d, i) => { const idx = globalIdx++; return <div key={d.id} onClick={() => { setTab("emails"); setSearchOpen(false); setSearchQuery(""); }} style={{ padding: "10px 20px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", background: idx === searchIdx ? T.accentBg : "transparent" }}><span style={{ fontSize: 15 }}>✏️</span><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.subject || "(no subject)"}</div><div style={{ fontSize: 12, color: T.textMuted }}>To: {d.to || "?"}</div></div></div>; })}
                   </div>}
                 </div>
               );
