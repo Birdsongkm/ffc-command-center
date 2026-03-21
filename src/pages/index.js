@@ -2235,9 +2235,12 @@ export default function Home() {
                       const style = teamMember?.meetingStyle || 'email';
                       return (
                       <div key={m.email} style={{ flex: "1 1 140px", background: T.bg, border: `1px solid ${isOpen ? T.accent : T.border}`, borderRadius: 10, padding: "12px 14px", position: "relative" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, cursor: "pointer" }} onClick={() => { setTeamNoteOpen(isOpen ? null : m.email); setTeamNoteText(''); }}>
-                          <div style={{ width: 30, height: 30, borderRadius: "50%", background: senderAvatar(m.name).color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{m.initials}</div>
-                          <div style={{ fontWeight: 600, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name.split(' ')[0]}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                          <div style={{ width: 30, height: 30, borderRadius: "50%", background: senderAvatar(m.name).color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, flexShrink: 0, cursor: "pointer" }} onClick={() => { setTeamNoteOpen(isOpen ? null : m.email); setTeamNoteText(''); }}>{m.initials}</div>
+                          <div style={{ fontWeight: 600, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "pointer", flex: 1 }} onClick={() => { setTeamNoteOpen(isOpen ? null : m.email); setTeamNoteText(''); }}>{m.name.split(' ')[0]}</div>
+                          {style === 'notes' && (
+                            <a href={teamMember?.driveDocUrl || `https://drive.google.com/drive/search?q=${encodeURIComponent('1:1 ' + m.name.split(' ')[0])}`} target="_blank" rel="noopener noreferrer" title="Open 1:1 notes in Drive" style={{ fontSize: 15, textDecoration: "none", flexShrink: 0, opacity: 0.7 }} onClick={e => e.stopPropagation()}>📄</a>
+                          )}
                         </div>
                         <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.8 }}>
                           {m.recentEmailCount > 0 && <div>✉️ {m.recentEmailCount} email{m.recentEmailCount !== 1 ? "s" : ""}</div>}
