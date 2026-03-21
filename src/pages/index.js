@@ -243,6 +243,39 @@ function suggestArchiveLabel(email) {
   return null;
 }
 
+// ── Sprint 3: Grant tracker + Pipeline helpers ────────────────────────────────
+const PIPELINE_STAGE_ORDER = ["Prospect", "Cultivating", "Ask Made", "Pledge", "Received"];
+function grantDaysUntil(deadline) {
+  if (!deadline) return null;
+  const d = new Date(deadline);
+  if (isNaN(d.getTime())) return null;
+  return Math.ceil((d.getTime() - Date.now()) / 86400000);
+}
+function grantDeadlineUrgency(deadline) {
+  const days = grantDaysUntil(deadline);
+  if (days === null) return "none";
+  if (days < 0) return "overdue";
+  if (days <= 7) return "red";
+  if (days <= 30) return "amber";
+  return "green";
+}
+function formatGrantCountdown(deadline) {
+  const days = grantDaysUntil(deadline);
+  if (days === null) return "";
+  if (days < 0) return `Overdue by ${Math.abs(days)}d`;
+  if (days === 0) return "Due today";
+  if (days === 1) return "Due tomorrow";
+  return `${days} days`;
+}
+function parsePipelineStages(deals) {
+  if (!deals || !deals.length) return [];
+  const counts = {};
+  for (const deal of deals) { const s = deal.stage || "Unknown"; counts[s] = (counts[s] || 0) + 1; }
+  const ordered = PIPELINE_STAGE_ORDER.filter(s => counts[s]);
+  const unknown = Object.keys(counts).filter(s => !PIPELINE_STAGE_ORDER.includes(s));
+  return [...ordered, ...unknown].map(stage => ({ stage, count: counts[stage] }));
+}
+
 // ── Action learning helpers ───────────────────────────────────────────────────
 function recordEmailAction(history, bucket, action) {
   const updated = { ...history };
@@ -911,6 +944,15 @@ export default function Home() {
   const [hsContactId, setHsContactId] = useState("");
   const [hsSaving, setHsSaving] = useState(false);
   const [aiDraftLoading, setAiDraftLoading] = useState(null); // emailId being drafted
+  const [grants, setGrants] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("ffc_grants") || "[]"); } catch { return []; }
+  });
+  const [showGrantForm, setShowGrantForm] = useState(false);
+  const [grantForm, setGrantForm] = useState({ name: "", deadline: "", amount: "" });
+  const [pipeline, setPipeline] = useState([]); // HubSpot deal stages
+  const [pipelineLoading, setPipelineLoading] = useState(false);
+  const [classDonations, setClassDonations] = useState([]); // Classy 7-day feed
+  const [classDonationsLoading, setClassDonationsLoading] = useState(false);
 
   // ── Persist ──
   useEffect(() => {
@@ -927,6 +969,9 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== "undefined" && Object.keys(forwardSuggestions).length > 0) localStorage.setItem("ffc_fwd_suggest", JSON.stringify(forwardSuggestions));
   }, [forwardSuggestions]);
+  useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem("ffc_grants", JSON.stringify(grants));
+  }, [grants]);
 
   const showToast = useCallback((msg) => setToast(msg), []);
 
@@ -972,6 +1017,23 @@ export default function Home() {
     if (auth && new Date().getDay() <= 1) {
       fetch("/api/monday-digest").then(r => r.json()).then(d => { if (d.digest) setDigest(d); }).catch(() => {});
     }
+  }, [auth]);
+
+  // Sprint 3: HubSpot pipeline + Classy donations (loaded with Today tab)
+  useEffect(() => {
+    if (!auth) return;
+    setPipelineLoading(true);
+    fetch("/api/hubspot-pipeline", { credentials: "include" })
+      .then(r => r.json())
+      .then(d => { if (d.deals) setPipeline(d.deals); })
+      .catch(() => {})
+      .finally(() => setPipelineLoading(false));
+    setClassDonationsLoading(true);
+    fetch("/api/classy-donations", { credentials: "include" })
+      .then(r => r.json())
+      .then(d => { if (d.donations) setClassDonations(d.donations); })
+      .catch(() => {})
+      .finally(() => setClassDonationsLoading(false));
   }, [auth]);
 
   // ── Actions ──
@@ -1637,6 +1699,104 @@ export default function Home() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* ── Grant Deadline Tracker ── */}
+            <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", marginBottom: 26 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 19 }}>🏆</span>
+                  <span style={{ fontSize: 18, fontWeight: 700, color: T.text }}>Grant Deadlines</span>
+                  {grants.length > 0 && <span style={{ fontSize: 13, color: T.textMuted, background: T.bg, padding: "2px 9px", borderRadius: 8 }}>{grants.length}</span>}
+                </div>
+                <button onClick={() => setShowGrantForm(f => !f)} style={{ padding: "6px 14px", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 7, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>+ Add</button>
+              </div>
+              {showGrantForm && (
+                <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+                  <input value={grantForm.name} onChange={e => setGrantForm(f => ({ ...f, name: e.target.value }))} placeholder="Grant name" style={{ flex: 2, minWidth: 160, padding: "7px 12px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 14, background: T.bg }} />
+                  <input value={grantForm.deadline} onChange={e => setGrantForm(f => ({ ...f, deadline: e.target.value }))} type="date" style={{ flex: 1, minWidth: 130, padding: "7px 12px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 14, background: T.bg }} />
+                  <input value={grantForm.amount} onChange={e => setGrantForm(f => ({ ...f, amount: e.target.value }))} placeholder="Amount (optional)" style={{ flex: 1, minWidth: 120, padding: "7px 12px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 14, background: T.bg }} />
+                  <button onClick={() => { if (!grantForm.name || !grantForm.deadline) return; setGrants(prev => [...prev, { id: Date.now(), ...grantForm }]); setGrantForm({ name: "", deadline: "", amount: "" }); setShowGrantForm(false); }} style={{ padding: "7px 16px", background: T.accent, color: "#fff", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>Save</button>
+                  <button onClick={() => setShowGrantForm(false)} style={{ padding: "7px 12px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14 }}>Cancel</button>
+                </div>
+              )}
+              {grants.length === 0 ? (
+                <div style={{ padding: "16px 0", color: T.textMuted, fontSize: 15, textAlign: "center" }}>No grant deadlines tracked. Add one above.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {[...grants].sort((a, b) => new Date(a.deadline) - new Date(b.deadline)).map(g => {
+                    const urgency = grantDeadlineUrgency(g.deadline);
+                    const urgencyColor = urgency === "overdue" || urgency === "red" ? T.danger : urgency === "amber" ? T.taskAmber : T.calGreen;
+                    const urgencyBg = urgency === "overdue" || urgency === "red" ? T.dangerBg : urgency === "amber" ? T.taskAmberBg : T.calGreenBg;
+                    return (
+                      <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: urgencyBg, border: `1px solid ${urgencyColor}30`, borderRadius: 9, borderLeft: `4px solid ${urgencyColor}` }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, fontSize: 15, color: T.text }}>{g.name}</div>
+                          {g.amount && <div style={{ fontSize: 13, color: T.textMuted }}>{g.amount}</div>}
+                        </div>
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <div style={{ fontWeight: 700, fontSize: 14, color: urgencyColor }}>{formatGrantCountdown(g.deadline)}</div>
+                          <div style={{ fontSize: 12, color: T.textMuted }}>{new Date(g.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
+                        </div>
+                        <button onClick={() => setGrants(prev => prev.filter(x => x.id !== g.id))} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, fontSize: 18, lineHeight: 1, padding: "0 4px" }} title="Remove">×</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* ── HubSpot Donor Pipeline Funnel ── */}
+            {(pipeline.length > 0 || pipelineLoading) && (
+              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", marginBottom: 26 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                  <span style={{ fontSize: 19 }}>🎯</span>
+                  <span style={{ fontSize: 18, fontWeight: 700, color: T.text }}>Donor Pipeline</span>
+                </div>
+                {pipelineLoading ? (
+                  <div style={{ color: T.textMuted, fontSize: 15 }}>Loading pipeline...</div>
+                ) : (
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    {parsePipelineStages(pipeline).map(({ stage, count }) => {
+                      const isAskMade = stage === "Ask Made";
+                      return (
+                        <div key={stage} style={{ flex: "1 1 120px", background: isAskMade ? T.urgentCoralBg : T.bg, border: `1px solid ${isAskMade ? T.urgentCoral : T.border}30`, borderRadius: 10, padding: "14px 16px", textAlign: "center" }}>
+                          <div style={{ fontSize: 26, fontWeight: 700, color: isAskMade ? T.urgentCoral : T.accent }}>{count}</div>
+                          <div style={{ fontSize: 13, color: T.textMuted, marginTop: 4 }}>{stage}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Classy Recent Donations ── */}
+            <div style={{ background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 14, padding: "20px 24px", marginBottom: 26 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                <span style={{ fontSize: 19 }}>💚</span>
+                <span style={{ fontSize: 18, fontWeight: 700, color: T.calGreen }}>Recent Donations (7 days)</span>
+              </div>
+              {classDonationsLoading ? (
+                <div style={{ color: T.textMuted, fontSize: 15 }}>Loading donations...</div>
+              ) : classDonations.length === 0 ? (
+                <div style={{ padding: "16px 0", color: T.textMuted, fontSize: 15 }}>
+                  {process.env.NEXT_PUBLIC_HAS_CLASSY ? "No donations in the last 7 days." : "Connect Classy to see your recent donations. Add CLASSY_API_TOKEN to your environment variables."}
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {classDonations.slice(0, 10).map((d, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: T.calGreenBg, border: `1px solid ${T.calGreenBorder}`, borderRadius: 9 }}>
+                      <div style={{ width: 38, height: 38, borderRadius: "50%", background: T.calGreen, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14, flexShrink: 0 }}>{(d.name || "?")[0].toUpperCase()}</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, fontSize: 15, color: T.text }}>{d.name || "Anonymous"}</div>
+                        <div style={{ fontSize: 13, color: T.textMuted }}>{fmtRel(d.date)}</div>
+                      </div>
+                      <div style={{ fontWeight: 700, fontSize: 16, color: T.calGreen }}>${(d.amount || 0).toLocaleString()}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* End of Day */}
