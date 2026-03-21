@@ -37,6 +37,7 @@ const TEAM = [
   { name: "Adjoa Kittoe", initials: "AK", email: "adjoa@freshfoodconnect.org", meetingStyle: "notes" },
   { name: "Debbie Nash", initials: "DN", email: "dnash@freshfoodconnect.org", meetingStyle: "email" },
   { name: "Lone Bryan", initials: "LB", email: "lone@freshfoodconnect.org", meetingStyle: "email" },
+  { name: "Brittany", initials: "BR", email: "brittany@freshfoodconnect.org", meetingStyle: "notes" },
 ];
 
 const URGENCY = [
