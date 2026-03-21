@@ -1707,7 +1707,7 @@ export default function Home() {
   //  TABS
   // ═══════════════════════════════════════════════
   const TABS = [
-    { id: "today", label: "Today", color: T.accent, icon: "🏠" },
+    { id: "today", label: "", color: T.accent, icon: "🏠" },
     { id: "emails", label: "Emails", color: T.emailBlue, icon: "✉️" },
     { id: "calendar", label: "Calendar", color: T.calGreen, icon: "📅" },
     { id: "tasks", label: "Tasks", color: T.taskAmber, icon: "📋" },
@@ -1751,6 +1751,7 @@ export default function Home() {
             <div style={{ fontSize: 13, color: T.textMuted, fontStyle: "italic", paddingLeft: 44 }}>"{dailyQuote.text}" <span style={{ fontStyle: "normal", fontWeight: 600 }}>— {dailyQuote.attr}</span></div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={() => { setSearchOpen(true); setSearchQuery(""); setSearchIdx(0); }} style={{ padding: "10px 16px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>🔍 Search <span style={{ fontSize: 11, opacity: 0.7 }}>⌘K</span></button>
             <button onClick={() => setTab("sticky")} style={{ padding: "10px 18px", background: "#FFF8E8", color: "#B8A030", border: "1px solid #E8D890", borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: "pointer" }}>📌 Capture</button>
             <button onClick={() => setComposing("compose")} style={{ padding: "10px 22px", background: T.accent, color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 16, cursor: "pointer" }}>+ Compose</button>
           </div>
@@ -1763,7 +1764,6 @@ export default function Home() {
 
         {/* TABS */}
         <div style={{ display: "flex", gap: 4, marginBottom: 26, borderBottom: `2px solid ${T.border}`, paddingBottom: 0, alignItems: "flex-end", justifyContent: "center", flexWrap: "wrap" }}>
-          <button onClick={() => { setSearchOpen(true); setSearchQuery(""); setSearchIdx(0); }} style={{ padding: "10px 16px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6, marginRight: 8, marginBottom: 3, whiteSpace: "nowrap" }}>🔍 Search <span style={{ fontSize: 11, opacity: 0.7 }}>⌘K</span></button>
           {TABS.map(t => {
             if (t.id === "emails") {
               const isEmailActive = tab === "emails" || tab === "drafts";
@@ -1800,7 +1800,7 @@ export default function Home() {
                 borderRadius: "8px 8px 0 0", cursor: "pointer", fontSize: 16, fontWeight: tab === t.id ? 700 : 500,
                 display: "flex", alignItems: "center", gap: 7, transition: "all 0.25s", whiteSpace: "nowrap",
               }}>
-                <span>{t.icon}</span> {t.label}
+                <span style={{ fontSize: t.label ? 16 : 20 }}>{t.icon}</span>{t.label ? ` ${t.label}` : ""}
                 {t.id === "tasks" && pendingTasks > 0 && <span style={{ background: T.taskAmber, color: "#fff", borderRadius: 10, padding: "2px 9px", fontSize: 13, fontWeight: 700 }}>{pendingTasks}</span>}
               </button>
             );
@@ -2080,6 +2080,12 @@ export default function Home() {
                         <div style={{ fontWeight: 600, fontSize: 15, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.title}</div>
                         {ev.location && <div style={{ fontSize: 13, color: T.textMuted }}>📍 {ev.location}</div>}
                         {!real && !linkedTask && <div style={{ fontSize: 12, color: T.textMuted, fontStyle: "italic" }}>No prep needed</div>}
+                        {ev.attendees && ev.attendees.length > 1 && (
+                          <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                            {ev.attendees.slice(0, 5).map((a, i) => { const av = senderAvatar(a.name || a.email); return <div key={i} title={a.name || a.email} style={{ width: 20, height: 20, borderRadius: "50%", background: av.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, border: "1.5px solid #fff" }}>{av.initials}</div>; })}
+                            {ev.attendees.length > 5 && <div style={{ width: 20, height: 20, borderRadius: "50%", background: T.border, color: T.textMuted, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700 }}>+{ev.attendees.length - 5}</div>}
+                          </div>
+                        )}
                       </div>
                       <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
                         {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", background: T.calGreen, color: "#fff", borderRadius: 6, textDecoration: "none", fontSize: 13, fontWeight: 600 }}>Join</a>}
@@ -2382,7 +2388,12 @@ export default function Home() {
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 600, fontSize: 17, color: T.text }}>{ev.title}</div>
                       {ev.location && <div style={{ fontSize: 15, color: T.textMuted, marginTop: 3 }}>📍 {ev.location}</div>}
-                      {ev.attendees?.length > 0 && <div style={{ fontSize: 14, color: T.textDim, marginTop: 3 }}>{ev.attendees.map(a => a.name || a.email).join(", ")}</div>}
+                      {ev.attendees?.length > 1 && (
+                        <div style={{ display: "flex", gap: 4, marginTop: 6, alignItems: "center" }}>
+                          {ev.attendees.slice(0, 6).map((a, i) => { const av = senderAvatar(a.name || a.email); return <div key={i} title={a.name || a.email} style={{ width: 24, height: 24, borderRadius: "50%", background: av.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, border: "2px solid #fff", boxShadow: "0 1px 3px rgba(0,0,0,0.15)" }}>{av.initials}</div>; })}
+                          {ev.attendees.length > 6 && <span style={{ fontSize: 12, color: T.textMuted }}>+{ev.attendees.length - 6} more</span>}
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: "flex", gap: 6 }}>
                       {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "9px 18px", background: T.calGreen, color: "#fff", borderRadius: 7, textDecoration: "none", fontSize: 15, fontWeight: 600 }}>Join Call</a>}
@@ -2413,7 +2424,15 @@ export default function Home() {
                     {dayEvents.map(ev => (
                       <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", marginBottom: 6, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, opacity: isRealMeeting(ev) ? 1 : 0.5 }}>
                         <span style={{ fontWeight: 600, fontSize: 15, color: T.calGreen, minWidth: 66 }}>{fmtTime(ev.start)}</span>
-                        <span style={{ fontSize: 16, color: T.text, flex: 1 }}>{ev.title}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 16, color: T.text }}>{ev.title}</div>
+                          {ev.attendees?.length > 1 && (
+                            <div style={{ display: "flex", gap: 3, marginTop: 4 }}>
+                              {ev.attendees.slice(0, 5).map((a, i) => { const av = senderAvatar(a.name || a.email); return <div key={i} title={a.name || a.email} style={{ width: 20, height: 20, borderRadius: "50%", background: av.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, border: "1.5px solid #fff" }}>{av.initials}</div>; })}
+                              {ev.attendees.length > 5 && <span style={{ fontSize: 11, color: T.textMuted }}>+{ev.attendees.length - 5}</span>}
+                            </div>
+                          )}
+                        </div>
                         {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 14px", background: T.calGreen, color: "#fff", borderRadius: 6, textDecoration: "none", fontSize: 14, fontWeight: 600 }}>Join</a>}
                         <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "6px 14px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>{preppedEvents[ev.id] ? "✓ Prepped" : "Prep Done"}</button>
                       </div>
