@@ -126,14 +126,16 @@ const PIPELINE_STAGE_ORDER = [
 function parsePipelineStages(deals) {
   if (!deals || !deals.length) return [];
   const counts = {};
+  const totals = {};
   for (const deal of deals) {
     const stage = deal.stage || "Unknown";
     counts[stage] = (counts[stage] || 0) + 1;
+    totals[stage] = (totals[stage] || 0) + (deal.amount || 0);
   }
   // Return in pipeline order, unknown stages at end
   const ordered = PIPELINE_STAGE_ORDER.filter(s => counts[s]);
   const unknown = Object.keys(counts).filter(s => !PIPELINE_STAGE_ORDER.includes(s));
-  return [...ordered, ...unknown].map(stage => ({ stage, count: counts[stage] }));
+  return [...ordered, ...unknown].map(stage => ({ stage, count: counts[stage], total: totals[stage] }));
 }
 
 describe("parsePipelineStages", () => {
@@ -179,6 +181,23 @@ describe("parsePipelineStages", () => {
     const deals = [{ name: "Deal without stage" }];
     const result = parsePipelineStages(deals);
     expect(result[0].stage).toBe("Unknown");
+  });
+
+  test("sums deal amounts per stage", () => {
+    const deals = [
+      { stage: "Prospect", amount: 5000 },
+      { stage: "Prospect", amount: 3000 },
+      { stage: "Ask Made", amount: 10000 },
+    ];
+    const result = parsePipelineStages(deals);
+    expect(result.find(r => r.stage === "Prospect")?.total).toBe(8000);
+    expect(result.find(r => r.stage === "Ask Made")?.total).toBe(10000);
+  });
+
+  test("deals without amount → total 0", () => {
+    const deals = [{ stage: "Prospect" }, { stage: "Prospect" }];
+    const result = parsePipelineStages(deals);
+    expect(result.find(r => r.stage === "Prospect")?.total).toBe(0);
   });
 });
 

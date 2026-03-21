@@ -378,10 +378,15 @@ function formatGrantCountdown(deadline) {
 function parsePipelineStages(deals) {
   if (!deals || !deals.length) return [];
   const counts = {};
-  for (const deal of deals) { const s = deal.stage || "Unknown"; counts[s] = (counts[s] || 0) + 1; }
+  const totals = {};
+  for (const deal of deals) {
+    const s = deal.stage || "Unknown";
+    counts[s] = (counts[s] || 0) + 1;
+    totals[s] = (totals[s] || 0) + (deal.amount || 0);
+  }
   const ordered = PIPELINE_STAGE_ORDER.filter(s => counts[s]);
   const unknown = Object.keys(counts).filter(s => !PIPELINE_STAGE_ORDER.includes(s));
-  return [...ordered, ...unknown].map(stage => ({ stage, count: counts[stage] }));
+  return [...ordered, ...unknown].map(stage => ({ stage, count: counts[stage], total: totals[stage] }));
 }
 
 // ── Action learning helpers ───────────────────────────────────────────────────
@@ -978,6 +983,7 @@ function MagicLoginScreen() {
 
 export default function Home() {
   const [auth, setAuth] = useState(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [tab, setTab] = useState("today");
   const [emails, setEmails] = useState([]);
   const [events, setEvents] = useState([]);
@@ -1132,9 +1138,11 @@ export default function Home() {
     try {
       const url = pageToken ? `/api/data?page=${pageToken}` : "/api/data";
       const r = await fetch(url);
+      if (r.status === 401) { setSessionExpired(true); setLoading(false); return; }
       const d = await r.json();
       if (!d.authenticated) { setAuth(false); setLoading(false); return; }
       setAuth(true);
+      setSessionExpired(false);
       if (pageToken) { setEmails(prev => [...prev, ...d.emails.filter(e => e.unread)]); }
       else { setEmails(d.emails.filter(e => e.unread)); setEvents(d.events || []); }
       setNextPage(d.nextPage);
@@ -1706,6 +1714,8 @@ export default function Home() {
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: ${T.bg}; color: ${T.text}; }
         @keyframes slideUp { from { transform: translateX(-50%) translateY(20px); opacity: 0; } to { transform: translateX(-50%) translateY(0); opacity: 1; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        .tab-content { animation: fadeIn 0.15s ease; }
         ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: ${T.border}; border-radius: 3px; }
         button:hover { filter: brightness(0.95); }
         a { color: ${T.emailBlue}; }
@@ -1752,6 +1762,15 @@ export default function Home() {
           ))}
         </div>
 
+        {/* Session expiry banner */}
+        {sessionExpired && (
+          <div style={{ background: T.dangerBg, border: `1px solid ${T.danger}`, borderRadius: 10, padding: "14px 20px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 18 }}>🔑</span>
+            <span style={{ flex: 1, fontSize: 15, color: T.danger, fontWeight: 600 }}>Session expired — please reconnect to continue.</span>
+            <a href="/api/auth/login" style={{ padding: "8px 20px", background: T.danger, color: "#fff", borderRadius: 7, textDecoration: "none", fontWeight: 600, fontSize: 14 }}>Reconnect</a>
+          </div>
+        )}
+
         {/* Global compose */}
         {composing === "compose" && <ComposeForm mode="compose" onSend={sendEmail} onCancel={() => setComposing(null)} signature={signature} contacts={contacts} />}
         {showTaskForm && <TaskForm prefillFromEmail={showTaskForm.prefillFromEmail} onSave={(task) => { setTasks(prev => [...prev, task]); setShowTaskForm(null); showToast("Task created!"); }} onCancel={() => setShowTaskForm(null)} />}
@@ -1759,7 +1778,7 @@ export default function Home() {
 
         {/* ═══════════ TODAY TAB ═══════════ */}
         {tab === "today" && (
-          <div>
+          <div className="tab-content">
             {/* Morning Briefing */}
             <div style={{ background: `linear-gradient(135deg, ${T.accentBg}, ${T.calGreenBg})`, border: `1px solid ${T.calGreenBorder}`, borderRadius: 14, padding: "24px 28px", marginBottom: 26 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
@@ -1786,15 +1805,28 @@ export default function Home() {
                 const ts = d.date ? new Date(d.date).getTime() : 0;
                 return ts > 0 && ts < twoDaysAgo;
               });
-              if (!urgentEmails.length && !staleDrafts.length) return null;
+              const autoOverdueTasks = tasks.filter(t => !t.done && t.due && new Date(t.due) < new Date());
+              const total = urgentEmails.length + staleDrafts.length + autoOverdueTasks.length;
+              if (!total) return null;
               return (
                 <div style={{ background: T.urgentCoralBg, border: `2px solid ${T.urgentCoral}`, borderRadius: 14, padding: "18px 22px", marginBottom: 26 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                     <span style={{ fontSize: 19 }}>⚡</span>
                     <span style={{ fontSize: 17, fontWeight: 700, color: T.urgentCoral }}>Urgent</span>
-                    <span style={{ fontSize: 13, background: T.urgentCoral, color: "#fff", borderRadius: 8, padding: "2px 9px", fontWeight: 700 }}>{urgentEmails.length + staleDrafts.length}</span>
+                    <span style={{ fontSize: 13, background: T.urgentCoral, color: "#fff", borderRadius: 8, padding: "2px 9px", fontWeight: 700 }}>{total}</span>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {autoOverdueTasks.map(t => (
+                      <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", background: T.card, borderRadius: 8, border: `1px solid ${T.danger}30` }}>
+                        <span style={{ fontSize: 13 }}>📋</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ fontWeight: 600, fontSize: 14, color: T.danger }}>Overdue task</span>
+                          <span style={{ fontSize: 13, color: T.textMuted, marginLeft: 8 }}>{t.title}</span>
+                          <span style={{ fontSize: 12, color: T.danger, marginLeft: 8 }}>· due {t.due}</span>
+                        </div>
+                        <button onClick={() => setTab("tasks")} style={{ ...abtn(T.taskAmber, T.taskAmberBg), flexShrink: 0 }}>Go to Tasks</button>
+                      </div>
+                    ))}
                     {urgentEmails.map(e => (
                       <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", background: T.card, borderRadius: 8, border: `1px solid ${T.urgentCoral}30` }}>
                         <span style={{ fontSize: 13 }}>✉️</span>
@@ -2070,12 +2102,13 @@ export default function Home() {
                     <div style={{ color: T.textMuted, fontSize: 15 }}>Loading pipeline...</div>
                   ) : (
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                      {parsePipelineStages(pipeline).map(({ stage, count }) => {
+                      {parsePipelineStages(pipeline).map(({ stage, count, total }) => {
                         const isAskMade = stage === "Ask Made";
                         return (
                           <div key={stage} style={{ flex: "1 1 90px", background: isAskMade ? T.urgentCoralBg : T.bg, border: `1px solid ${isAskMade ? T.urgentCoral : T.border}30`, borderRadius: 10, padding: "12px 14px", textAlign: "center" }}>
                             <div style={{ fontSize: 24, fontWeight: 700, color: isAskMade ? T.urgentCoral : T.accent }}>{count}</div>
-                            <div style={{ fontSize: 12, color: T.textMuted, marginTop: 4 }}>{stage}</div>
+                            <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{stage}</div>
+                            {total > 0 && <div style={{ fontSize: 11, color: isAskMade ? T.urgentCoral : T.accent, fontWeight: 600, marginTop: 2 }}>${total.toLocaleString()}</div>}
                           </div>
                         );
                       })}
@@ -2160,7 +2193,7 @@ export default function Home() {
 
         {/* ═══════════ EMAILS TAB ═══════════ */}
         {tab === "emails" && (
-          <div>
+          <div className="tab-content">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
               <div style={{ fontSize: 15, color: T.textMuted }}>{emails.length} unread · sorted by most recent · drag to reclassify</div>
               {nextPage && <button onClick={() => fetchData(nextPage)} style={{ padding: "6px 16px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>Load More</button>}
@@ -2278,7 +2311,7 @@ export default function Home() {
 
         {/* ═══════════ CALENDAR TAB ═══════════ */}
         {tab === "calendar" && (
-          <div>
+          <div className="tab-content">
             <div style={{ display: "flex", gap: 8, marginBottom: 22 }}>
               <button onClick={() => setCalView("today")} style={{ padding: "10px 22px", background: calView === "today" ? T.calGreenBg : T.bg, color: calView === "today" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "today" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Today</button>
               <button onClick={() => { setCalView("week"); fetchWeekEvents(); }} style={{ padding: "10px 22px", background: calView === "week" ? T.calGreenBg : T.bg, color: calView === "week" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "week" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>This Week</button>
@@ -2370,7 +2403,7 @@ export default function Home() {
 
         {/* ═══════════ TASKS TAB ═══════════ */}
         {tab === "tasks" && (
-          <div>
+          <div className="tab-content">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
               <span style={{ fontSize: 18, fontWeight: 700, color: T.taskAmber }}>Task Board</span>
               <button onClick={() => setShowTaskForm({})} style={{ padding: "10px 22px", background: T.taskAmber, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>+ New Task</button>
@@ -2418,7 +2451,7 @@ export default function Home() {
 
         {/* ═══════════ DRIVE TAB ═══════════ */}
         {tab === "drive" && (
-          <div>
+          <div className="tab-content">
             <div style={{ display: "flex", gap: 8, marginBottom: 22 }}>
               <input placeholder="Search Drive..." value={driveSearch} onChange={e => setDriveSearch(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && driveSearch) fetchDrive("search", driveSearch); }}
                 style={{ flex: 1, padding: "12px 18px", border: `1px solid ${T.driveVioletBorder}`, borderRadius: 8, fontSize: 16, background: T.surface, color: T.text, outline: "none" }} />
@@ -2444,7 +2477,7 @@ export default function Home() {
 
         {/* ═══════════ DRAFTS TAB ═══════════ */}
         {tab === "drafts" && (
-          <div>
+          <div className="tab-content">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 18, fontWeight: 700, color: T.info }}>Drafts</span>
@@ -2518,7 +2551,7 @@ export default function Home() {
 
         {/* ═══════════ STICKY / QUICK CAPTURE TAB ═══════════ */}
         {tab === "sticky" && (
-          <div>
+          <div className="tab-content">
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 22 }}>
               <span style={{ fontSize: 19 }}>📌</span>
               <span style={{ fontSize: 18, fontWeight: 700, color: "#B8A030" }}>Quick Capture</span>
