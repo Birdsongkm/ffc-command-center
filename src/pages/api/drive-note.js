@@ -67,24 +67,26 @@ export default async function handler(req, res) {
     );
     if (!searchRes.ok) {
       const err = await searchRes.json().catch(() => ({}));
-      console.error('drive-note:search', { firstName, status: searchRes.status, message: err.message });
-      return res.status(502).json({ error: err.message || 'Drive search failed' });
+      const msg = err.error?.message || err.message || 'Drive search failed';
+      console.error('drive-note:search', { firstName, status: searchRes.status, message: msg });
+      return res.status(502).json({ error: msg });
     }
     const searchData = await searchRes.json();
     const file = searchData.files?.[0];
-    if (!file) return res.status(404).json({ error: `No 1:1 doc found for ${firstName}` });
+    if (!file) return res.status(404).json({ error: `No 1:1 doc found for "${firstName}" — make sure a Google Doc named "1:1 ${firstName}" exists in your Drive` });
 
     // Get document to find body end index
     const docRes = await fetch(`https://docs.googleapis.com/v1/documents/${file.id}`, { headers: h });
     if (!docRes.ok) {
       const err = await docRes.json().catch(() => ({}));
-      console.error('drive-note:getDoc', { fileId: file.id, status: docRes.status, message: err.message });
-      return res.status(502).json({ error: err.message || 'Failed to read document' });
+      const msg = err.error?.message || err.message || 'Failed to read document';
+      console.error('drive-note:getDoc', { fileId: file.id, docName: file.name, status: docRes.status, message: msg });
+      return res.status(502).json({ error: msg });
     }
     const docData = await docRes.json();
     const endIndex = docData.body?.content?.slice(-1)?.[0]?.endIndex || 2;
 
-    // Append note at top of document (after title, index 1)
+    // Prepend note at top of document (after title, index 1)
     const dateStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     const insertText = `Next meeting (${dateStr}):\n• ${note}\n\n`;
 
@@ -102,8 +104,9 @@ export default async function handler(req, res) {
     });
     if (!updateRes.ok) {
       const err = await updateRes.json().catch(() => ({}));
-      console.error('drive-note:append', { fileId: file.id, status: updateRes.status, message: err.message });
-      return res.status(502).json({ error: err.message || 'Failed to update document' });
+      const msg = err.error?.message || err.message || 'Failed to update document';
+      console.error('drive-note:append', { fileId: file.id, docName: file.name, status: updateRes.status, message: msg });
+      return res.status(502).json({ error: msg });
     }
 
     return res.status(200).json({ ok: true, docName: file.name, docId: file.id });

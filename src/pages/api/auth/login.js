@@ -8,6 +8,7 @@ export default function handler(req, res) {
       'https://www.googleapis.com/auth/gmail.send',
       'https://www.googleapis.com/auth/calendar',
       'https://www.googleapis.com/auth/drive',
+      'https://www.googleapis.com/auth/documents',
     ].join(' '),
     access_type: 'offline',
     prompt: 'consent',
