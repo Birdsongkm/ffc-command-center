@@ -1316,7 +1316,7 @@ export default function Home() {
     const d = await r.json();
     if (d.drafts) { setDrafts(d.drafts); setDraftsTotal(d.total || d.drafts.length); }
   };
-  useEffect(() => { if (auth && tab === "drafts") fetchDrafts(); }, [auth, tab]);
+  useEffect(() => { if (auth && (tab === "drafts" || tab === "emails")) fetchDrafts(); }, [auth, tab]);
 
   // ── Keyboard shortcuts ──
   const TAB_IDS = ["today", "emails", "calendar", "tasks", "drive", "drafts", "sticky"];
@@ -1989,6 +1989,42 @@ export default function Home() {
                 <button onClick={() => setSelectedEmailIds(new Set())} style={{ marginLeft: "auto", padding: "7px 14px", background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14 }}>✕ Clear</button>
               </div>
             )}
+            {/* ── Drafts in Email Tab ── */}
+            {drafts.length > 0 && (
+              <div style={{ marginBottom: 22 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <span style={{ fontSize: 17 }}>✏️</span>
+                  <span style={{ fontSize: 17, fontWeight: 700, color: T.info }}>Drafts</span>
+                  <span style={{ fontSize: 13, color: T.info, background: T.infoBg, padding: "2px 9px", borderRadius: 6, fontWeight: 600 }}>{drafts.length}</span>
+                  <button onClick={() => setTab("drafts")} style={{ marginLeft: "auto", padding: "4px 12px", background: "transparent", color: T.info, border: `1px solid ${T.info}30`, borderRadius: 5, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>View all →</button>
+                </div>
+                <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
+                  {drafts.slice(0, 8).map(d => {
+                    const toAddr = (d.to || "").replace(/<.*>/, "").trim() || d.to || "No recipient";
+                    const dAvatar = senderAvatar(toAddr);
+                    return (
+                      <div key={d.id} style={{ flex: "0 0 280px", background: T.card, border: `1px solid ${T.border}`, borderTop: `3px solid ${T.info}`, borderRadius: 12, padding: "14px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                          <div style={{ width: 32, height: 32, borderRadius: "50%", background: dAvatar.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{dAvatar.initials}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{toAddr}</div>
+                            <div style={{ fontSize: 11, color: T.textMuted }}>{draftAge(d.updatedAt)}</div>
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 4 }}>{d.subject || "(no subject)"}</div>
+                        <div style={{ fontSize: 12, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 10 }}>{d.snippet || ""}</div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button onClick={async () => { const r = await fetch(`/api/drafts?id=${d.id}`, { method: "PUT" }); const res = await r.json(); if (res.success) { showToast("Draft sent!"); fetchDrafts(); } else showToast("Send failed: " + (res.error || "error")); }} style={{ flex: 1, padding: "5px 0", background: T.info, color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Send</button>
+                          <button onClick={() => { setTab("drafts"); }} style={{ flex: 1, padding: "5px 0", background: T.infoBg, color: T.info, border: `1px solid ${T.info}30`, borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Edit</button>
+                          <button onClick={async () => { const r = await fetch(`/api/drafts?id=${d.id}`, { method: "DELETE" }); const res = await r.json(); if (res.success) { showToast("Deleted"); fetchDrafts(); } }} style={{ padding: "5px 10px", background: T.dangerBg, color: T.danger, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>✕</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(480px, 1fr))", gap: 18 }}>
               {sortedBuckets.map(([bucket, bucketEmails]) => {
                 const info = BUCKETS[bucket] || { label: bucket, icon: "📧", color: T.textMuted, bg: T.bg, border: T.border };
