@@ -2,7 +2,7 @@
 
 **Owner:** Kayla Birdsong, CEO / PM — Fresh Food Connect
 **Executor:** Claude (autonomous, recursive, continuous until Kayla says pause)
-**Last updated:** 2026-03-20 (Sprint 2 complete, Sprint 3 planned)
+**Last updated:** 2026-03-21 (Sprint 3 complete, Sprint 4 planned)
 
 ---
 
@@ -200,8 +200,8 @@ CRO vote: Relationship badge (6/6), lapsed signal highlighted in red/orange (6/6
 
 ---
 
-## Sprint 3 — Fundraising & Development Dashboard
-*Status: PLANNED — next to execute*
+## Sprint 3 — Fundraising & Development Dashboard ✅ COMPLETE
+*Shipped: 2026-03-21 | Commit: 3a31e22 (Sprint 3 features) + acd5c8f (user issues #20-25)*
 
 ### Panel deliberation (post-Sprint 2 convening)
 
@@ -255,27 +255,75 @@ CEO vote: pipeline funnel stages (6/6), trend arrow on sparkline (4/6 — "only 
 **New env vars needed:** `CLASSY_API_TOKEN` (Kayla to provide for Feature 2)
 **New API routes:** `/api/classy-donations` (GET, auth-guarded), `/api/hubspot-pipeline` (GET, auth-guarded)
 
+### What shipped (Sprint 3 + user issues #20-25 also shipped this cycle)
+
+| Feature | Status |
+|---|---|
+| Grant deadline tracker (localStorage, red/amber/green countdown, add/remove) | ✅ |
+| Classy donation widget (7-day feed, graceful empty state) | ✅ |
+| HubSpot pipeline funnel (deal stages, Ask Made highlighted) | ✅ |
+| #21: 📋 Make Task button in hover bar (bug fix) | ✅ |
+| #20: Renamed 'needs-response' → 'Important / Not Addressed'; To Do bucket (📌) | ✅ |
+| #22: Invoices & Receipts bucket (invoice/receipt/payment classifier) | ✅ |
+| #23: Delete All button on newsletter, sales, fyi-mass buckets | ✅ |
+| #24/#25: Sales / Spam? bucket (cold outreach classifier) | ✅ |
+
+**Tests added:** 27 new tests (sprint3.test.js) — **269 total passing**
+**Email buckets now:** needs-response, to-do, team, classy-onetime, invoices, fyi-mass, classy-recurring, calendar-notif, docs-activity, automated, newsletter, sales (12 buckets)
+
 ---
 
 ## Sprint 4 — Reporting & Weekly Intelligence
-*Status: PLANNED*
+*Status: PLANNED — next to execute*
 
-### Pre-sprint panel input
+### Panel deliberation (post-Sprint 3 convening)
 
-**ED Users panel:**
-> "I spend Sunday nights assembling board updates. I pull from Gmail, from Classy, from our spreadsheets. It takes 3 hours. Automate the first draft."
+**ED Users panel (6/6):**
+> "I spend Sunday nights assembling board updates. I pull from Gmail, from Classy, from our spreadsheets. It takes 3 hours. Automate the first draft. I want to push a button on Sunday and have a draft board report waiting for me in my Docs. That's a 3-hour time save every month."
 
-**Data panel:**
-> "The data is all here: emails handled, tasks completed, meetings attended, dollars raised. Build the narrative from the data. AI writes the first draft of the board report."
+ED vote: AI board report draft (6/6), one-click Google Doc export (6/6), weekly brief (5/6 — "make Monday morning feel different")
 
-**COO panel:**
-> "Accountability without more meetings. A weekly digest that goes to me automatically — what got done, what's overdue, who responded to what."
+**Data panel (5/6):**
+> "The data is all here in the app: emails handled (we count them), tasks completed (we track done/undone), meetings attended (calendar), words donated (Classy). Build the narrative from the data. AI writes the first draft. Don't make Kayla assemble numbers — pull them automatically."
 
-**CFO panel:**
-> "The board report needs to export to Google Doc or PDF. Boards don't want to log into apps."
+Data vote: auto-assembled metrics (6/6), AI narrative generation (5/6), don't require manual data entry (6/6 — "if it requires effort to run it won't get run")
 
-**Unicorn CEO panel:**
-> "Weekly brief auto-sent to Kayla's inbox every Monday 7am. She reads it on the way in. She's already prepared before she sits down."
+**COO panel (6/6):**
+> "Accountability without more meetings. A weekly digest that shows: what got done, what's overdue, who didn't respond to a key email. Make it auto-generated every Monday. I want to open the app Monday morning and see the week summarized."
+
+COO vote: weekly brief auto on Monday (6/6), overdue task visibility (6/6), reply rate by sender (4/6 — "useful but secondary")
+
+**CFO panel (6/6):**
+> "The board report needs to export to Google Doc or PDF. Boards don't want to log into apps. One click: 'Generate Board Report' → Google Doc ready to share. That's what I need. The AI can write it but a human has to review it before the board sees it."
+
+CFO vote: Google Doc export (6/6), requires human review before share (6/6 — "never auto-send to board"), include financial summary if Classy data available (5/6)
+
+**Unicorn CEO panel (5/6):**
+> "Weekly brief auto-generated every Monday at 7am. She reads it on the way in. She walks in already knowing what happened last week, what's at risk this week, who she needs to call. That's the product. Weekly intelligence, not just a report."
+
+CEO vote: Monday morning brief (6/6), AI narrative quality over raw data dump (6/6), keep it under 300 words (4/6 — "must be scannable in 2 minutes")
+
+**UX panel (6/6):**
+> "One button, one click. 'Generate Weekly Brief' on Today tab every Monday. No configuration, no form to fill out. The data is already here — just generate. Show a spinner, show the result inline. If they want the Doc, second button: 'Save to Drive.'"
+
+UX vote: one-button generate (6/6), inline preview before Drive save (6/6), no required fields (6/6)
+
+**CRO panel (4/6):**
+> "The brief should include donor highlights — who gave this week, biggest gift, any lapsed donors who re-engaged. That's the data I care about in a Monday brief. Fundraising context in the weekly narrative."
+
+CRO vote: donor highlights in brief (5/6), include lapsed re-engagement signal (4/6)
+
+**Product team resolution (Kayla as PM):**
+- Feature 1: Weekly brief button on Today — generates AI summary of last 7 days (emails handled, tasks completed, meetings, key donors if Classy available), inline display, save to Drive
+- Feature 2: Board report draft — same data, longer format, structured with sections, one-click Google Doc creation
+- Feature 3: Team activity digest deferred — requires team member tracking we don't have yet
+
+**Product team plan:**
+- Feature 1: Weekly brief generator (Today tab, Monday-highlight button or any-day access, < 300 words, AI-written from in-app data, save to Drive)
+- Feature 2: Board report draft (longer structured format, one-click Google Doc, explicitly marked "DRAFT — review before sharing")
+
+**New env vars needed:** None (uses existing ANTHROPIC_API_KEY and Google Drive API)
+**New API routes:** `/api/weekly-brief` (POST, auth-guarded)
 
 **Product team plan:**
 - Feature 1: Weekly brief auto-generator (AI-written from week's data, shows on Today Monday AM)
