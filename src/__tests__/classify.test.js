@@ -202,6 +202,32 @@ describe('classifyEmail', () => {
     test('team sender + sales-y subject → team (team check before sales)', () => {
       expect(classifyEmail({ from: 'staff@freshfoodconnect.org', subject: 'Quick call tomorrow?', recipientCount: 2 })).toBe('team');
     });
+    // Outreach platform domain detection
+    test('from apollo.io domain → sales', () => {
+      expect(classifyEmail({ from: 'rep@apollo.io', subject: 'Hey', recipientCount: 1 })).toBe('sales');
+    });
+    test('from salesloft.com domain → sales', () => {
+      expect(classifyEmail({ from: 'outreach@salesloft.com', subject: 'Checking in', recipientCount: 1 })).toBe('sales');
+    });
+    test('from instantly.ai domain → sales', () => {
+      expect(classifyEmail({ from: 'sender@instantly.ai', subject: 'Hello', recipientCount: 1 })).toBe('sales');
+    });
+    // Expanded keyword detection
+    test('subject has "book a demo" → sales', () => {
+      expect(classifyEmail({ from: 'team@startup.com', subject: 'Book a demo with us this week', recipientCount: 1 })).toBe('sales');
+    });
+    test('snippet has "i\'m reaching out" → sales', () => {
+      expect(classifyEmail({ from: 'person@vendor.com', subject: 'Hello', snippet: "I'm reaching out because we work with nonprofits", recipientCount: 1 })).toBe('sales');
+    });
+    test('snippet has "opt out" → sales', () => {
+      expect(classifyEmail({ from: 'marketing@biz.com', subject: 'Quick note', snippet: 'If you want to opt out of future emails click here', recipientCount: 1 })).toBe('sales');
+    });
+    test('subject has "exclusive offer" → sales', () => {
+      expect(classifyEmail({ from: 'deals@vendor.com', subject: 'Exclusive offer for nonprofits', recipientCount: 1 })).toBe('sales');
+    });
+    test('snippet has "saw your organization" → sales', () => {
+      expect(classifyEmail({ from: 'rep@company.com', subject: 'Quick question', snippet: 'I saw your organization and thought we could help', recipientCount: 1 })).toBe('sales');
+    });
   });
 });
 
