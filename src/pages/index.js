@@ -108,6 +108,19 @@ function classifyEmail(e) {
   if (from.includes("classy")) return "classy-recurring";
   if (from.includes("noreply") || from.includes("no-reply") || from.includes("notifications@") || from.includes("mailer-daemon") || from.includes("postmaster")) return "automated";
   if (from.includes("freshfoodconnect") || from.includes("@ffc")) return "team";
+  // Invoices: financial transaction emails
+  if (subj.includes("invoice") || subj.includes("receipt") || subj.includes("payment") || subj.includes("billing") || subj.includes("statement") || subj.includes("your order") || subj.includes("charge") || subj.includes("subscription renewal")) return "invoices";
+  // Sales/spam: cold outreach, B2B pitches, vendor solicitation
+  const salesSignals = [
+    "quick call", "15 minutes", "30 minutes", "hop on a call", "schedule a demo",
+    "just following up", "wanted to connect", "partnership opportunity", "help you grow",
+    "increase your", "we help nonprofits", "we help organizations", "solutions for",
+    "free trial", "limited time", "our platform", "reach out to", "i wanted to reach",
+    "checking in to see", "would love to chat", "can we connect", "business opportunity",
+  ];
+  if (salesSignals.some(s => subj.includes(s) || (e.snippet || "").toLowerCase().includes(s))) return "sales";
+  // Unknown sender with high recipient count or no clear signal → sales bucket
+  const knownDomains = ["google", "microsoft", "zoom", "docusign", "dropbox", "slack", "quickbooks", "gusto", "stripe"];
   if (recipientCount <= 3) return "needs-response";
   return "needs-response";
 }
@@ -293,15 +306,18 @@ function getSuggestedAction(history, bucket, threshold = 3) {
 }
 
 const BUCKETS = {
-  "needs-response": { label: "Needs Your Reply", icon: "✉️", color: T.urgentCoral, bg: T.urgentCoralBg, border: T.urgentCoralBorder, priority: 1 },
-  "fyi-mass": { label: "FYI / Mass Sends", icon: "📋", color: T.info, bg: T.infoBg, border: T.emailBlueBorder, priority: 2 },
-  "classy-onetime": { label: "Donation Alerts", icon: "💚", color: T.calGreen, bg: T.calGreenBg, border: T.calGreenBorder, priority: 3 },
-  "team": { label: "Team / Internal", icon: "👥", color: T.emailBlue, bg: T.emailBlueBg, border: T.emailBlueBorder, priority: 4 },
-  "classy-recurring": { label: "Classy Platform", icon: "🔄", color: T.driveViolet, bg: T.driveVioletBg, border: T.driveVioletBorder, priority: 5 },
-  "calendar-notif": { label: "Calendar Notifications", icon: "📅", color: T.calGreen, bg: T.calGreenBg, border: T.calGreenBorder, priority: 6 },
-  "docs-activity": { label: "Docs & Drive Activity", icon: "📄", color: T.driveViolet, bg: T.driveVioletBg, border: T.driveVioletBorder, priority: 7 },
-  "automated": { label: "Automated / System", icon: "⚙️", color: T.textMuted, bg: "#F5F5F5", border: T.border, priority: 8 },
-  "newsletter": { label: "Newsletters & Lists", icon: "📰", color: T.textMuted, bg: "#F5F5F5", border: T.border, priority: 9 },
+  "needs-response": { label: "Important / Not Addressed", icon: "✉️", color: T.urgentCoral, bg: T.urgentCoralBg, border: T.urgentCoralBorder, priority: 1 },
+  "to-do": { label: "To Do", icon: "☑️", color: T.accent, bg: T.accentBg, border: T.border, priority: 2 },
+  "team": { label: "Team / Internal", icon: "👥", color: T.emailBlue, bg: T.emailBlueBg, border: T.emailBlueBorder, priority: 3 },
+  "classy-onetime": { label: "Donation Alerts", icon: "💚", color: T.calGreen, bg: T.calGreenBg, border: T.calGreenBorder, priority: 4 },
+  "invoices": { label: "Invoices & Receipts", icon: "🧾", color: T.taskAmber, bg: T.taskAmberBg, border: T.taskAmberBorder, priority: 5 },
+  "fyi-mass": { label: "FYI / Mass Sends", icon: "📋", color: T.info, bg: T.infoBg, border: T.emailBlueBorder, priority: 6 },
+  "classy-recurring": { label: "Classy Platform", icon: "🔄", color: T.driveViolet, bg: T.driveVioletBg, border: T.driveVioletBorder, priority: 7 },
+  "calendar-notif": { label: "Calendar Notifications", icon: "📅", color: T.calGreen, bg: T.calGreenBg, border: T.calGreenBorder, priority: 8 },
+  "docs-activity": { label: "Docs & Drive Activity", icon: "📄", color: T.driveViolet, bg: T.driveVioletBg, border: T.driveVioletBorder, priority: 9 },
+  "automated": { label: "Automated / System", icon: "⚙️", color: T.textMuted, bg: "#F5F5F5", border: T.border, priority: 10 },
+  "newsletter": { label: "Newsletters & Lists", icon: "📰", color: T.textMuted, bg: "#F5F5F5", border: T.border, priority: 11 },
+  "sales": { label: "Sales / Spam?", icon: "🚫", color: T.danger, bg: T.dangerBg, border: "#E5B0B030", priority: 12 },
 };
 
 // ═══════════════════════════════════════════════
@@ -944,6 +960,9 @@ export default function Home() {
   const [hsContactId, setHsContactId] = useState("");
   const [hsSaving, setHsSaving] = useState(false);
   const [aiDraftLoading, setAiDraftLoading] = useState(null); // emailId being drafted
+  const [toDoEmailIds, setToDoEmailIds] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("ffc_todo_emails") || "[]")); } catch { return new Set(); }
+  });
   const [grants, setGrants] = useState(() => {
     try { return JSON.parse(localStorage.getItem("ffc_grants") || "[]"); } catch { return []; }
   });
@@ -972,6 +991,9 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== "undefined") localStorage.setItem("ffc_grants", JSON.stringify(grants));
   }, [grants]);
+  useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem("ffc_todo_emails", JSON.stringify([...toDoEmailIds]));
+  }, [toDoEmailIds]);
 
   const showToast = useCallback((msg) => setToast(msg), []);
 
@@ -1225,10 +1247,11 @@ export default function Home() {
   }, [tab, emails, focusedIdx]);
 
   // ── Derived state ──
-  const BUCKET_ORDER = ['needs-response','team','classy-onetime','fyi-mass','classy-recurring','calendar-notif','docs-activity','automated','newsletter'];
+  const BUCKET_ORDER = ['needs-response','to-do','team','classy-onetime','invoices','fyi-mass','classy-recurring','calendar-notif','docs-activity','automated','newsletter','sales'];
   const emailsByBucket = {};
   emails.forEach(e => {
-    const b = emailBucketOverrides[e.id] || classifyEmail(e);
+    // to-do takes priority over other buckets (and overrides)
+    const b = toDoEmailIds.has(e.id) ? "to-do" : (emailBucketOverrides[e.id] || classifyEmail(e));
     if (!emailsByBucket[b]) emailsByBucket[b] = [];
     emailsByBucket[b].push(e);
   });
@@ -1394,6 +1417,11 @@ export default function Home() {
                 <button onClick={() => emailAction("trash", email.id)} style={abtn(T.danger, T.dangerBg)}>🗑 Delete</button>
                 <button onClick={() => emailAction("markRead", email.id)} style={abtn(T.textMuted, T.bg)}>✓ Read</button>
                 <button onClick={() => emailAction("star", email.id)} style={abtn(T.gold, T.goldBg)}>⭐ Star</button>
+                <button onClick={() => setShowTaskForm({ prefillFromEmail: email })} style={abtn(T.taskAmber, T.taskAmberBg)}>📋 Make Task</button>
+                {effectiveBucket === "to-do"
+                  ? <button onClick={() => setToDoEmailIds(prev => { const n = new Set(prev); n.delete(email.id); return n; })} style={abtn(T.calGreen, T.calGreenBg)}>✓ Done</button>
+                  : <button onClick={() => setToDoEmailIds(prev => new Set([...prev, email.id]))} style={abtn(T.accent, T.accentBg)}>📌 To Do</button>
+                }
                 {isDebbieFinance && <button onClick={() => setFinancePanel(email)} style={abtn(T.taskAmber, T.taskAmberBg)}>📊 Finance Review</button>}
               </>
             )}
@@ -1832,11 +1860,11 @@ export default function Home() {
                 <button onClick={() => setSelectedEmailIds(new Set())} style={{ marginLeft: "auto", padding: "7px 14px", background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14 }}>✕ Clear</button>
               </div>
             )}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 18 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(480px, 1fr))", gap: 18 }}>
               {sortedBuckets.map(([bucket, bucketEmails]) => {
                 const info = BUCKETS[bucket] || { label: bucket, icon: "📧", color: T.textMuted, bg: T.bg, border: T.border };
                 const isOver = dragOverEmailBucket === bucket;
-                const canBatchDelete = ["automated", "calendar-notif", "docs-activity", "classy-recurring"].includes(bucket);
+                const canBatchDelete = ["automated", "calendar-notif", "docs-activity", "classy-recurring", "newsletter", "sales", "fyi-mass"].includes(bucket);
                 return (
                   <div key={bucket}
                     onDragOver={e => { e.preventDefault(); setDragOverEmailBucket(bucket); }}
