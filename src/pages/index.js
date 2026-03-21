@@ -476,7 +476,7 @@ function LightbulbFAB() {
   return (
     <>
       <button
-        onClick={() => { setOpen(o => !o); setStatus(null); setText(""); }}
+        onClick={() => { setOpen(o => !o); setStatus(null); }}
         title="Feedback & audit log"
         style={{
           position: "fixed", bottom: 28, right: 28, width: 52, height: 52,
