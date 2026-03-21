@@ -256,6 +256,58 @@ function suggestArchiveLabel(email) {
   return null;
 }
 
+// ── Sprint 5: Global search + Team activity ───────────────────────────────────
+function scoreSearchResult(item, query, type) {
+  const q = query.toLowerCase().trim();
+  if (!q) return 0;
+  let score = 0;
+  if (type === 'email') {
+    if ((item.subject || '').toLowerCase().includes(q)) score += 10;
+    if ((item.from || '').toLowerCase().includes(q)) score += 8;
+    if ((item.snippet || '').toLowerCase().includes(q)) score += 3;
+  } else if (type === 'task') {
+    if ((item.title || '').toLowerCase().includes(q)) score += 10;
+    if ((item.notes || '').toLowerCase().includes(q)) score += 4;
+  } else if (type === 'draft') {
+    if ((item.subject || '').toLowerCase().includes(q)) score += 10;
+    if ((item.to || '').toLowerCase().includes(q)) score += 8;
+    if ((item.snippet || '').toLowerCase().includes(q)) score += 3;
+  }
+  return score;
+}
+function searchEmails(emailList, query) {
+  if (!query || !query.trim()) return [];
+  return (emailList || []).map(e => ({ item: e, score: scoreSearchResult(e, query, 'email') })).filter(r => r.score > 0).sort((a, b) => b.score - a.score).map(r => r.item);
+}
+function searchTasks(taskList, query) {
+  if (!query || !query.trim()) return [];
+  return (taskList || []).map(t => ({ item: t, score: scoreSearchResult(t, query, 'task') })).filter(r => r.score > 0).sort((a, b) => b.score - a.score).map(r => r.item);
+}
+function searchDraftsData(draftList, query) {
+  if (!query || !query.trim()) return [];
+  return (draftList || []).map(d => ({ item: d, score: scoreSearchResult(d, query, 'draft') })).filter(r => r.score > 0).sort((a, b) => b.score - a.score).map(r => r.item);
+}
+function buildTeamActivity(emailList, taskList, teamMembers) {
+  const sevenDaysAgo = Date.now() - 7 * 24 * 3600 * 1000;
+  return (teamMembers || []).map(member => {
+    const memberEmails = (emailList || []).filter(e => {
+      const from = (e.from || '').toLowerCase();
+      return from.includes(member.email.toLowerCase()) || from.includes(member.name.toLowerCase().split(' ')[0]);
+    });
+    const recentEmails = memberEmails.filter(e => {
+      const ts = e.internalDate ? parseInt(e.internalDate) : new Date(e.date || 0).getTime();
+      return ts >= sevenDaysAgo;
+    });
+    const assignedTasks = (taskList || []).filter(t => (t.assignee || '').toLowerCase().includes(member.name.toLowerCase()));
+    return {
+      name: member.name, email: member.email, initials: member.initials,
+      recentEmailCount: recentEmails.length,
+      completedTaskCount: assignedTasks.filter(t => t.done).length,
+      pendingTaskCount: assignedTasks.filter(t => !t.done).length,
+    };
+  });
+}
+
 // ── Sprint 4: Weekly brief context builder ────────────────────────────────────
 function buildWeeklyBriefContext(emails, tasks, events, donations) {
   const now = Date.now();
@@ -1018,6 +1070,9 @@ export default function Home() {
   const [weeklyBrief, setWeeklyBrief] = useState(null); // { text, boardText } or null
   const [weeklyBriefLoading, setWeeklyBriefLoading] = useState(false);
   const [boardReportSaving, setBoardReportSaving] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchIdx, setSearchIdx] = useState(0); // keyboard nav index
 
   // ── Persist ──
   useEffect(() => {
@@ -1325,7 +1380,8 @@ export default function Home() {
       const tag = (e.target.tagName || "").toLowerCase();
       if (tag === "input" || tag === "textarea" || e.target.isContentEditable) return;
       if (e.key === "?") { setShowShortcuts(s => !s); return; }
-      if (e.key === "Escape") { setShowShortcuts(false); return; }
+      if (e.key === "Escape") { setShowShortcuts(false); setSearchOpen(false); setSearchQuery(""); return; }
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setSearchOpen(s => !s); setSearchQuery(""); setSearchIdx(0); return; }
       if (tab === "emails") {
         if (e.key === "j") { setFocusedIdx(i => Math.min(i + 1, emails.length - 1)); return; }
         if (e.key === "k") { setFocusedIdx(i => Math.max(i - 1, 0)); return; }
@@ -1654,7 +1710,8 @@ export default function Home() {
         )}
 
         {/* TABS */}
-        <div style={{ display: "flex", gap: 4, marginBottom: 26, borderBottom: `2px solid ${T.border}`, paddingBottom: 0, overflowX: "auto" }}>
+        <div style={{ display: "flex", gap: 4, marginBottom: 26, borderBottom: `2px solid ${T.border}`, paddingBottom: 0, overflowX: "auto", alignItems: "flex-end" }}>
+          <button onClick={() => { setSearchOpen(true); setSearchQuery(""); setSearchIdx(0); }} style={{ padding: "10px 16px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6, marginRight: 8, marginBottom: 3, whiteSpace: "nowrap" }}>🔍 Search <span style={{ fontSize: 11, opacity: 0.7 }}>⌘K</span></button>
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
               padding: "13px 22px", background: tab === t.id ? t.color + "12" : "transparent",
@@ -1955,6 +2012,36 @@ export default function Home() {
                 </div>
               )}
             </div>
+
+            {/* ── Team Activity Digest ── */}
+            {(() => {
+              const teamActivity = buildTeamActivity(emails, tasks, TEAM);
+              const active = teamActivity.filter(m => m.recentEmailCount > 0 || m.completedTaskCount > 0 || m.pendingTaskCount > 0);
+              if (!active.length) return null;
+              return (
+                <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", marginBottom: 26 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                    <span style={{ fontSize: 19 }}>👥</span>
+                    <span style={{ fontSize: 18, fontWeight: 700, color: T.text }}>Team This Week</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    {active.map(m => (
+                      <div key={m.email} style={{ flex: "1 1 140px", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                          <div style={{ width: 30, height: 30, borderRadius: "50%", background: senderAvatar(m.name).color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{m.initials}</div>
+                          <div style={{ fontWeight: 600, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name.split(' ')[0]}</div>
+                        </div>
+                        <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.8 }}>
+                          {m.recentEmailCount > 0 && <div>✉️ {m.recentEmailCount} email{m.recentEmailCount !== 1 ? "s" : ""}</div>}
+                          {m.completedTaskCount > 0 && <div style={{ color: T.calGreen }}>✓ {m.completedTaskCount} done</div>}
+                          {m.pendingTaskCount > 0 && <div>📋 {m.pendingTaskCount} pending</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* End of Day */}
             {new Date().getHours() >= 16 && (
@@ -2485,6 +2572,67 @@ export default function Home() {
               </div>
             ))}
             <div style={{ marginTop: 18, fontSize: 13, color: T.textDim, textAlign: "center" }}>Shortcuts disabled when typing in inputs</div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Cmd+K Global Search Palette ── */}
+      {searchOpen && (
+        <div onClick={() => { setSearchOpen(false); setSearchQuery(""); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 9000, display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 80 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: 16, width: "100%", maxWidth: 640, boxShadow: "0 24px 64px rgba(0,0,0,0.28)", overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "center", padding: "14px 20px", borderBottom: `1px solid ${T.borderLight}`, gap: 12 }}>
+              <span style={{ fontSize: 18, color: T.textMuted }}>🔍</span>
+              <input
+                autoFocus
+                value={searchQuery}
+                onChange={e => { setSearchQuery(e.target.value); setSearchIdx(0); }}
+                onKeyDown={e => {
+                  const results = [...searchEmails(emails, searchQuery).slice(0,4), ...searchTasks(tasks, searchQuery).slice(0,4), ...searchDraftsData(drafts, searchQuery).slice(0,3)];
+                  if (e.key === "ArrowDown") { e.preventDefault(); setSearchIdx(i => Math.min(i + 1, results.length - 1)); }
+                  if (e.key === "ArrowUp") { e.preventDefault(); setSearchIdx(i => Math.max(i - 1, 0)); }
+                  if (e.key === "Enter" && results[searchIdx]) {
+                    const r = results[searchIdx];
+                    if (r.subject !== undefined && r.to !== undefined) { setTab("drafts"); } // draft
+                    else if (r.subject !== undefined) { setTab("emails"); setExpandedEmail(r.id); fetchEmailBody(r.id); } // email
+                    else { setTab("tasks"); } // task
+                    setSearchOpen(false); setSearchQuery("");
+                  }
+                  if (e.key === "Escape") { setSearchOpen(false); setSearchQuery(""); }
+                }}
+                placeholder="Search emails, tasks, drafts... (⌘K to close)"
+                style={{ flex: 1, fontSize: 17, background: "none", border: "none", outline: "none", color: T.text }}
+              />
+              <span style={{ fontSize: 13, color: T.textMuted, flexShrink: 0 }}>Esc to close</span>
+            </div>
+            {searchQuery.trim() ? (() => {
+              const emailResults = searchEmails(emails, searchQuery).slice(0, 4);
+              const taskResults = searchTasks(tasks, searchQuery).slice(0, 4);
+              const draftResults = searchDraftsData(drafts, searchQuery).slice(0, 3);
+              const allResults = [...emailResults, ...taskResults, ...draftResults];
+              if (allResults.length === 0) return <div style={{ padding: "24px 20px", color: T.textMuted, textAlign: "center", fontSize: 15 }}>No results for "{searchQuery}"</div>;
+              let globalIdx = 0;
+              return (
+                <div style={{ maxHeight: 420, overflowY: "auto" }}>
+                  {emailResults.length > 0 && <div>
+                    <div style={{ padding: "8px 20px 4px", fontSize: 11, fontWeight: 700, color: T.textMuted, letterSpacing: "0.08em", textTransform: "uppercase" }}>Emails</div>
+                    {emailResults.map((e, i) => { const idx = globalIdx++; return <div key={e.id} onClick={() => { setTab("emails"); setExpandedEmail(e.id); fetchEmailBody(e.id); setSearchOpen(false); setSearchQuery(""); }} style={{ padding: "10px 20px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", background: idx === searchIdx ? T.accentBg : "transparent" }}><span style={{ fontSize: 15 }}>✉️</span><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.subject || "(no subject)"}</div><div style={{ fontSize: 12, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.from}</div></div></div>; })}
+                  </div>}
+                  {taskResults.length > 0 && <div>
+                    <div style={{ padding: "8px 20px 4px", fontSize: 11, fontWeight: 700, color: T.textMuted, letterSpacing: "0.08em", textTransform: "uppercase" }}>Tasks</div>
+                    {taskResults.map((t, i) => { const idx = globalIdx++; return <div key={t.id} onClick={() => { setTab("tasks"); setSearchOpen(false); setSearchQuery(""); }} style={{ padding: "10px 20px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", background: idx === searchIdx ? T.accentBg : "transparent" }}><span style={{ fontSize: 15 }}>📋</span><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div><div style={{ fontSize: 12, color: T.textMuted }}>{t.done ? "✓ Done" : t.due ? `Due ${new Date(t.due).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "No due date"}</div></div></div>; })}
+                  </div>}
+                  {draftResults.length > 0 && <div>
+                    <div style={{ padding: "8px 20px 4px", fontSize: 11, fontWeight: 700, color: T.textMuted, letterSpacing: "0.08em", textTransform: "uppercase" }}>Drafts</div>
+                    {draftResults.map((d, i) => { const idx = globalIdx++; return <div key={d.id} onClick={() => { setTab("drafts"); setSearchOpen(false); setSearchQuery(""); }} style={{ padding: "10px 20px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", background: idx === searchIdx ? T.accentBg : "transparent" }}><span style={{ fontSize: 15 }}>✏️</span><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.subject || "(no subject)"}</div><div style={{ fontSize: 12, color: T.textMuted }}>To: {d.to || "?"}</div></div></div>; })}
+                  </div>}
+                </div>
+              );
+            })() : (
+              <div style={{ padding: "16px 20px", color: T.textMuted, fontSize: 14 }}>
+                <div style={{ marginBottom: 8 }}>Search across all emails, tasks, and drafts</div>
+                <div style={{ fontSize: 12, color: T.textDim }}>↑↓ to navigate · Enter to open · Esc to close</div>
+              </div>
+            )}
           </div>
         </div>
       )}
