@@ -1984,65 +1984,67 @@ export default function Home() {
               </div>
             )}
 
-            {/* Needs Your Reply */}
-            <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", marginBottom: 26 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: needsReply.length ? 14 : 0 }}>
-                <span style={{ fontSize: 19 }}>✉️</span>
-                <span style={{ fontSize: 18, fontWeight: 700, color: T.urgentCoral }}>Needs Your Reply</span>
-                <span style={{ fontSize: 14, color: T.urgentCoral, background: T.urgentCoralBg, padding: "3px 11px", borderRadius: 8, fontWeight: 600 }}>{needsReply.length}</span>
-              </div>
-              {needsReply.length === 0 ? <div style={{ padding: "10px 0", color: T.calGreen, fontSize: 15 }}>You're all caught up!</div>
-                : needsReply.slice(0, 7).map(e => {
-                  const av = senderAvatar(e.from);
-                  const isUrgent = urgentEmailIds.has(e.id);
-                  return (
-                    <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: isUrgent ? T.urgentCoralBg : T.bg, border: `1px solid ${isUrgent ? T.urgentCoral : T.border}30`, borderRadius: 9, marginBottom: 6, cursor: "pointer", borderLeft: isUrgent ? `3px solid ${T.urgentCoral}` : undefined }} onClick={() => { setTab("emails"); setExpandedEmail(e.id); fetchEmailBody(e.id); }}>
-                      <div style={{ width: 32, height: 32, borderRadius: "50%", background: av.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{av.initials}</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.from?.match(/^([^<]+)/)?.[1]?.trim() || e.from}</div>
-                        <div style={{ fontSize: 13, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.subject}</div>
-                      </div>
-                      <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
-                        <span style={{ fontSize: 12, color: T.textMuted }}>{fmtRel(e.date)}</span>
-                        <button onClick={ev => { ev.stopPropagation(); setComposing({ to: e.from, subject: `Re: ${e.subject}`, body: "" }); }} style={abtn(T.accent, T.accentBg)}>Reply</button>
-                        <button onClick={ev => { ev.stopPropagation(); emailAction("archive", e.id); }} style={abtn(T.textMuted, T.bg)}>Archive</button>
-                        <button onClick={ev => { ev.stopPropagation(); setUrgentEmailIds(prev => { const n = new Set(prev); isUrgent ? n.delete(e.id) : n.add(e.id); return n; }); }} style={abtn(isUrgent ? T.urgentCoral : T.textMuted, isUrgent ? T.urgentCoralBg : T.bg)} title="Mark urgent">⚡</button>
-                      </div>
-                    </div>
-                  );
-                })}
-              {needsReply.length > 7 && <button onClick={() => setTab("emails")} style={{ width: "100%", padding: "9px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600, marginTop: 6 }}>View all {needsReply.length} →</button>}
-            </div>
+            {/* Needs Your Reply + Today's Schedule — side by side */}
+            <div style={{ display: "flex", gap: 20, marginBottom: 26, flexWrap: "wrap" }}>
 
-            {/* Today's Schedule */}
-            <div style={{ marginBottom: 26 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                <span style={{ fontSize: 19 }}>📅</span>
-                <span style={{ fontSize: 18, fontWeight: 700, color: T.calGreen }}>Today's Schedule</span>
+              {/* Needs Your Reply */}
+              <div style={{ flex: "1 1 420px", background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: needsReply.length ? 14 : 0 }}>
+                  <span style={{ fontSize: 19 }}>✉️</span>
+                  <span style={{ fontSize: 18, fontWeight: 700, color: T.urgentCoral }}>Needs Your Reply</span>
+                  <span style={{ fontSize: 14, color: T.urgentCoral, background: T.urgentCoralBg, padding: "3px 11px", borderRadius: 8, fontWeight: 600 }}>{needsReply.length}</span>
+                </div>
+                {needsReply.length === 0 ? <div style={{ padding: "10px 0", color: T.calGreen, fontSize: 15 }}>You're all caught up!</div>
+                  : needsReply.slice(0, 7).map(e => {
+                    const av = senderAvatar(e.from);
+                    const isUrgent = urgentEmailIds.has(e.id);
+                    return (
+                      <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: isUrgent ? T.urgentCoralBg : T.bg, border: `1px solid ${isUrgent ? T.urgentCoral : T.border}30`, borderRadius: 9, marginBottom: 6, cursor: "pointer", borderLeft: isUrgent ? `3px solid ${T.urgentCoral}` : undefined }} onClick={() => { setTab("emails"); setExpandedEmail(e.id); fetchEmailBody(e.id); }}>
+                        <div style={{ width: 32, height: 32, borderRadius: "50%", background: av.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{av.initials}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.from?.match(/^([^<]+)/)?.[1]?.trim() || e.from}</div>
+                          <div style={{ fontSize: 13, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.subject}</div>
+                        </div>
+                        <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+                          <span style={{ fontSize: 12, color: T.textMuted }}>{fmtRel(e.date)}</span>
+                          <button onClick={ev => { ev.stopPropagation(); setComposing({ to: e.from, subject: `Re: ${e.subject}`, body: "" }); }} style={abtn(T.accent, T.accentBg)}>Reply</button>
+                          <button onClick={ev => { ev.stopPropagation(); emailAction("archive", e.id); }} style={abtn(T.textMuted, T.bg)}>Archive</button>
+                          <button onClick={ev => { ev.stopPropagation(); setUrgentEmailIds(prev => { const n = new Set(prev); isUrgent ? n.delete(e.id) : n.add(e.id); return n; }); }} style={abtn(isUrgent ? T.urgentCoral : T.textMuted, isUrgent ? T.urgentCoralBg : T.bg)} title="Mark urgent">⚡</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                {needsReply.length > 7 && <button onClick={() => setTab("emails")} style={{ width: "100%", padding: "9px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600, marginTop: 6 }}>View all {needsReply.length} →</button>}
               </div>
-              <div style={{ background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 12, overflow: "hidden" }}>
-                {events.length === 0 ? <div style={{ padding: 22, textAlign: "center", color: T.textMuted, fontSize: 16 }}>No events today</div>
-                  : events.map(ev => (
-                  <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 20px", borderBottom: `1px solid ${T.borderLight}`, opacity: isRealMeeting(ev) ? 1 : 0.5 }}>
-                    <div style={{ width: 56, textAlign: "center", flexShrink: 0 }}><div style={{ fontSize: 16, fontWeight: 700, color: T.calGreen }}>{fmtTime(ev.start)}</div></div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: 16, color: T.text }}>{ev.title}</div>
-                      {ev.location && <div style={{ fontSize: 14, color: T.textMuted }}>📍 {ev.location}</div>}
-                    </div>
-                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                      {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "8px 18px", background: T.calGreen, color: "#fff", borderRadius: 7, textDecoration: "none", fontSize: 15, fontWeight: 600 }}>Join Call</a>}
-                      {isRealMeeting(ev) && (
-                        <>
-                          {!preppedEvents[ev.id] && <button onClick={() => { setTab("drive"); setDriveSearch(ev.title); fetchDrive("search", ev.title); }} style={{ padding: "8px 16px", background: T.calGreenBg, color: T.calGreen, border: `1px solid ${T.calGreenBorder}`, borderRadius: 7, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Prepare</button>}
-                          <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "8px 16px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>
-                            {preppedEvents[ev.id] ? "✓ Prepped" : "Prep Done"}
+
+              {/* Today's Schedule */}
+              <div style={{ flex: "1 1 340px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                  <span style={{ fontSize: 19 }}>📅</span>
+                  <span style={{ fontSize: 18, fontWeight: 700, color: T.calGreen }}>Today's Schedule</span>
+                </div>
+                <div style={{ background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 12, overflow: "hidden" }}>
+                  {events.length === 0 ? <div style={{ padding: 22, textAlign: "center", color: T.textMuted, fontSize: 16 }}>No events today</div>
+                    : events.map(ev => (
+                    <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderBottom: `1px solid ${T.borderLight}`, opacity: isRealMeeting(ev) ? 1 : 0.5 }}>
+                      <div style={{ width: 48, textAlign: "center", flexShrink: 0 }}><div style={{ fontSize: 14, fontWeight: 700, color: T.calGreen }}>{fmtTime(ev.start)}</div></div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 15, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.title}</div>
+                        {ev.location && <div style={{ fontSize: 13, color: T.textMuted }}>📍 {ev.location}</div>}
+                      </div>
+                      <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+                        {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", background: T.calGreen, color: "#fff", borderRadius: 6, textDecoration: "none", fontSize: 13, fontWeight: 600 }}>Join</a>}
+                        {isRealMeeting(ev) && (
+                          <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "6px 10px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                            {preppedEvents[ev.id] ? "✓" : "Prep"}
                           </button>
-                        </>
-                      )}
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
+
             </div>
 
             {/* ── Grant Deadline Tracker ── */}
