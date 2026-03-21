@@ -141,7 +141,7 @@ describe('classifyEmail', () => {
     });
   });
 
-  // Invoices / financial — must fire BEFORE automated so noreply senders still land here
+  // Invoices / financial — must fire BEFORE newsletter AND automated
   describe('invoices', () => {
     test('subject has "invoice" → invoices', () => {
       expect(classifyEmail({ from: 'billing@vendor.com', subject: 'Invoice #1234' })).toBe('invoices');
@@ -160,6 +160,12 @@ describe('classifyEmail', () => {
     });
     test('noreply with no invoice keyword → automated (unchanged)', () => {
       expect(classifyEmail({ from: 'noreply@someservice.com', subject: 'Account notification' })).toBe('automated');
+    });
+    test('invoice subject + List-Unsubscribe header → invoices (not newsletter)', () => {
+      expect(classifyEmail({ from: 'revops@turing.com', subject: 'Invoice from Turing', listUnsubscribe: '<mailto:unsub@turing.com>' })).toBe('invoices');
+    });
+    test('receipt subject + List-Id header → invoices (not newsletter)', () => {
+      expect(classifyEmail({ from: 'billing@vendor.com', subject: 'Your receipt', listId: '<receipts.vendor.com>' })).toBe('invoices');
     });
   });
 

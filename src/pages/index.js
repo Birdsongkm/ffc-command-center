@@ -96,6 +96,9 @@ function classifyEmail(e) {
   const isMassSend = recipientCount >= 20;
 
   if (isMassSend && !from.includes("classy") && !from.includes("hubspot")) return "fyi-mass";
+  // Invoices before newsletter: billing emails often carry List-Unsubscribe headers
+  // (e.g. Turing, QuickBooks) which would otherwise route them to newsletter instead of Financial
+  if (subj.includes("invoice") || subj.includes("receipt") || subj.includes("payment") || subj.includes("billing") || subj.includes("statement") || subj.includes("your order") || subj.includes("charge") || subj.includes("subscription renewal")) return "invoices";
   if (listUnsub || listId || precedence === "list" || precedence === "bulk") {
     if (from.includes("classy") || from.includes("fundrais")) return "classy-recurring";
     return "newsletter";
@@ -105,9 +108,6 @@ function classifyEmail(e) {
   // Classy checks must come before the generic noreply check — Classy sends from noreply addresses
   if ((from.includes("classy") || subj.includes("classy")) && (subj.includes("donation") || subj.includes("gift") || subj.includes("contribut"))) return "classy-onetime";
   if (from.includes("classy")) return "classy-recurring";
-  // Invoices: financial transaction emails — checked before noreply so receipt/invoice
-  // emails from automated senders (Stripe, QuickBooks, etc.) still land in Financial
-  if (subj.includes("invoice") || subj.includes("receipt") || subj.includes("payment") || subj.includes("billing") || subj.includes("statement") || subj.includes("your order") || subj.includes("charge") || subj.includes("subscription renewal")) return "invoices";
   if (from.includes("noreply") || from.includes("no-reply") || from.includes("notifications@") || from.includes("mailer-daemon") || from.includes("postmaster")) return "automated";
   if (from.includes("freshfoodconnect") || from.includes("@ffc")) return "team";
   // Sales/spam: known outreach platform domains → always sales
@@ -1074,6 +1074,9 @@ export default function Home() {
   const [draggingEmail, setDraggingEmail] = useState(null);
   const [dragOverEmailBucket, setDragOverEmailBucket] = useState(null);
   const [emailBucketOverrides, setEmailBucketOverrides] = useState({});
+  const [learnedBuckets, setLearnedBuckets] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("ffc_learned_buckets") || "{}"); } catch { return {}; }
+  });
   const [emailActionHistory, setEmailActionHistory] = useState(() => {
     try { return JSON.parse(localStorage.getItem("ffc_action_history") || "{}"); } catch { return {}; }
   });
@@ -1460,7 +1463,9 @@ export default function Home() {
   const emailsByBucket = {};
   emails.forEach(e => {
     // to-do takes priority over other buckets (and overrides)
-    const b = toDoEmailIds.has(e.id) ? "to-do" : (emailBucketOverrides[e.id] || classifyEmail(e));
+    const senderKey = (e.from || "").toLowerCase().match(/[\w.-]+@[\w.-]+/)?.[0] || "";
+    const learned = learnedBuckets[senderKey] || learnedBuckets[senderKey.split("@")[1]] || null;
+    const b = toDoEmailIds.has(e.id) ? "to-do" : (emailBucketOverrides[e.id] || learned || classifyEmail(e));
     if (!emailsByBucket[b]) emailsByBucket[b] = [];
     emailsByBucket[b].push(e);
   });
@@ -2358,6 +2363,18 @@ export default function Home() {
                       e.preventDefault();
                       if (draggingEmail && draggingEmail.id) {
                         setEmailBucketOverrides(prev => ({ ...prev, [draggingEmail.id]: bucket }));
+                        // Learn: save sender email + domain → bucket for future emails
+                        const senderEmail = (draggingEmail.from || "").toLowerCase().match(/[\w.-]+@[\w.-]+/)?.[0] || "";
+                        const senderDomain = senderEmail.split("@")[1] || "";
+                        if (senderEmail || senderDomain) {
+                          setLearnedBuckets(prev => {
+                            const updated = { ...prev };
+                            if (senderEmail) updated[senderEmail] = bucket;
+                            if (senderDomain) updated[senderDomain] = bucket;
+                            try { localStorage.setItem("ffc_learned_buckets", JSON.stringify(updated)); } catch {}
+                            return updated;
+                          });
+                        }
                       }
                       setDraggingEmail(null); setDragOverEmailBucket(null);
                     }}

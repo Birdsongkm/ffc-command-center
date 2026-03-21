@@ -20,6 +20,9 @@ function classifyEmail(e) {
   const isMassSend = recipientCount >= 20;
 
   if (isMassSend && !from.includes("classy") && !from.includes("hubspot")) return "fyi-mass";
+  // Invoices checked before newsletter: billing emails often carry List-Unsubscribe headers
+  // (e.g. Turing, QuickBooks) which would otherwise land them in newsletter instead of Financial
+  if (subj.includes("invoice") || subj.includes("receipt") || subj.includes("payment") || subj.includes("billing") || subj.includes("statement") || subj.includes("your order") || subj.includes("charge") || subj.includes("subscription renewal")) return "invoices";
   if (listUnsub || listId || precedence === "list" || precedence === "bulk") {
     if (from.includes("classy") || from.includes("fundrais")) return "classy-recurring";
     return "newsletter";
@@ -29,9 +32,6 @@ function classifyEmail(e) {
   // Classy checks must come before the generic noreply check — Classy sends from noreply addresses
   if ((from.includes("classy") || subj.includes("classy")) && (subj.includes("donation") || subj.includes("gift") || subj.includes("contribut"))) return "classy-onetime";
   if (from.includes("classy")) return "classy-recurring";
-  // Invoices: checked before noreply so receipt/invoice emails from automated senders
-  // (Stripe, QuickBooks, etc.) still land in Financial, not Automated
-  if (subj.includes("invoice") || subj.includes("receipt") || subj.includes("payment") || subj.includes("billing") || subj.includes("statement") || subj.includes("your order") || subj.includes("charge") || subj.includes("subscription renewal")) return "invoices";
   if (from.includes("noreply") || from.includes("no-reply") || from.includes("notifications@") || from.includes("mailer-daemon") || from.includes("postmaster")) return "automated";
   if (from.includes("freshfoodconnect") || from.includes("@ffc")) return "team";
   // Sales/spam: known outreach platform domains → always sales
