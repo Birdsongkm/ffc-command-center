@@ -2052,7 +2052,7 @@ export default function Home() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 26 }}>
 
               {/* Needs Your Reply */}
-              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", borderTop: `4px solid ${T.urgentCoral}` }}>
+              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", borderTop: `4px solid ${T.urgentCoral}`, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: needsReply.length ? 14 : 0 }}>
                   <span style={{ fontSize: 19 }}>✉️</span>
                   <span style={{ fontSize: 18, fontWeight: 700, color: T.urgentCoral }}>Needs Your Reply</span>
@@ -2082,7 +2082,7 @@ export default function Home() {
               </div>
 
               {/* Today's Schedule */}
-              <div style={{ background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 14, padding: "20px 24px", borderTop: `4px solid ${T.calGreen}`, overflow: "hidden" }}>
+              <div style={{ background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 14, padding: "20px 24px", borderTop: `4px solid ${T.calGreen}`, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                   <span style={{ fontSize: 19 }}>📅</span>
                   <span style={{ fontSize: 18, fontWeight: 700, color: T.calGreen }}>Today's Schedule</span>
@@ -2228,14 +2228,13 @@ export default function Home() {
             {/* ── Team Activity Digest ── */}
             {(() => {
               const teamActivity = buildTeamActivity(emails, tasks, TEAM);
-              const activeUnsorted = teamActivity.filter(m => m.recentEmailCount > 0 || m.completedTaskCount > 0 || m.pendingTaskCount > 0);
+              const activeUnsorted = teamActivity; // show all team members always
               const active = teamOrder.length
                 ? [...activeUnsorted].sort((a, b) => {
                     const ia = teamOrder.indexOf(a.email); const ib = teamOrder.indexOf(b.email);
                     return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
                   })
                 : activeUnsorted;
-              if (!active.length) return null;
               return (
                 <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", marginBottom: 26 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
