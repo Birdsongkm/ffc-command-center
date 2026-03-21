@@ -2,7 +2,7 @@
 
 **Owner:** Kayla Birdsong, CEO / PM — Fresh Food Connect
 **Executor:** Claude (autonomous, recursive, continuous until Kayla says pause)
-**Last updated:** 2026-03-21 (Sprint 5 complete, Sprint 6 planned)
+**Last updated:** 2026-03-21 (issues #27–35 shipped, Sprint 6 planned)
 
 ---
 
@@ -405,28 +405,68 @@ CEO vote: keyword search now (6/6), semantic search as future enhancement (note 
 
 ---
 
-## Sprint 6 — Resilience & Mobile
-*Status: PLANNED*
+## Sprint 6 — UX Polish & Resilience
+*Status: PLANNED — next to execute*
 
-### Pre-sprint panel input
+Issues #28–35 shipped between sprints (user feedback cycle). Sprint 6 formalizes
+the resilience work plus any remaining polish from that cycle.
 
-**UX panel:**
-> "The app has no loading states, no error states, no empty states that explain what happened. Users don't know if something is loading or broken."
+### Panel deliberation (post-issues #28–35)
 
-**DevOps / QA (product team):**
-> "No error boundaries. A single component crash takes down the whole page. Need proper error recovery."
+**ED Users panel (6/6):**
+> "The app feels like it's getting real. But sometimes it just sits there after I
+> click something — no spinner, no error. I don't know if it's working. I need
+> feedback on every action."
 
-**ED Users panel:**
-> "I check this on my phone between meetings. It's completely unusable on mobile. Even just the Today tab responsive would help."
+ED vote: loading spinners everywhere (6/6), error messages (6/6), toast on success (5/6 — already partial)
 
-**CFO panel:**
-> "I need this reliable enough to trust for board meeting prep. Right now I'm nervous it'll break at a critical moment."
+**UX panel (6/6):**
+> "The Today page redesign helped. The compact email rows are right. But the
+> transitions when switching tabs still feel jarring — content just appears.
+> A 150ms fade would be enough. Also: the tabs centered, but now the 📌 Capture
+> and + Compose buttons feel disconnected from the tab area. Consider a persistent
+> header action row."
+
+UX vote: fade transition on tab switch (6/6), header refinement (4/6 — secondary), loading skeletons (5/6)
+
+**COO panel (6/6):**
+> "The urgent box is the right pattern. Everything should be able to go urgent.
+> What about tasks? Overdue tasks should auto-appear in the urgent box, same as
+> stale drafts. Make the urgent box the north star — if it's empty, the day is
+> clean."
+
+COO vote: tasks in urgent box when overdue (6/6), stale draft auto-urgent already done (noted), urgent box empty = good signal (6/6)
+
+**CFO panel (5/6):**
+> "The side-by-side Classy + Pipeline layout is exactly what I needed. Now I can
+> see fundraising at a glance. Add a 'total in pipeline' dollar figure next to
+> the pipeline stages — not just counts."
+
+CFO vote: pipeline dollar totals (4/6), Classy 7-day total shown (5/6)
+
+**Unicorn CEO panel (5/6):**
+> "Error recovery. If the Gmail token expires in the middle of the day, right now
+> the whole app silently fails. I want a banner: 'Session expired — click to
+> reconnect' not a blank page."
+
+CEO vote: session expiry banner (6/6), auto-retry on token refresh (already built — note for CEO)
+
+**Product team resolution (Kayla as PM):**
+- Feature 1: Overdue tasks auto-appear in the Today Urgent box
+- Feature 2: Session expiry banner (detect 401 responses → show reconnect prompt)
+- Feature 3: Tab switch fade transition (CSS opacity transition on content area)
+- Feature 4: Pipeline dollar totals in Donor Pipeline widget
+- Feature 5: Loading skeleton on initial data load (Today tab key widgets)
 
 **Product team plan:**
-- Feature 1: Error boundaries with retry UI on each tab
-- Feature 2: Offline/stale state indicator (last-refreshed timestamp)
-- Feature 3: Mobile-responsive Today and Emails tabs
-- Feature 4: Loading skeleton states instead of blank areas
+- Feature 1: Urgent box — add overdue tasks to auto-urgent list (no manual mark needed)
+- Feature 2: 401 detection in data fetches → `sessionExpired` state → banner with login link
+- Feature 3: CSS fade on tab content (opacity 0→1, 150ms)
+- Feature 4: Sum deal amounts in parsePipelineStages or show total in pipeline header
+- Feature 5: Skeleton loaders for email list, Today widgets
+
+**New env vars needed:** None
+**New API routes:** None
 
 ---
 
