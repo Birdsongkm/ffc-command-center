@@ -36,7 +36,6 @@ const TEAM = [
   { name: "Carmen Alcantara", initials: "CA", email: "carmen@freshfoodconnect.org", meetingStyle: "email-chat" },
   { name: "Adjoa Kittoe", initials: "AK", email: "adjoa@freshfoodconnect.org", meetingStyle: "notes" },
   { name: "Debbie Nash", initials: "DN", email: "dnash@freshfoodconnect.org", meetingStyle: "email" },
-  { name: "Lone Bryan", initials: "LB", email: "lone@freshfoodconnect.org", meetingStyle: "email" },
   { name: "Brittany", initials: "BR", email: "brittany@freshfoodconnect.org", meetingStyle: "notes" },
 ];
 
@@ -2260,7 +2259,7 @@ export default function Home() {
                           setDragTeam(null); setDragOverTeam(null);
                         }}
                         style={{ flex: "1 1 140px", background: T.bg, border: `1px solid ${isDropTarget ? T.accent : style === 'notes' ? T.border : isOpen ? T.accent : T.border}`, borderRadius: 10, padding: "12px 14px", position: "relative", cursor: "grab", opacity: dragTeam === m.email ? 0.5 : 1, transition: "opacity 0.15s, border-color 0.15s" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, cursor: style !== 'notes' ? "pointer" : "default" }} onClick={() => style !== 'notes' && setTeamNoteOpen(isOpen ? null : m.email)}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                           <div style={{ width: 30, height: 30, borderRadius: "50%", background: senderAvatar(m.name).color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{m.initials}</div>
                           <div style={{ fontWeight: 600, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{m.name.split(' ')[0]}</div>
                         </div>
@@ -2288,19 +2287,18 @@ export default function Home() {
                             </div>
                           );
                         })()}
-                        {style !== 'notes' && isOpen && (
-                          <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
-                            {style === 'email-chat' && (
-                              <div style={{ display: "flex", gap: 6 }}>
-                                <button onClick={() => { setComposing({ to: m.email, subject: '', body: '' }); setTeamNoteOpen(null); }} style={{ flex: 1, padding: "6px 0", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>✉️ Email</button>
-                                <button onClick={() => { window.open(`https://chat.google.com/`, '_blank'); setTeamNoteOpen(null); }} style={{ flex: 1, padding: "6px 0", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>💬 Chat</button>
+                        {(style === 'email' || style === 'email-chat') && (() => {
+                          const noteText = teamNoteTexts[m.email] || '';
+                          return (
+                            <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+                              <textarea value={noteText} onChange={e => setTeamNoteTexts(prev => ({ ...prev, [m.email]: e.target.value }))} placeholder={`Quick message to ${m.name.split(' ')[0]}…`} rows={2} style={{ width: "100%", padding: "7px 10px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit", color: T.text, background: T.surface, boxSizing: "border-box" }} />
+                              <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                                <button onClick={() => { setComposing({ to: m.email, subject: '', body: noteText }); setTeamNoteTexts(prev => ({ ...prev, [m.email]: '' })); }} style={{ flex: 1, padding: "6px 0", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>✉️ Email</button>
+                                {style === 'email-chat' && <button onClick={() => window.open('https://chat.google.com/', '_blank')} style={{ flex: 1, padding: "6px 0", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>💬 Chat</button>}
                               </div>
-                            )}
-                            {style === 'email' && (
-                              <button onClick={() => { setComposing({ to: m.email, subject: '', body: '' }); setTeamNoteOpen(null); }} style={{ width: "100%", padding: "6px 0", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>✉️ Send Email</button>
-                            )}
-                          </div>
-                        )}
+                            </div>
+                          );
+                        })()}
                       </div>
                       );
                     })}
