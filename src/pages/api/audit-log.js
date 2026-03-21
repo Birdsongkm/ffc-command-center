@@ -1,3 +1,9 @@
+/**
+ * GET /api/audit-log
+ * Fetches GitHub issues labeled "ffc-feedback" as a changelog/audit log.
+ * Returns up to 50 entries with status (open=pending, closed=deployed); no auth guard.
+ * Env: GITHUB_TOKEN, GITHUB_REPO
+ */
 export default async function handler(req, res) {
   const token = process.env.GITHUB_TOKEN;
   const repo = process.env.GITHUB_REPO;

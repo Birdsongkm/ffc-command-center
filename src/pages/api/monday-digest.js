@@ -1,3 +1,9 @@
+/**
+ * GET /api/monday-digest
+ * Aggregates weekly calendar events, unread email count, needs-response emails,
+ * and finance alerts into a single digest summary string.
+ * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+ */
 function parseCookies(req) {
   const c = {};
   (req.headers.cookie || '').split(';').forEach(s => {

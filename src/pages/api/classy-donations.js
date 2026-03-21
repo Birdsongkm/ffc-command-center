@@ -1,3 +1,9 @@
+/**
+ * GET /api/classy-donations
+ * Fetches the last 25 Classy transactions from the past 7 days for the configured org.
+ * Returns empty array gracefully if CLASSY_API_TOKEN or CLASSY_ORG_ID are not set.
+ * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, CLASSY_API_TOKEN, CLASSY_ORG_ID
+ */
 function parseCookies(req) {
   const c = {};
   (req.headers.cookie || '').split(';').forEach(s => {

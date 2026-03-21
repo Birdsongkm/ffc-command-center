@@ -1,3 +1,9 @@
+/**
+ * GET /api/drive
+ * Lists Google Drive files. Actions (query param): search (by name), starred, or recent (default).
+ * Returns up to 20 files ordered by modified time descending.
+ * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+ */
 function parseCookies(req) {
   const c = {};
   (req.headers.cookie || '').split(';').forEach(s => {

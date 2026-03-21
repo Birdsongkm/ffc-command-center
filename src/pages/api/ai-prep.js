@@ -1,3 +1,9 @@
+/**
+ * POST /api/ai-prep
+ * Uses Claude (Haiku) to generate concise meeting prep notes for a calendar event.
+ * Accepts event details (title, date, attendees, location, description); no auth guard.
+ * Env: ANTHROPIC_API_KEY
+ */
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 

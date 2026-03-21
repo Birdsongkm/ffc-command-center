@@ -1,3 +1,9 @@
+/**
+ * GET /api/hubspot-pipeline
+ * Fetches up to 100 open HubSpot deals and maps internal stage IDs to display names.
+ * Returns empty array gracefully if HUBSPOT_TOKEN is not set.
+ * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, HUBSPOT_TOKEN
+ */
 function parseCookies(req) {
   const c = {};
   (req.headers.cookie || '').split(';').forEach(s => {

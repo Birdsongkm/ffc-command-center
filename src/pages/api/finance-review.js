@@ -1,3 +1,9 @@
+/**
+ * GET /api/finance-review
+ * Supports finance review workflows via Gmail and Google Sheets.
+ * Actions (query param): checkDebbie | checkBudgetSheet | draftNudge | draftCommitteeReminder.
+ * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+ */
 function parseCookies(req) {
   const c = {};
   (req.headers.cookie || '').split(';').forEach(s => {

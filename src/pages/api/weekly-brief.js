@@ -1,3 +1,9 @@
+/**
+ * POST /api/weekly-brief
+ * Uses Claude (Haiku) to generate a weekly intelligence brief or board report draft.
+ * Body: context (required, digest text), boardMode (optional boolean for board report format).
+ * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, ANTHROPIC_API_KEY
+ */
 function parseCookies(req) {
   const c = {};
   (req.headers.cookie || '').split(';').forEach(s => {

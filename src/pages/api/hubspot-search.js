@@ -1,3 +1,9 @@
+/**
+ * GET /api/hubspot-search
+ * Searches HubSpot contacts by name or email (up to 10 results).
+ * Query param: q (search term). Returns empty array for blank queries.
+ * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, HUBSPOT_TOKEN
+ */
 function parseCookies(req) {
   const c = {};
   (req.headers.cookie || '').split(';').forEach(s => {

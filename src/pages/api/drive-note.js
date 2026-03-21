@@ -1,3 +1,9 @@
+/**
+ * POST /api/drive-note
+ * Finds a staff member's 1:1 Google Doc in Drive and prepends a dated note.
+ * Body: personName (required), note (required).
+ * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+ */
 function parseCookies(req) {
   const c = {};
   (req.headers.cookie || '').split(';').forEach(s => {

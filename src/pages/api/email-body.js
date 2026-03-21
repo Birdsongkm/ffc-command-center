@@ -1,3 +1,9 @@
+/**
+ * GET /api/email-body
+ * Fetches the full body (plain text and HTML) of a Gmail message by ID.
+ * Query param: id (required, Gmail message ID).
+ * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+ */
 function parseCookies(req) {
   const c = {};
   (req.headers.cookie || '').split(';').forEach(s => {

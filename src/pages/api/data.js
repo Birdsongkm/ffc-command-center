@@ -1,3 +1,9 @@
+/**
+ * GET /api/data
+ * Primary data endpoint: fetches unread inbox emails (50/page) and today's + upcoming
+ * calendar events (including deadline events within 90 days) in parallel.
+ * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+ */
 function parseCookies(req) {
   const c = {};
   (req.headers.cookie || '').split(';').forEach(s => {

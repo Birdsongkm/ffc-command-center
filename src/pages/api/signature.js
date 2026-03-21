@@ -1,3 +1,9 @@
+/**
+ * GET /api/signature
+ * Fetches the primary Gmail send-as signature HTML for the authenticated user.
+ * Returns an empty string if no primary send-as is configured.
+ * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+ */
 function parseCookies(req) {
   const c = {};
   (req.headers.cookie || '').split(';').forEach(s => {

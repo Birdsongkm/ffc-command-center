@@ -1,3 +1,9 @@
+/**
+ * GET /api/contact-history
+ * Returns Gmail message count and most recent contact date for a given email address.
+ * Query param: email (required).
+ * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+ */
 function parseCookies(req) {
   const c = {};
   (req.headers.cookie || '').split(';').forEach(s => {

@@ -1,3 +1,9 @@
+/**
+ * POST /api/ai-draft
+ * Uses Claude (Haiku) to generate a reply email draft on behalf of the ED.
+ * Accepts email context (from, subject, snippet/body) and returns a draft reply.
+ * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, ANTHROPIC_API_KEY
+ */
 function parseCookies(req) {
   const c = {};
   (req.headers.cookie || '').split(';').forEach(s => {

@@ -1,3 +1,9 @@
+/**
+ * POST /api/hubspot-note
+ * Creates a HubSpot engagement note, optionally associated with a contact or meeting.
+ * Body: note (required), contactId (optional), meetingId (optional).
+ * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, HUBSPOT_TOKEN
+ */
 function parseCookies(req) {
   const c = {};
   (req.headers.cookie || '').split(';').forEach(s => {

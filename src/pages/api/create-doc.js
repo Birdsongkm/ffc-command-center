@@ -1,3 +1,9 @@
+/**
+ * POST /api/create-doc
+ * Creates a new Google Doc in Drive via multipart upload.
+ * Body: title (required), content (required), folderId (optional).
+ * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+ */
 function parseCookies(req) {
   const c = {};
   (req.headers.cookie || '').split(';').forEach(s => {

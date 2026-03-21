@@ -1,3 +1,9 @@
+/**
+ * POST /api/send-email
+ * Sends a Gmail message (new, reply, or forward) using the Gmail messages/send endpoint.
+ * Supports threadId, In-Reply-To, Cc, signature append, and forwarded body inclusion.
+ * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+ */
 function parseCookies(req) {
   const c = {};
   (req.headers.cookie || '').split(';').forEach(s => {

@@ -1,3 +1,9 @@
+/**
+ * GET /api/credit-card
+ * Supports credit card allocation workflows via Google Sheets and Calendar.
+ * Actions (query param): checkSheet | checkTeamCompletion | getCalendarForMonth | draftNudge.
+ * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+ */
 function parseCookies(req) {
   const c = {};
   (req.headers.cookie || '').split(';').forEach(s => {

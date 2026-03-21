@@ -1,3 +1,9 @@
+/**
+ * POST /api/calendar-actions
+ * Create, update, delete, or query Google Calendar events.
+ * Actions: create | update | delete | week | range (passed in request body).
+ * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+ */
 function parseCookies(req) {
   const c = {};
   (req.headers.cookie || '').split(';').forEach(s => {

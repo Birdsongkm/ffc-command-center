@@ -1,3 +1,10 @@
+/**
+ * POST /api/email-actions
+ * Applies Gmail label mutations to one or many messages.
+ * Actions: archive | markRead | markUnread | trash | star | unstar | snooze.
+ * Supports batch mode via messageIds array using Gmail batchModify.
+ * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+ */
 function parseCookies(req) {
   const c = {};
   (req.headers.cookie || '').split(';').forEach(s => {

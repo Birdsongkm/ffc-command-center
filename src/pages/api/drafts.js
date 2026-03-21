@@ -1,3 +1,9 @@
+/**
+ * GET | DELETE | PUT | PATCH /api/drafts
+ * Manages Gmail drafts: GET lists all drafts, DELETE removes one, PUT sends one,
+ * PATCH updates recipient/subject/body. Draft details fetched via /drafts/{id}?format=full.
+ * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+ */
 function parseCookies(req) {
   const c = {};
   (req.headers.cookie || '').split(';').forEach(s => {
