@@ -141,6 +141,28 @@ describe('classifyEmail', () => {
     });
   });
 
+  // Invoices / financial — must fire BEFORE automated so noreply senders still land here
+  describe('invoices', () => {
+    test('subject has "invoice" → invoices', () => {
+      expect(classifyEmail({ from: 'billing@vendor.com', subject: 'Invoice #1234' })).toBe('invoices');
+    });
+    test('subject has "receipt" → invoices', () => {
+      expect(classifyEmail({ from: 'noreply@stripe.com', subject: 'Your receipt from Stripe' })).toBe('invoices');
+    });
+    test('noreply sender + invoice subject → invoices (not automated)', () => {
+      expect(classifyEmail({ from: 'no-reply@quickbooks.com', subject: 'Invoice ready' })).toBe('invoices');
+    });
+    test('noreply sender + receipt subject → invoices (not automated)', () => {
+      expect(classifyEmail({ from: 'noreply@paypal.com', subject: 'Payment receipt' })).toBe('invoices');
+    });
+    test('subject has "billing" → invoices', () => {
+      expect(classifyEmail({ from: 'accounts@service.com', subject: 'Your billing statement' })).toBe('invoices');
+    });
+    test('noreply with no invoice keyword → automated (unchanged)', () => {
+      expect(classifyEmail({ from: 'noreply@someservice.com', subject: 'Account notification' })).toBe('automated');
+    });
+  });
+
   // needs-response (default)
   describe('needs-response', () => {
     test('personal email, 1 recipient → needs-response', () => {

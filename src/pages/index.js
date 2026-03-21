@@ -106,10 +106,11 @@ function classifyEmail(e) {
   // Classy checks must come before the generic noreply check — Classy sends from noreply addresses
   if ((from.includes("classy") || subj.includes("classy")) && (subj.includes("donation") || subj.includes("gift") || subj.includes("contribut"))) return "classy-onetime";
   if (from.includes("classy")) return "classy-recurring";
+  // Invoices: financial transaction emails — checked before noreply so receipt/invoice
+  // emails from automated senders (Stripe, QuickBooks, etc.) still land in Financial
+  if (subj.includes("invoice") || subj.includes("receipt") || subj.includes("payment") || subj.includes("billing") || subj.includes("statement") || subj.includes("your order") || subj.includes("charge") || subj.includes("subscription renewal")) return "invoices";
   if (from.includes("noreply") || from.includes("no-reply") || from.includes("notifications@") || from.includes("mailer-daemon") || from.includes("postmaster")) return "automated";
   if (from.includes("freshfoodconnect") || from.includes("@ffc")) return "team";
-  // Invoices: financial transaction emails
-  if (subj.includes("invoice") || subj.includes("receipt") || subj.includes("payment") || subj.includes("billing") || subj.includes("statement") || subj.includes("your order") || subj.includes("charge") || subj.includes("subscription renewal")) return "invoices";
   // Sales/spam: cold outreach, B2B pitches, vendor solicitation
   const salesSignals = [
     "quick call", "15 minutes", "30 minutes", "hop on a call", "schedule a demo",
@@ -1761,7 +1762,7 @@ export default function Home() {
         )}
 
         {/* TABS */}
-        <div style={{ display: "flex", gap: 4, marginBottom: 26, borderBottom: `2px solid ${T.border}`, paddingBottom: 0, overflowX: "auto", alignItems: "flex-end", justifyContent: "center" }}>
+        <div style={{ display: "flex", gap: 4, marginBottom: 26, borderBottom: `2px solid ${T.border}`, paddingBottom: 0, alignItems: "flex-end", justifyContent: "center", flexWrap: "wrap" }}>
           <button onClick={() => { setSearchOpen(true); setSearchQuery(""); setSearchIdx(0); }} style={{ padding: "10px 16px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6, marginRight: 8, marginBottom: 3, whiteSpace: "nowrap" }}>🔍 Search <span style={{ fontSize: 11, opacity: 0.7 }}>⌘K</span></button>
           {TABS.map(t => {
             if (t.id === "emails") {
