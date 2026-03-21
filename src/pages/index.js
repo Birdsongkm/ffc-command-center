@@ -1083,6 +1083,7 @@ export default function Home() {
   });
   const [selectedEmailIds, setSelectedEmailIds] = useState(new Set());
   const [bucketPages, setBucketPages] = useState({}); // bucket → current page index
+  const [expandedCalEvent, setExpandedCalEvent] = useState(null); // event id expanded in Today's Schedule
   const [docModal, setDocModal] = useState(null); // { title, content } or null
   const [docSaving, setDocSaving] = useState(false);
   const [docFolderUrl, setDocFolderUrl] = useState("");
@@ -1483,7 +1484,11 @@ export default function Home() {
   const mergedBuckets = { ...emailsByBucket };
   const financialEmails = FINANCIAL_KEYS.flatMap(k => mergedBuckets[k] || []);
   FINANCIAL_KEYS.forEach(k => delete mergedBuckets[k]);
-  if (financialEmails.length > 0) mergedBuckets["financial"] = financialEmails;
+  mergedBuckets["financial"] = financialEmails; // always present (may be empty)
+  // Always show every display bucket, even when empty (users can drag emails in)
+  Object.keys(BUCKETS).filter(k => !FINANCIAL_KEYS.includes(k)).forEach(k => {
+    if (!mergedBuckets[k]) mergedBuckets[k] = [];
+  });
   const sortedBuckets = Object.entries(mergedBuckets).sort(([a], [b]) => {
     const ia = BUCKET_ORDER.indexOf(a); const ib = BUCKET_ORDER.indexOf(b);
     return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
@@ -2061,10 +2066,48 @@ export default function Home() {
               </div>
             )}
 
-            {/* Needs Your Reply + Today's Schedule — 2 columns (1/3 + 2/3) */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 20, marginBottom: 16 }}>
+            {/* Urgent + Needs Your Reply + Today's Schedule — 3 columns */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: 20, marginBottom: 16 }}>
 
-              {/* Needs Your Reply — 1/3 */}
+              {/* Urgent — 1/4 */}
+              {(() => {
+                const urgentEmails = needsReply.filter(e => urgentEmailIds.has(e.id));
+                const criticalTasks = tasks.filter(t => !t.done && (t.urgency === "critical" || (t.due && new Date(t.due) < new Date())));
+                const hasItems = urgentEmails.length > 0 || criticalTasks.length > 0;
+                return (
+                  <div style={{ background: T.card, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 14, padding: "20px 24px", borderTop: `4px solid ${T.danger}`, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: hasItems ? 14 : 0 }}>
+                      <span style={{ fontSize: 19 }}>⚡</span>
+                      <span style={{ fontSize: 18, fontWeight: 700, color: T.danger }}>Urgent</span>
+                      {hasItems && <span style={{ fontSize: 14, color: T.danger, background: T.dangerBg, padding: "3px 11px", borderRadius: 8, fontWeight: 600 }}>{urgentEmails.length + criticalTasks.length}</span>}
+                    </div>
+                    {!hasItems && <div style={{ padding: "10px 0", color: T.calGreen, fontSize: 15 }}>Nothing urgent!</div>}
+                    {urgentEmails.map(e => {
+                      const av = senderAvatar(e.from);
+                      return (
+                        <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: T.dangerBg, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 9, marginBottom: 6, cursor: "pointer", borderLeft: `3px solid ${T.danger}` }} onClick={() => { setTab("emails"); setExpandedEmail(e.id); fetchEmailBody(e.id); }}>
+                          <div style={{ width: 28, height: 28, borderRadius: "50%", background: av.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 11, flexShrink: 0 }}>{av.initials}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, fontSize: 13, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.from?.match(/^([^<]+)/)?.[1]?.trim() || e.from}</div>
+                            <div style={{ fontSize: 12, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.subject}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {criticalTasks.map(t => (
+                      <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: T.dangerBg, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 9, marginBottom: 6, cursor: "pointer", borderLeft: `3px solid ${T.danger}` }} onClick={() => setTab("tasks")}>
+                        <span style={{ fontSize: 16, flexShrink: 0 }}>📋</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
+                          {t.due && <div style={{ fontSize: 12, color: T.danger }}>{new Date(t.due) < new Date() ? "Overdue" : "Critical"}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* Needs Your Reply — 1/4 */}
               <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", borderTop: `4px solid ${T.urgentCoral}`, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: needsReply.length ? 14 : 0 }}>
                   <span style={{ fontSize: 19 }}>✉️</span>
@@ -2094,7 +2137,7 @@ export default function Home() {
                 {needsReply.length > 10 && <button onClick={() => setTab("emails")} style={{ width: "100%", padding: "9px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600, marginTop: 6 }}>View all {needsReply.length} →</button>}
               </div>
 
-              {/* Today's Schedule — 2/3 */}
+              {/* Today's Schedule — 2/4 */}
               <div style={{ background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 14, padding: "20px 24px", borderTop: `4px solid ${T.calGreen}`, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                   <span style={{ fontSize: 19 }}>📅</span>
@@ -2104,30 +2147,48 @@ export default function Home() {
                   {events.length === 0 ? <div style={{ padding: 22, textAlign: "center", color: T.textMuted, fontSize: 16 }}>No events today</div>
                     : events.map(ev => {
                     const real = isRealMeeting(ev);
+                    const hasOthers = ev.attendees && ev.attendees.length > 1;
                     const linkedTask = !real && tasks.find(t => !t.done && t.title && ev.title.toLowerCase().includes(t.title.toLowerCase()));
+                    const isExpanded = expandedCalEvent === ev.id;
                     return (
-                    <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderBottom: `1px solid ${T.borderLight}`, opacity: real ? 1 : 0.6 }}>
-                      <div style={{ width: 48, textAlign: "center", flexShrink: 0 }}><div style={{ fontSize: 14, fontWeight: 700, color: T.calGreen }}>{fmtTime(ev.start)}</div></div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 15, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.title}</div>
-                        {ev.location && <div style={{ fontSize: 13, color: T.textMuted }}>📍 {ev.location}</div>}
-                        {!real && !linkedTask && <div style={{ fontSize: 12, color: T.textMuted, fontStyle: "italic" }}>No prep needed</div>}
-                        {ev.attendees && ev.attendees.length > 1 && (
-                          <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
-                            {ev.attendees.slice(0, 5).map((a, i) => { const av = senderAvatar(a.name || a.email); return <div key={i} title={a.name || a.email} style={{ width: 20, height: 20, borderRadius: "50%", background: av.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, border: "1.5px solid #fff" }}>{av.initials}</div>; })}
-                            {ev.attendees.length > 5 && <div style={{ width: 20, height: 20, borderRadius: "50%", background: T.border, color: T.textMuted, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700 }}>+{ev.attendees.length - 5}</div>}
+                    <div key={ev.id} style={{ borderBottom: `1px solid ${T.borderLight}`, opacity: real ? 1 : 0.7 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", cursor: "pointer" }} onClick={() => setExpandedCalEvent(isExpanded ? null : ev.id)}>
+                        <div style={{ width: 48, textAlign: "center", flexShrink: 0 }}><div style={{ fontSize: 14, fontWeight: 700, color: T.calGreen }}>{fmtTime(ev.start)}</div></div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 15, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.title}</div>
+                          {ev.location && <div style={{ fontSize: 13, color: T.textMuted }}>📍 {ev.location}</div>}
+                          {hasOthers && (
+                            <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                              {ev.attendees.slice(0, 5).map((a, i) => { const av = senderAvatar(a.name || a.email); return <div key={i} title={a.name || a.email} style={{ width: 20, height: 20, borderRadius: "50%", background: av.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, border: "1.5px solid #fff" }}>{av.initials}</div>; })}
+                              {ev.attendees.length > 5 && <div style={{ width: 20, height: 20, borderRadius: "50%", background: T.border, color: T.textMuted, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700 }}>+{ev.attendees.length - 5}</div>}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ display: "flex", gap: 5, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                          {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", background: T.calGreen, color: "#fff", borderRadius: 6, textDecoration: "none", fontSize: 13, fontWeight: 600 }}>Join</a>}
+                          {linkedTask && <button onClick={() => { setTab("drive"); setDriveSearch(linkedTask.title); fetchDrive("search", linkedTask.title); }} style={{ padding: "6px 12px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Do it →</button>}
+                          {hasOthers && (
+                            <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "6px 10px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                              {preppedEvents[ev.id] ? "✓" : "Prep"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {isExpanded && (
+                        <div style={{ padding: "0 16px 14px 76px", fontSize: 13, color: T.textMuted }}>
+                          {ev.description && <div style={{ marginBottom: 6, color: T.text }}>{ev.description}</div>}
+                          {hasOthers && (
+                            <div style={{ marginBottom: 6 }}>
+                              <span style={{ fontWeight: 600, color: T.text }}>Attendees: </span>
+                              {ev.attendees.map(a => a.name || a.email).join(", ")}
+                            </div>
+                          )}
+                          <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+                            {ev.htmlLink && <a href={ev.htmlLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: T.calGreen, fontWeight: 600, textDecoration: "none" }}>📅 See in Google Calendar →</a>}
+                            <span style={{ color: T.textDim }}>{fmtTime(ev.start)} – {fmtTime(ev.end)}</span>
                           </div>
-                        )}
-                      </div>
-                      <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-                        {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", background: T.calGreen, color: "#fff", borderRadius: 6, textDecoration: "none", fontSize: 13, fontWeight: 600 }}>Join</a>}
-                        {linkedTask && <button onClick={() => { setTab("drive"); setDriveSearch(linkedTask.title); fetchDrive("search", linkedTask.title); }} style={{ padding: "6px 12px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Do it →</button>}
-                        {real && (
-                          <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "6px 10px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-                            {preppedEvents[ev.id] ? "✓" : "Prep"}
-                          </button>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                     );
                   })}
@@ -2140,25 +2201,27 @@ export default function Home() {
             {(() => {
               const allGrants = [...grants, ...calendarGrants.filter(cg => !grants.some(g => g.name === cg.name && g.deadline === cg.deadline))].sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
               return (
-                <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "12px 20px", marginBottom: 26 }}>
+                <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "16px 22px", marginBottom: 26 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 16 }}>🏆</span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: T.text, flexShrink: 0 }}>Grant Deadlines</span>
-                    {allGrants.length === 0 && <span style={{ fontSize: 13, color: T.textMuted }}>No deadlines yet — add one or put "deadline" in a calendar event</span>}
+                    <span style={{ fontSize: 18 }}>🏆</span>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: T.text, flexShrink: 0 }}>Grant Deadlines</span>
+                    {allGrants.length === 0 && <span style={{ fontSize: 14, color: T.textMuted }}>No deadlines yet — add one or put "deadline" in a calendar event</span>}
                     {allGrants.map(g => {
                       const urgency = grantDeadlineUrgency(g.deadline);
                       const urgencyColor = urgency === "overdue" || urgency === "red" ? T.danger : urgency === "amber" ? T.taskAmber : T.calGreen;
                       const urgencyBg = urgency === "overdue" || urgency === "red" ? T.dangerBg : urgency === "amber" ? T.taskAmberBg : T.calGreenBg;
                       return (
-                        <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px 4px 12px", background: urgencyBg, border: `1px solid ${urgencyColor}40`, borderRadius: 20, borderLeft: `3px solid ${urgencyColor}` }}>
-                          <span style={{ fontWeight: 600, fontSize: 13, color: T.text }}>{g.name}</span>
-                          <span style={{ fontSize: 12, color: urgencyColor, fontWeight: 700 }}>{formatGrantCountdown(g.deadline)}</span>
-                          {g.amount && <span style={{ fontSize: 11, color: T.textMuted }}>{g.amount}</span>}
-                          {!g.source && <button onClick={() => setGrants(prev => prev.filter(x => x.id !== g.id))} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, fontSize: 15, lineHeight: 1, padding: "0 2px", marginLeft: 2 }} title="Remove">×</button>}
+                        <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px 8px 14px", background: urgencyBg, border: `1px solid ${urgencyColor}40`, borderRadius: 10, borderLeft: `4px solid ${urgencyColor}` }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{g.name}</div>
+                            <div style={{ fontSize: 12, color: urgencyColor, fontWeight: 600 }}>{formatGrantCountdown(g.deadline)} · {new Date(g.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+                            {g.amount && <div style={{ fontSize: 12, color: T.textMuted }}>{g.amount}</div>}
+                          </div>
+                          {!g.source && <button onClick={() => setGrants(prev => prev.filter(x => x.id !== g.id))} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, fontSize: 18, lineHeight: 1, padding: "0 2px", marginLeft: 4 }} title="Remove">×</button>}
                         </div>
                       );
                     })}
-                    <button onClick={() => setShowGrantForm(f => !f)} style={{ marginLeft: "auto", padding: "5px 12px", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 7, cursor: "pointer", fontSize: 12, fontWeight: 600, flexShrink: 0 }}>+ Add</button>
+                    <button onClick={() => setShowGrantForm(f => !f)} style={{ marginLeft: "auto", padding: "7px 14px", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 7, cursor: "pointer", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>+ Add</button>
                   </div>
                   {showGrantForm && (
                     <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
