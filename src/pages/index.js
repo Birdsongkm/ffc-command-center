@@ -436,6 +436,8 @@ const BUCKETS = {
   "sales": { label: "Likely Sales / Spam", icon: "🚫", color: T.danger, bg: T.dangerBg, border: "#E5B0B030", priority: 12 },
 };
 
+const PAGE_SIZE = 10; // emails per page within each bucket
+
 // ═══════════════════════════════════════════════
 //  LIGHTBULB FAB — product feedback → GitHub issue
 // ═══════════════════════════════════════════════
@@ -1081,6 +1083,7 @@ export default function Home() {
     try { return JSON.parse(localStorage.getItem("ffc_action_history") || "{}"); } catch { return {}; }
   });
   const [selectedEmailIds, setSelectedEmailIds] = useState(new Set());
+  const [bucketPages, setBucketPages] = useState({}); // bucket → current page index
   const [docModal, setDocModal] = useState(null); // { title, content } or null
   const [docSaving, setDocSaving] = useState(false);
   const [docFolderUrl, setDocFolderUrl] = useState("");
@@ -2053,10 +2056,10 @@ export default function Home() {
               </div>
             )}
 
-            {/* Needs Your Reply + Today's Schedule + Grant Deadlines — 3 equal columns */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 26 }}>
+            {/* Needs Your Reply + Today's Schedule — 2 columns (1/3 + 2/3) */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 20, marginBottom: 16 }}>
 
-              {/* Needs Your Reply */}
+              {/* Needs Your Reply — 1/3 */}
               <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", borderTop: `4px solid ${T.urgentCoral}`, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: needsReply.length ? 14 : 0 }}>
                   <span style={{ fontSize: 19 }}>✉️</span>
@@ -2064,7 +2067,7 @@ export default function Home() {
                   <span style={{ fontSize: 14, color: T.urgentCoral, background: T.urgentCoralBg, padding: "3px 11px", borderRadius: 8, fontWeight: 600 }}>{needsReply.length}</span>
                 </div>
                 {needsReply.length === 0 ? <div style={{ padding: "10px 0", color: T.calGreen, fontSize: 15 }}>You're all caught up!</div>
-                  : needsReply.slice(0, 7).map(e => {
+                  : needsReply.slice(0, 10).map(e => {
                     const av = senderAvatar(e.from);
                     const isUrgent = urgentEmailIds.has(e.id);
                     return (
@@ -2083,10 +2086,10 @@ export default function Home() {
                       </div>
                     );
                   })}
-                {needsReply.length > 7 && <button onClick={() => setTab("emails")} style={{ width: "100%", padding: "9px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600, marginTop: 6 }}>View all {needsReply.length} →</button>}
+                {needsReply.length > 10 && <button onClick={() => setTab("emails")} style={{ width: "100%", padding: "9px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600, marginTop: 6 }}>View all {needsReply.length} →</button>}
               </div>
 
-              {/* Today's Schedule */}
+              {/* Today's Schedule — 2/3 */}
               <div style={{ background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 14, padding: "20px 24px", borderTop: `4px solid ${T.calGreen}`, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                   <span style={{ fontSize: 19 }}>📅</span>
@@ -2126,55 +2129,44 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Grant Deadlines */}
-              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", borderTop: `4px solid ${T.taskAmber}` }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 19 }}>🏆</span>
-                    <span style={{ fontSize: 18, fontWeight: 700, color: T.text }}>Grant Deadlines</span>
-                    {grants.length > 0 && <span style={{ fontSize: 13, color: T.textMuted, background: T.bg, padding: "2px 9px", borderRadius: 8 }}>{grants.length}</span>}
-                  </div>
-                  <button onClick={() => setShowGrantForm(f => !f)} style={{ padding: "6px 14px", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 7, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>+ Add</button>
-                </div>
-                {showGrantForm && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
-                    <input value={grantForm.name} onChange={e => setGrantForm(f => ({ ...f, name: e.target.value }))} placeholder="Grant name" style={{ padding: "7px 12px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 14, background: T.bg }} />
-                    <input value={grantForm.deadline} onChange={e => setGrantForm(f => ({ ...f, deadline: e.target.value }))} type="date" style={{ padding: "7px 12px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 14, background: T.bg }} />
-                    <input value={grantForm.amount} onChange={e => setGrantForm(f => ({ ...f, amount: e.target.value }))} placeholder="Amount (optional)" style={{ padding: "7px 12px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 14, background: T.bg }} />
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={() => { if (!grantForm.name || !grantForm.deadline) return; setGrants(prev => [...prev, { id: Date.now(), ...grantForm }]); setGrantForm({ name: "", deadline: "", amount: "" }); setShowGrantForm(false); }} style={{ flex: 1, padding: "7px 0", background: T.accent, color: "#fff", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>Save</button>
-                      <button onClick={() => setShowGrantForm(false)} style={{ padding: "7px 12px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14 }}>Cancel</button>
-                    </div>
-                  </div>
-                )}
-                {grants.length === 0 && calendarGrants.length === 0 ? (
-                  <div style={{ padding: "16px 0", color: T.textMuted, fontSize: 14, textAlign: "center" }}>No deadlines yet. Add one or put "deadline" in a calendar event title.</div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {[...grants, ...calendarGrants.filter(cg => !grants.some(g => g.name === cg.name && g.deadline === cg.deadline))].sort((a, b) => new Date(a.deadline) - new Date(b.deadline)).map(g => {
+            </div>
+
+            {/* Grant Deadlines — condensed horizontal bar */}
+            {(() => {
+              const allGrants = [...grants, ...calendarGrants.filter(cg => !grants.some(g => g.name === cg.name && g.deadline === cg.deadline))].sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+              return (
+                <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "12px 20px", marginBottom: 26 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 16 }}>🏆</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: T.text, flexShrink: 0 }}>Grant Deadlines</span>
+                    {allGrants.length === 0 && <span style={{ fontSize: 13, color: T.textMuted }}>No deadlines yet — add one or put "deadline" in a calendar event</span>}
+                    {allGrants.map(g => {
                       const urgency = grantDeadlineUrgency(g.deadline);
                       const urgencyColor = urgency === "overdue" || urgency === "red" ? T.danger : urgency === "amber" ? T.taskAmber : T.calGreen;
                       const urgencyBg = urgency === "overdue" || urgency === "red" ? T.dangerBg : urgency === "amber" ? T.taskAmberBg : T.calGreenBg;
                       return (
-                        <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: urgencyBg, border: `1px solid ${urgencyColor}30`, borderRadius: 9, borderLeft: `4px solid ${urgencyColor}` }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</div>
-                            {g.amount && <div style={{ fontSize: 12, color: T.textMuted }}>{g.amount}</div>}
-                            {g.source === 'calendar' && <div style={{ fontSize: 11, color: T.textMuted, fontStyle: "italic" }}>📅 calendar</div>}
-                          </div>
-                          <div style={{ textAlign: "right", flexShrink: 0 }}>
-                            <div style={{ fontWeight: 700, fontSize: 13, color: urgencyColor }}>{formatGrantCountdown(g.deadline)}</div>
-                            <div style={{ fontSize: 11, color: T.textMuted }}>{new Date(g.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
-                          </div>
-                          {!g.source && <button onClick={() => setGrants(prev => prev.filter(x => x.id !== g.id))} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, fontSize: 18, lineHeight: 1, padding: "0 2px" }} title="Remove">×</button>}
+                        <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px 4px 12px", background: urgencyBg, border: `1px solid ${urgencyColor}40`, borderRadius: 20, borderLeft: `3px solid ${urgencyColor}` }}>
+                          <span style={{ fontWeight: 600, fontSize: 13, color: T.text }}>{g.name}</span>
+                          <span style={{ fontSize: 12, color: urgencyColor, fontWeight: 700 }}>{formatGrantCountdown(g.deadline)}</span>
+                          {g.amount && <span style={{ fontSize: 11, color: T.textMuted }}>{g.amount}</span>}
+                          {!g.source && <button onClick={() => setGrants(prev => prev.filter(x => x.id !== g.id))} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, fontSize: 15, lineHeight: 1, padding: "0 2px", marginLeft: 2 }} title="Remove">×</button>}
                         </div>
                       );
                     })}
+                    <button onClick={() => setShowGrantForm(f => !f)} style={{ marginLeft: "auto", padding: "5px 12px", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 7, cursor: "pointer", fontSize: 12, fontWeight: 600, flexShrink: 0 }}>+ Add</button>
                   </div>
-                )}
-              </div>
-
-            </div>
+                  {showGrantForm && (
+                    <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+                      <input value={grantForm.name} onChange={e => setGrantForm(f => ({ ...f, name: e.target.value }))} placeholder="Grant name" style={{ flex: "1 1 160px", padding: "7px 12px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 14, background: T.bg }} />
+                      <input value={grantForm.deadline} onChange={e => setGrantForm(f => ({ ...f, deadline: e.target.value }))} type="date" style={{ flex: "0 0 auto", padding: "7px 12px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 14, background: T.bg }} />
+                      <input value={grantForm.amount} onChange={e => setGrantForm(f => ({ ...f, amount: e.target.value }))} placeholder="Amount (optional)" style={{ flex: "1 1 130px", padding: "7px 12px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 14, background: T.bg }} />
+                      <button onClick={() => { if (!grantForm.name || !grantForm.deadline) return; setGrants(prev => [...prev, { id: Date.now(), ...grantForm }]); setGrantForm({ name: "", deadline: "", amount: "" }); setShowGrantForm(false); }} style={{ padding: "7px 16px", background: T.accent, color: "#fff", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>Save</button>
+                      <button onClick={() => setShowGrantForm(false)} style={{ padding: "7px 12px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14 }}>Cancel</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* ── Pipeline + Classy side by side ── */}
             <div style={{ display: "flex", gap: 20, marginBottom: 26, flexWrap: "wrap" }}>
@@ -2355,6 +2347,9 @@ export default function Home() {
                 const info = BUCKETS[bucket] || { label: bucket, icon: "📧", color: T.textMuted, bg: T.bg, border: T.border };
                 const isOver = dragOverEmailBucket === bucket;
                 const canBatchDelete = ["automated", "calendar-notif", "docs-activity", "classy-recurring", "newsletter", "sales", "fyi-mass"].includes(bucket);
+                const page = bucketPages[bucket] || 0;
+                const totalPages = Math.ceil(bucketEmails.length / PAGE_SIZE);
+                const visibleEmails = bucketEmails.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
                 return (
                   <div key={bucket}
                     onDragOver={e => { e.preventDefault(); setDragOverEmailBucket(bucket); }}
@@ -2394,25 +2389,25 @@ export default function Home() {
                       </div>
                       <div style={{ display: "flex", gap: 4 }}>
                         <button onClick={() => {
-                          const allSelected = bucketEmails.length > 0 && bucketEmails.every(e => selectedEmailIds.has(e.id));
+                          const allSelected = visibleEmails.length > 0 && visibleEmails.every(e => selectedEmailIds.has(e.id));
                           setSelectedEmailIds(prev => {
                             const n = new Set(prev);
-                            if (allSelected) bucketEmails.forEach(e => n.delete(e.id));
-                            else bucketEmails.forEach(e => n.add(e.id));
+                            if (allSelected) visibleEmails.forEach(e => n.delete(e.id));
+                            else visibleEmails.forEach(e => n.add(e.id));
                             return n;
                           });
                         }} style={{ padding: "4px 10px", background: "transparent", color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>
-                          {bucketEmails.every(e => selectedEmailIds.has(e.id)) && bucketEmails.length > 0 ? "✓ All" : "☐ Select"}
+                          {visibleEmails.every(e => selectedEmailIds.has(e.id)) && visibleEmails.length > 0 ? "✓ All" : "☐ Select"}
                         </button>
                         <button onClick={() => batchAction("markRead", bucketEmails.map(e => e.id))} style={{ padding: "4px 10px", background: "transparent", color: T.textDim, border: `1px solid ${T.border}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>Read all</button>
-                        {canBatchDelete && <button onClick={() => batchAction("trash", bucketEmails.map(e => e.id))} style={{ padding: "4px 10px", background: "transparent", color: T.danger, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>Delete all</button>}
+                        {canBatchDelete && <button onClick={() => batchAction("trash", visibleEmails.map(e => e.id))} style={{ padding: "4px 10px", background: "transparent", color: T.danger, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>Delete {totalPages > 1 ? "page" : "all"}</button>}
                       </div>
                     </div>
                     {/* Email cards */}
                     {bucketEmails.length === 0 && (
                       <div style={{ fontSize: 14, color: T.textDim, textAlign: "center", padding: "16px 0" }}>Drop emails here</div>
                     )}
-                    {bucketEmails.map((e, i) => (
+                    {visibleEmails.map((e, i) => (
                       <div key={e.id}
                         draggable
                         onDragStart={() => setDraggingEmail(e)}
@@ -2421,6 +2416,14 @@ export default function Home() {
                         {renderEmailRow(e, i)}
                       </div>
                     ))}
+                    {/* Pagination controls */}
+                    {totalPages > 1 && (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.borderLight}` }}>
+                        <button onClick={() => setBucketPages(prev => ({ ...prev, [bucket]: Math.max(0, page - 1) }))} disabled={page === 0} style={{ padding: "4px 12px", background: page === 0 ? T.bg : T.emailBlueBg, color: page === 0 ? T.textDim : T.emailBlue, border: `1px solid ${page === 0 ? T.border : T.emailBlueBorder}`, borderRadius: 6, cursor: page === 0 ? "default" : "pointer", fontSize: 13, fontWeight: 600 }}>← Prev</button>
+                        <span style={{ fontSize: 12, color: T.textMuted }}>{page + 1} / {totalPages}</span>
+                        <button onClick={() => setBucketPages(prev => ({ ...prev, [bucket]: Math.min(totalPages - 1, page + 1) }))} disabled={page >= totalPages - 1} style={{ padding: "4px 12px", background: page >= totalPages - 1 ? T.bg : T.emailBlueBg, color: page >= totalPages - 1 ? T.textDim : T.emailBlue, border: `1px solid ${page >= totalPages - 1 ? T.border : T.emailBlueBorder}`, borderRadius: 6, cursor: page >= totalPages - 1 ? "default" : "pointer", fontSize: 13, fontWeight: 600 }}>Next →</button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
