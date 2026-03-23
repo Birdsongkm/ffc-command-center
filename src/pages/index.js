@@ -2101,48 +2101,10 @@ export default function Home() {
               </div>
             )}
 
-            {/* Urgent + Needs Your Reply + Today's Schedule — 3 columns */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: 20, marginBottom: 16 }}>
+            {/* Needs Your Reply + Today's Schedule — 2 equal columns (#66: urgent section removed) */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 16 }}>
 
-              {/* Urgent — 1/4 */}
-              {(() => {
-                const urgentEmails = needsReply.filter(e => urgentEmailIds.has(e.id));
-                const criticalTasks = tasks.filter(t => !t.done && (t.urgency === "critical" || (t.due && new Date(t.due) < new Date())));
-                const hasItems = urgentEmails.length > 0 || criticalTasks.length > 0;
-                return (
-                  <div style={{ background: T.card, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 14, padding: "20px 24px", borderTop: `4px solid ${T.danger}`, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: hasItems ? 14 : 0 }}>
-                      <span style={{ fontSize: 19 }}>⚡</span>
-                      <span style={{ fontSize: 18, fontWeight: 700, color: T.danger }}>Urgent</span>
-                      {hasItems && <span style={{ fontSize: 14, color: T.danger, background: T.dangerBg, padding: "3px 11px", borderRadius: 8, fontWeight: 600 }}>{urgentEmails.length + criticalTasks.length}</span>}
-                    </div>
-                    {!hasItems && <div style={{ padding: "10px 0", color: T.calGreen, fontSize: 15 }}>Nothing urgent!</div>}
-                    {urgentEmails.map(e => {
-                      const av = senderAvatar(e.from);
-                      return (
-                        <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: T.dangerBg, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 9, marginBottom: 6, cursor: "pointer", borderLeft: `3px solid ${T.danger}` }} onClick={() => { setTab("emails"); setExpandedEmail(e.id); fetchEmailBody(e.id); }}>
-                          <div style={{ width: 28, height: 28, borderRadius: "50%", background: av.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 11, flexShrink: 0 }}>{av.initials}</div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, fontSize: 13, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.from?.match(/^([^<]+)/)?.[1]?.trim() || e.from}</div>
-                            <div style={{ fontSize: 12, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.subject}</div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {criticalTasks.map(t => (
-                      <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: T.dangerBg, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 9, marginBottom: 6, cursor: "pointer", borderLeft: `3px solid ${T.danger}` }} onClick={() => setTab("tasks")}>
-                        <span style={{ fontSize: 16, flexShrink: 0 }}>📋</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, fontSize: 13, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
-                          {t.due && <div style={{ fontSize: 12, color: T.danger }}>{new Date(t.due) < new Date() ? "Overdue" : "Critical"}</div>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-
-              {/* Needs Your Reply — 1/4 */}
+              {/* Needs Your Reply — 1/2 */}
               <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", borderTop: `4px solid ${T.urgentCoral}`, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: needsReply.length ? 14 : 0 }}>
                   <span style={{ fontSize: 19 }}>✉️</span>
@@ -2172,7 +2134,7 @@ export default function Home() {
                 {needsReply.length > 10 && <button onClick={() => setTab("emails")} style={{ width: "100%", padding: "9px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600, marginTop: 6 }}>View all {needsReply.length} →</button>}
               </div>
 
-              {/* Today's Schedule — 2/4 */}
+              {/* Today's Schedule — 1/2 */}
               <div style={{ background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 14, padding: "20px 24px", borderTop: `4px solid ${T.calGreen}`, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                   <span style={{ fontSize: 19 }}>📅</span>
