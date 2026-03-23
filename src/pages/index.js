@@ -272,6 +272,17 @@ function suggestArchiveLabel(email) {
 }
 
 // ── Sprint 5: Global search + Team activity ───────────────────────────────────
+function getScheduledTimeLabel(scheduledAt) {
+  const diff = scheduledAt - Date.now();
+  if (diff <= 0) return 'Sending now…';
+  const mins = Math.round(diff / 60000);
+  const hrs = Math.round(diff / 3600000);
+  const days = Math.round(diff / 86400000);
+  if (mins < 60) return `Sends in ${mins}m`;
+  if (hrs < 24) return `Sends in ${hrs}h`;
+  return `Sends in ${days}d`;
+}
+
 function groupAgendaItems(items) {
   const groups = {};
   (items || []).forEach(item => {
@@ -725,9 +736,10 @@ function SnoozePicker({ onSnooze, onCancel }) {
 // ═══════════════════════════════════════════════
 //  COMPOSE / REPLY / FORWARD FORM — with autocomplete
 // ═══════════════════════════════════════════════
-function ComposeForm({ mode = "compose", email = null, onSend, onCancel, signature = "", suggestedForwardTo = "", prefillBody = "", contacts = [] }) {
+function ComposeForm({ mode = "compose", email = null, onSend, onSchedule, onCancel, signature = "", suggestedForwardTo = "", prefillBody = "", contacts = [] }) {
   const [to, setTo] = useState(mode === "reply" && email ? (email.replyTo || email.from || "") : (mode === "forward" ? suggestedForwardTo : ""));
-  const [cc, setCc] = useState(mode === "reply" && email ? (email.cc || "") : "");
+  // Reply-all by default (#74): include original To + CC recipients in the CC field
+  const [cc, setCc] = useState(mode === "reply" && email ? [email.to, email.cc].filter(v => v && v.trim()).join(', ') : "");
   const [subject, setSubject] = useState(
     mode === "reply" ? `Re: ${(email?.subject || "").replace(/^Re:\s*/i, "")}` :
     mode === "forward" ? `Fwd: ${email?.subject || ""}` : ""
@@ -736,6 +748,8 @@ function ComposeForm({ mode = "compose", email = null, onSend, onCancel, signatu
   const [sending, setSending] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [showSugg, setShowSugg] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [scheduleCustom, setScheduleCustom] = useState("");
   const inputStyle = { width: "100%", padding: "12px 16px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 16, background: T.bg, color: T.text, outline: "none", boxSizing: "border-box" };
 
   const handleToChange = (val) => {
@@ -804,8 +818,28 @@ function ComposeForm({ mode = "compose", email = null, onSend, onCancel, signatu
       <input placeholder="Subject" value={subject} onChange={e => setSubject(e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
       <textarea placeholder="Write your message..." value={body} onChange={e => setBody(e.target.value)} rows={6} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
       {signature && <div style={{ fontSize: 13, color: T.textMuted, marginTop: 6, padding: "8px 12px", background: T.bg, borderRadius: 6, borderLeft: `3px solid ${T.accent}` }}>Your signature will be appended</div>}
-      <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+      <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
         <button onClick={handleSend} disabled={sending || !to.trim()} style={{ padding: "11px 26px", background: T.accent, color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 16, cursor: "pointer", opacity: sending ? 0.6 : 1 }}>{sending ? "Sending..." : "Send"}</button>
+        <div style={{ position: "relative" }}>
+          <button onClick={() => setShowSchedule(s => !s)} disabled={!to.trim()} style={{ padding: "11px 18px", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: "pointer" }}>📅 Schedule</button>
+          {showSchedule && (
+            <div style={{ position: "absolute", bottom: "calc(100% + 8px)", left: 0, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: 12, zIndex: 100, minWidth: 230, boxShadow: "0 4px 20px rgba(0,0,0,0.15)" }}>
+              {[
+                { label: "Tomorrow 8am", getTime: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(8, 0, 0, 0); return d.getTime(); } },
+                { label: "Tomorrow noon", getTime: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(12, 0, 0, 0); return d.getTime(); } },
+                { label: "Monday 9am", getTime: () => { const d = new Date(); const days = (8 - d.getDay()) % 7 || 7; d.setDate(d.getDate() + days); d.setHours(9, 0, 0, 0); return d.getTime(); } },
+                { label: "Next Friday 9am", getTime: () => { const d = new Date(); const days = ((5 - d.getDay() + 7) % 7) || 7; d.setDate(d.getDate() + days); d.setHours(9, 0, 0, 0); return d.getTime(); } },
+              ].map(opt => (
+                <button key={opt.label} onClick={() => { if (!onSchedule || !to.trim()) return; const payload = { to, cc, subject, body: body + (signature ? `\n--\n${signature.replace(/<[^>]*>/g, "")}` : "") }; if (mode === "reply" && email) { payload.threadId = email.threadId; payload.inReplyTo = email.messageId; payload.references = email.messageId; payload.originalMessageId = email.id; } onSchedule(payload, opt.getTime()); setShowSchedule(false); onCancel(); }} style={{ display: "block", width: "100%", padding: "8px 12px", textAlign: "left", background: "none", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 14, color: T.text, marginBottom: 2 }}>{opt.label}</button>
+              ))}
+              <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 6, paddingTop: 6 }}>
+                <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 4 }}>Custom date/time:</div>
+                <input type="datetime-local" value={scheduleCustom} onChange={e => setScheduleCustom(e.target.value)} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, background: T.bg, color: T.text, boxSizing: "border-box" }} />
+                <button onClick={() => { if (!scheduleCustom || !to.trim()) return; const payload = { to, cc, subject, body: body + (signature ? `\n--\n${signature.replace(/<[^>]*>/g, "")}` : "") }; if (mode === "reply" && email) { payload.threadId = email.threadId; payload.inReplyTo = email.messageId; payload.references = email.messageId; payload.originalMessageId = email.id; } onSchedule(payload, new Date(scheduleCustom).getTime()); setShowSchedule(false); onCancel(); }} disabled={!scheduleCustom} style={{ marginTop: 6, width: "100%", padding: "7px", background: T.accent, color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Schedule</button>
+              </div>
+            </div>
+          )}
+        </div>
         <button onClick={onCancel} style={{ padding: "11px 22px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 16 }}>Cancel</button>
       </div>
     </div>
@@ -1167,6 +1201,9 @@ export default function Home() {
   const [teamNoteOpen, setTeamNoteOpen] = useState(null); // email of open team member
   const [teamNoteTexts, setTeamNoteTexts] = useState({}); // keyed by email
   const [teamNoteSaving, setTeamNoteSaving] = useState(null); // email currently saving
+  const [scheduledEmails, setScheduledEmails] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('ffc_scheduled_emails') || '[]'); } catch { return []; }
+  });
   const [agendaItems, setAgendaItems] = useState(() => {
     try { return JSON.parse(localStorage.getItem('ffc_agenda_items') || '[]'); } catch { return []; }
   });
@@ -1208,6 +1245,27 @@ export default function Home() {
   useEffect(() => {
     try { localStorage.setItem('ffc_agenda_items', JSON.stringify(agendaItems)); } catch {}
   }, [agendaItems]);
+  useEffect(() => {
+    try { localStorage.setItem('ffc_scheduled_emails', JSON.stringify(scheduledEmails)); } catch {}
+  }, [scheduledEmails]);
+  // Check and send due scheduled emails every 60s
+  useEffect(() => {
+    const check = async () => {
+      const now = Date.now();
+      const due = scheduledEmails.filter(s => s.scheduledAt <= now);
+      if (due.length === 0) return;
+      for (const s of due) {
+        try {
+          await fetch("/api/send-email", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(s.payload) });
+          showToast(`Scheduled email sent: ${s.payload.subject || '(no subject)'}`);
+        } catch { /* silent — email stays in queue for retry */ }
+      }
+      setScheduledEmails(prev => prev.filter(s => s.scheduledAt > now));
+    };
+    check();
+    const interval = setInterval(check, 60000);
+    return () => clearInterval(interval);
+  }, [scheduledEmails, showToast]);
 
   const showToast = useCallback((msg) => setToast(msg), []);
 
@@ -1348,6 +1406,13 @@ export default function Home() {
         fetch("/api/email-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "markRead", messageId: payload.originalMessageId }) });
       }
     } else { showToast("Failed: " + (d.error || "Unknown error")); }
+  };
+
+  const scheduleEmail = (payload, scheduledAt) => {
+    const entry = { id: `sch-${Date.now()}`, payload, scheduledAt };
+    setScheduledEmails(prev => [...prev, entry]);
+    showToast(`Scheduled: ${payload.subject || '(no subject)'} — ${getScheduledTimeLabel(scheduledAt)}`);
+    setComposing(null);
   };
 
   const fetchAiDraft = async (email) => {
@@ -1815,7 +1880,7 @@ export default function Home() {
 
             {composing && composing.email?.id === email.id && (
               <div style={{ marginTop: 14 }}>
-                <ComposeForm mode={composing.mode} email={email} onSend={sendEmail} onCancel={() => setComposing(null)} signature={signature} prefillBody={composing.prefillBody || ""} contacts={contacts} />
+                <ComposeForm mode={composing.mode} email={email} onSend={sendEmail} onSchedule={scheduleEmail} onCancel={() => setComposing(null)} signature={signature} prefillBody={composing.prefillBody || ""} contacts={contacts} />
               </div>
             )}
           </div>
@@ -1938,7 +2003,7 @@ export default function Home() {
         )}
 
         {/* Global compose */}
-        {composing === "compose" && <ComposeForm mode="compose" onSend={sendEmail} onCancel={() => setComposing(null)} signature={signature} contacts={contacts} />}
+        {composing === "compose" && <ComposeForm mode="compose" onSend={sendEmail} onSchedule={scheduleEmail} onCancel={() => setComposing(null)} signature={signature} contacts={contacts} />}
         {showTaskForm && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={() => setShowTaskForm(null)}>
             <div style={{ width: "100%", maxWidth: 500 }} onClick={e => e.stopPropagation()}>
@@ -2080,7 +2145,7 @@ export default function Home() {
             )}
 
             {/* Prep for week button */}
-            {showPrepButton && <button onClick={() => fetchWeekPrep(dayOfWeek === 5)} style={{ width: "100%", padding: "15px 22px", marginBottom: 22, background: T.calGreenBg, color: T.calGreen, border: `2px solid ${T.calGreenBorder}`, borderRadius: 12, cursor: "pointer", fontSize: 17, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+            {showPrepButton && <button onClick={() => { if (dayOfWeek === 5) { setTab("calendar"); setCalView("nextWeek"); fetchNextWeekEvents(); } else { setTab("calendar"); setCalView("week"); fetchWeekEvents(); } }} style={{ width: "100%", padding: "15px 22px", marginBottom: 22, background: T.calGreenBg, color: T.calGreen, border: `2px solid ${T.calGreenBorder}`, borderRadius: 12, cursor: "pointer", fontSize: 17, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
               <span>🗓</span> {dayOfWeek === 5 ? "Prep for Next Week" : "Week Ahead Prep"}
             </button>}
 

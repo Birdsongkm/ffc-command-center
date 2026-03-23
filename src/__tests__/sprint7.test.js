@@ -7,6 +7,34 @@
  * - getAutoScrollSpeed(clientY, windowHeight) → autoscroll speed
  */
 
+// ── getScheduledTimeLabel ─────────────────────────────────────────────────────
+function getScheduledTimeLabel(scheduledAt) {
+  const now = Date.now();
+  const diff = scheduledAt - now;
+  if (diff <= 0) return 'Sending now…';
+  const mins = Math.round(diff / 60000);
+  const hrs = Math.round(diff / 3600000);
+  const days = Math.round(diff / 86400000);
+  if (mins < 60) return `Sends in ${mins}m`;
+  if (hrs < 24) return `Sends in ${hrs}h`;
+  return `Sends in ${days}d`;
+}
+
+describe("getScheduledTimeLabel", () => {
+  test("past time shows 'Sending now…'", () => {
+    expect(getScheduledTimeLabel(Date.now() - 1000)).toBe('Sending now…');
+  });
+  test("30 minutes out", () => {
+    expect(getScheduledTimeLabel(Date.now() + 30 * 60 * 1000)).toBe('Sends in 30m');
+  });
+  test("3 hours out", () => {
+    expect(getScheduledTimeLabel(Date.now() + 3 * 3600 * 1000)).toBe('Sends in 3h');
+  });
+  test("2 days out", () => {
+    expect(getScheduledTimeLabel(Date.now() + 2 * 86400 * 1000)).toBe('Sends in 2d');
+  });
+});
+
 // ── groupAgendaItems ──────────────────────────────────────────────────────────
 function groupAgendaItems(items) {
   const groups = {};

@@ -60,7 +60,12 @@ export default async function handler(req, res) {
   try {
     let driveUrl;
 
-    if (action === 'search' && q) {
+    if (action === 'folders') {
+      const folderQ = q
+        ? encodeURIComponent(`mimeType='application/vnd.google-apps.folder' and name contains '${q.replace(/'/g, "\\'")}' and trashed=false`)
+        : encodeURIComponent(`mimeType='application/vnd.google-apps.folder' and trashed=false`);
+      driveUrl = `https://www.googleapis.com/drive/v3/files?q=${folderQ}&fields=files(id,name)&orderBy=modifiedTime desc&pageSize=20`;
+    } else if (action === 'search' && q) {
       const searchQ = encodeURIComponent(`name contains '${q.replace(/'/g, "\\'")}'`);
       driveUrl = `https://www.googleapis.com/drive/v3/files?q=${searchQ}&fields=${fields}&orderBy=modifiedTime desc&pageSize=20`;
     } else if (action === 'starred') {
