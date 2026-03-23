@@ -325,6 +325,32 @@ function parseAddressField(str) {
   });
 }
 
+// Returns event status relative to now (#77): "inprogress" | "soon" | "upcoming" | "past"
+// "soon" = starts within 30 minutes
+function getEventStatus(ev, now) {
+  if (!ev || !ev.start) return "upcoming";
+  const start = new Date(ev.start).getTime();
+  const end = ev.end ? new Date(ev.end).getTime() : start + 3600000;
+  const n = now || Date.now();
+  if (n >= start && n < end) return "inprogress";
+  if (start > n && start - n <= 30 * 60 * 1000) return "soon";
+  if (n >= end) return "past";
+  return "upcoming";
+}
+
+// Returns "In Xm" / "In Xh Xm" label for future events (#77)
+function minsUntil(ev, now) {
+  const start = new Date(ev.start).getTime();
+  const n = now || Date.now();
+  const diffMs = start - n;
+  if (diffMs <= 0) return "";
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 60) return `In ${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return rem > 0 ? `In ${hrs}h ${rem}m` : `In ${hrs}h`;
+}
+
 function scoreSearchResult(item, query, type) {
   const q = query.toLowerCase().trim();
   if (!q) return 0;
@@ -2730,12 +2756,25 @@ export default function Home() {
               <div>
                 <h3 style={{ fontSize: 18, fontWeight: 700, color: T.calGreen, marginBottom: 16 }}>Today — {fmtDate(new Date())}</h3>
                 {events.length === 0 ? <div style={{ padding: "48px 32px", textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, fontSize: 15 }}><div style={{ fontSize: 52, marginBottom: 14 }}>🌿</div>No events today — enjoy the breathing room!</div>
-                  : events.map(ev => (
-                  <div key={ev.id} style={{ background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 10, padding: "18px 22px", marginBottom: 12, display: "flex", alignItems: "center", gap: 16, opacity: isRealMeeting(ev) ? 1 : 0.5 }}>
-                    <div style={{ minWidth: 66, textAlign: "center" }}><div style={{ fontSize: 16, fontWeight: 700, color: T.calGreen }}>{fmtTime(ev.start)}</div><div style={{ fontSize: 14, color: T.textMuted }}>{fmtTime(ev.end)}</div></div>
+                  : events.map(ev => {
+                    const evStatus = getEventStatus(ev);
+                    const isNow = evStatus === "inprogress";
+                    const isSoon = evStatus === "soon";
+                    const isPast = evStatus === "past";
+                    const real = isRealMeeting(ev);
+                    return (
+                  <div key={ev.id} style={{ background: isNow ? T.calGreenBg : T.card, border: `2px solid ${isNow ? T.calGreen : isSoon ? T.calGreenBorder : T.calGreenBorder}`, borderLeft: isNow ? `5px solid ${T.calGreen}` : isSoon ? `5px solid ${T.taskAmber}` : undefined, borderRadius: 10, padding: "18px 22px", marginBottom: 12, display: "flex", alignItems: "center", gap: 16, opacity: (real || isNow) ? 1 : 0.5, transition: "all 0.15s" }}>
+                    <div style={{ minWidth: 66, textAlign: "center" }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: isNow ? T.calGreen : T.calGreen }}>{fmtTime(ev.start)}</div>
+                      <div style={{ fontSize: 13, color: T.textMuted }}>{fmtTime(ev.end)}</div>
+                      {isNow && <div style={{ marginTop: 4, fontSize: 11, fontWeight: 700, color: "#fff", background: T.calGreen, borderRadius: 4, padding: "2px 6px" }}>▶ NOW</div>}
+                      {isSoon && <div style={{ marginTop: 4, fontSize: 11, fontWeight: 700, color: T.taskAmber, background: T.taskAmberBg, borderRadius: 4, padding: "2px 6px" }}>{minsUntil(ev)}</div>}
+                      {isPast && <div style={{ marginTop: 4, fontSize: 11, color: T.textMuted }}>Done</div>}
+                    </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 600, fontSize: 17, color: T.text }}>{ev.title}</div>
-                      {ev.location && <div style={{ fontSize: 15, color: T.textMuted, marginTop: 3 }}>📍 {ev.location}</div>}
+                      {ev.location && <div style={{ fontSize: 14, color: T.textMuted, marginTop: 3 }}>📍 {ev.location}</div>}
+                      {ev.description && <div style={{ fontSize: 13, color: T.textMuted, marginTop: 4, lineHeight: 1.5, maxHeight: 40, overflow: "hidden" }}>{ev.description.replace(/<[^>]*>/g, "").slice(0, 120)}{ev.description.length > 120 ? "…" : ""}</div>}
                       {ev.attendees?.length > 1 && (
                         <div style={{ display: "flex", gap: 4, marginTop: 6, alignItems: "center" }}>
                           {ev.attendees.slice(0, 6).map((a, i) => { const av = senderAvatar(a.name || a.email); return <div key={i} title={a.name || a.email} style={{ width: 24, height: 24, borderRadius: "50%", background: av.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, border: "2px solid #fff", boxShadow: "0 1px 3px rgba(0,0,0,0.15)" }}>{av.initials}</div>; })}
@@ -2743,13 +2782,14 @@ export default function Home() {
                         </div>
                       )}
                     </div>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "9px 18px", background: T.calGreen, color: "#fff", borderRadius: 7, textDecoration: "none", fontSize: 15, fontWeight: 600 }}>Join Call</a>}
-                      {isRealMeeting(ev) && !preppedEvents[ev.id] && <button onClick={() => { setTab("drive"); setDriveSearch(ev.title); fetchDrive("search", ev.title); }} style={{ padding: "9px 16px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 7, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Prepare</button>}
-                      {isRealMeeting(ev) && <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "9px 16px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>{preppedEvents[ev.id] ? "✓ Prepped" : "Prep Done"}</button>}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+                      {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "9px 18px", background: isNow ? T.calGreen : T.calGreenBg, color: isNow ? "#fff" : T.calGreen, borderRadius: 7, textDecoration: "none", fontSize: 15, fontWeight: 700, border: `1px solid ${T.calGreenBorder}` }}>📹 {isNow ? "Join Now!" : "Join Call"}</a>}
+                      {real && !preppedEvents[ev.id] && <button onClick={() => { setTab("drive"); setDriveSearch(ev.title); fetchDrive("search", ev.title); }} style={{ padding: "9px 16px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 7, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Prepare</button>}
+                      {real && <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "9px 16px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>{preppedEvents[ev.id] ? "✓ Prepped" : "Prep Done"}</button>}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -2769,11 +2809,19 @@ export default function Home() {
                 return entries.map(([day, dayEvents]) => (
                   <div key={day} style={{ marginBottom: 24 }}>
                     <h4 style={{ fontSize: 17, fontWeight: 700, color: T.calGreen, marginBottom: 12, paddingBottom: 6, borderBottom: `2px solid ${T.calGreenBorder}` }}>{day}</h4>
-                    {dayEvents.map(ev => (
-                      <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", marginBottom: 6, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, opacity: isRealMeeting(ev) ? 1 : 0.5 }}>
-                        <span style={{ fontWeight: 600, fontSize: 15, color: T.calGreen, minWidth: 66 }}>{fmtTime(ev.start)}</span>
+                    {dayEvents.map(ev => {
+                      const wkStatus = getEventStatus(ev);
+                      const wkNow = wkStatus === "inprogress";
+                      const wkSoon = wkStatus === "soon";
+                      return (
+                      <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", marginBottom: 6, background: wkNow ? T.calGreenBg : T.card, border: `1px solid ${wkNow ? T.calGreen : T.border}`, borderLeft: wkNow ? `4px solid ${T.calGreen}` : wkSoon ? `4px solid ${T.taskAmber}` : undefined, borderRadius: 8, opacity: isRealMeeting(ev) ? 1 : 0.5 }}>
+                        <div style={{ minWidth: 70, textAlign: "center" }}>
+                          <span style={{ fontWeight: 600, fontSize: 14, color: T.calGreen, display: "block" }}>{fmtTime(ev.start)}</span>
+                          {wkNow && <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: T.calGreen, borderRadius: 3, padding: "1px 5px", display: "inline-block", marginTop: 2 }}>▶ NOW</span>}
+                          {wkSoon && <span style={{ fontSize: 10, fontWeight: 700, color: T.taskAmber, display: "block", marginTop: 2 }}>{minsUntil(ev)}</span>}
+                        </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 16, color: T.text }}>{ev.title}</div>
+                          <div style={{ fontSize: 16, color: T.text, fontWeight: wkNow ? 700 : 400 }}>{ev.title}</div>
                           {ev.attendees?.length > 1 && (
                             <div style={{ display: "flex", gap: 3, marginTop: 4 }}>
                               {ev.attendees.slice(0, 5).map((a, i) => { const av = senderAvatar(a.name || a.email); return <div key={i} title={a.name || a.email} style={{ width: 20, height: 20, borderRadius: "50%", background: av.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, border: "1.5px solid #fff" }}>{av.initials}</div>; })}
@@ -2781,10 +2829,10 @@ export default function Home() {
                             </div>
                           )}
                         </div>
-                        {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 14px", background: T.calGreen, color: "#fff", borderRadius: 6, textDecoration: "none", fontSize: 14, fontWeight: 600 }}>Join</a>}
+                        {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 14px", background: wkNow ? T.calGreen : T.calGreenBg, color: wkNow ? "#fff" : T.calGreen, borderRadius: 6, textDecoration: "none", fontSize: 14, fontWeight: 600, border: `1px solid ${T.calGreenBorder}` }}>📹 {wkNow ? "Join Now" : "Join"}</a>}
                         <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "6px 14px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>{preppedEvents[ev.id] ? "✓ Prepped" : "Prep Done"}</button>
                       </div>
-                    ))}
+                    ); })}
                   </div>
                 ));
               })()}</div>

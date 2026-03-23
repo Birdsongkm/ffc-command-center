@@ -229,3 +229,82 @@ describe("parseAddressField", () => {
     expect(result[0].email).toBe("real@email.com");
   });
 });
+
+// ── getEventStatus (#77) ──────────────────────────────────────────────────────
+// Returns event status relative to now: "inprogress", "soon", "upcoming", "past"
+// "soon" = starts within 30 minutes
+function getEventStatus(ev, now) {
+  if (!ev || !ev.start) return "upcoming";
+  const start = new Date(ev.start).getTime();
+  const end = ev.end ? new Date(ev.end).getTime() : start + 3600000;
+  const n = now || Date.now();
+  if (n >= start && n < end) return "inprogress";
+  if (start > n && start - n <= 30 * 60 * 1000) return "soon";
+  if (n >= end) return "past";
+  return "upcoming";
+}
+
+// Returns human-readable "In Xm" or "In Xh Xm" for future events
+function minsUntil(ev, now) {
+  const start = new Date(ev.start).getTime();
+  const n = now || Date.now();
+  const diffMs = start - n;
+  if (diffMs <= 0) return "";
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 60) return `In ${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return rem > 0 ? `In ${hrs}h ${rem}m` : `In ${hrs}h`;
+}
+
+describe("getEventStatus", () => {
+  const now = new Date("2026-03-23T14:00:00").getTime();
+
+  test("event in progress", () => {
+    expect(getEventStatus({ start: "2026-03-23T13:30:00", end: "2026-03-23T14:30:00" }, now)).toBe("inprogress");
+  });
+
+  test("event starting in 20 minutes = soon", () => {
+    expect(getEventStatus({ start: "2026-03-23T14:20:00", end: "2026-03-23T15:00:00" }, now)).toBe("soon");
+  });
+
+  test("event starting in 31 minutes = upcoming (not soon)", () => {
+    expect(getEventStatus({ start: "2026-03-23T14:31:00", end: "2026-03-23T15:30:00" }, now)).toBe("upcoming");
+  });
+
+  test("event in the past", () => {
+    expect(getEventStatus({ start: "2026-03-23T10:00:00", end: "2026-03-23T11:00:00" }, now)).toBe("past");
+  });
+
+  test("event starting now (exact start) = inprogress", () => {
+    expect(getEventStatus({ start: "2026-03-23T14:00:00", end: "2026-03-23T15:00:00" }, now)).toBe("inprogress");
+  });
+
+  test("no end time — defaults to 1h duration", () => {
+    expect(getEventStatus({ start: "2026-03-23T13:00:00" }, now)).toBe("past");
+  });
+
+  test("null event returns upcoming", () => {
+    expect(getEventStatus(null, now)).toBe("upcoming");
+  });
+});
+
+describe("minsUntil", () => {
+  const now = new Date("2026-03-23T14:00:00").getTime();
+
+  test("25 mins away", () => {
+    expect(minsUntil({ start: "2026-03-23T14:25:00" }, now)).toBe("In 25m");
+  });
+
+  test("1 hour away", () => {
+    expect(minsUntil({ start: "2026-03-23T15:00:00" }, now)).toBe("In 1h");
+  });
+
+  test("1 hour 30 mins away", () => {
+    expect(minsUntil({ start: "2026-03-23T15:30:00" }, now)).toBe("In 1h 30m");
+  });
+
+  test("past event returns empty string", () => {
+    expect(minsUntil({ start: "2026-03-23T13:00:00" }, now)).toBe("");
+  });
+});
