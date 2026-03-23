@@ -60,7 +60,11 @@ export default async function handler(req, res) {
   try {
     let driveUrl;
 
-    if (action === 'folders') {
+    if (action === 'browse') {
+      const parentId = q || 'root';
+      const browseQ = encodeURIComponent(`'${parentId}' in parents and trashed=false`);
+      driveUrl = `https://www.googleapis.com/drive/v3/files?q=${browseQ}&fields=${fields}&orderBy=folder,modifiedTime desc&pageSize=50`;
+    } else if (action === 'folders') {
       const folderQ = q
         ? encodeURIComponent(`mimeType='application/vnd.google-apps.folder' and name contains '${q.replace(/'/g, "\\'")}' and trashed=false`)
         : encodeURIComponent(`mimeType='application/vnd.google-apps.folder' and trashed=false`);

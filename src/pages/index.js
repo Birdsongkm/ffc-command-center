@@ -1296,6 +1296,7 @@ export default function Home() {
   const [driveSearch, setDriveSearch] = useState("");
   const [driveView, setDriveView] = useState("recent");
   const [driveLayout, setDriveLayout] = useState(() => { try { return localStorage.getItem('ffc_drive_layout') || 'list'; } catch { return 'list'; } });
+  const [driveFolderPath, setDriveFolderPath] = useState([]); // [{id, name}] breadcrumb stack
   const [emailDensity, setEmailDensity] = useState(() => { try { return localStorage.getItem('ffc_email_density') || 'comfortable'; } catch { return 'comfortable'; } });
   const [drafts, setDrafts] = useState([]);
   const [draftsTotal, setDraftsTotal] = useState(0);
@@ -1741,6 +1742,38 @@ export default function Home() {
 
   const fetchDrive = async (action = "recent", q = "") => {
     const params = new URLSearchParams({ action }); if (q) params.set("q", q);
+    const r = await fetch(`/api/drive?${params}`);
+    const d = await r.json();
+    if (d.files) setDriveFiles(d.files);
+  };
+
+  const browseDriveFolder = async (folder) => {
+    // folder = { id, name } or null for root
+    if (!folder) {
+      setDriveFolderPath([]);
+      fetchDrive("recent");
+      setDriveView("recent");
+      return;
+    }
+    setDriveFolderPath(prev => [...prev, folder]);
+    const params = new URLSearchParams({ action: "browse", q: folder.id });
+    const r = await fetch(`/api/drive?${params}`);
+    const d = await r.json();
+    if (d.files) setDriveFiles(d.files);
+  };
+
+  const browseDriveCrumb = async (idx) => {
+    // Navigate to breadcrumb item at index idx; -1 = root
+    if (idx < 0) {
+      setDriveFolderPath([]);
+      fetchDrive("recent");
+      setDriveView("recent");
+      return;
+    }
+    const newPath = driveFolderPath.slice(0, idx + 1);
+    setDriveFolderPath(newPath);
+    const folderId = newPath[newPath.length - 1].id;
+    const params = new URLSearchParams({ action: "browse", q: folderId });
     const r = await fetch(`/api/drive?${params}`);
     const d = await r.json();
     if (d.files) setDriveFiles(d.files);
@@ -3050,13 +3083,13 @@ export default function Home() {
         {tab === "drive" && (
           <div className="tab-content">
             <div style={{ display: "flex", gap: 8, marginBottom: 22 }}>
-              <input placeholder="Search Drive..." value={driveSearch} onChange={e => setDriveSearch(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && driveSearch) fetchDrive("search", driveSearch); }}
+              <input placeholder="Search Drive..." value={driveSearch} onChange={e => setDriveSearch(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && driveSearch) { setDriveFolderPath([]); setDriveView("search"); fetchDrive("search", driveSearch); } }}
                 style={{ flex: 1, padding: "12px 18px", border: `1px solid ${T.driveVioletBorder}`, borderRadius: 8, fontSize: 16, background: T.surface, color: T.text, outline: "none" }} />
-              <button onClick={() => fetchDrive("search", driveSearch)} style={{ padding: "12px 22px", background: T.driveViolet, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 16 }}>Search</button>
+              <button onClick={() => { setDriveFolderPath([]); setDriveView("search"); fetchDrive("search", driveSearch); }} style={{ padding: "12px 22px", background: T.driveViolet, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 16 }}>Search</button>
             </div>
-            <div style={{ display: "flex", gap: 6, marginBottom: 18, alignItems: "center" }}>
-              {[{ id: "recent", label: "Recent" }, { id: "starred", label: "Starred" }].map(v => (
-                <button key={v.id} onClick={() => { setDriveView(v.id); fetchDrive(v.id); }} style={{ padding: "8px 18px", background: driveView === v.id ? T.driveVioletBg : T.bg, color: driveView === v.id ? T.driveViolet : T.textMuted, border: `1px solid ${driveView === v.id ? T.driveVioletBorder : T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>{v.label}</button>
+            <div style={{ display: "flex", gap: 6, marginBottom: 18, alignItems: "center", flexWrap: "wrap" }}>
+              {[{ id: "recent", label: "🕐 Recent" }, { id: "starred", label: "⭐ Starred" }].map(v => (
+                <button key={v.id} onClick={() => { setDriveView(v.id); setDriveFolderPath([]); fetchDrive(v.id); }} style={{ padding: "8px 18px", background: driveView === v.id && driveFolderPath.length === 0 ? T.driveVioletBg : T.bg, color: driveView === v.id && driveFolderPath.length === 0 ? T.driveViolet : T.textMuted, border: `1px solid ${driveView === v.id && driveFolderPath.length === 0 ? T.driveVioletBorder : T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>{v.label}</button>
               ))}
               <div style={{ flex: 1 }} />
               {/* Layout toggle */}
@@ -3064,28 +3097,67 @@ export default function Home() {
                 <button key={l.id} onClick={() => { setDriveLayout(l.id); try { localStorage.setItem('ffc_drive_layout', l.id); } catch {} }} title={l.id === "list" ? "List view" : "Grid view"} style={{ padding: "8px 12px", background: driveLayout === l.id ? T.driveVioletBg : T.bg, color: driveLayout === l.id ? T.driveViolet : T.textMuted, border: `1px solid ${driveLayout === l.id ? T.driveVioletBorder : T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 17 }}>{l.icon}</button>
               ))}
             </div>
+            {/* Breadcrumb */}
+            {driveFolderPath.length > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14, padding: "10px 14px", background: T.driveVioletBg, borderRadius: 8, flexWrap: "wrap" }}>
+                <button onClick={() => browseDriveCrumb(-1)} style={{ background: "none", border: "none", color: T.driveViolet, cursor: "pointer", fontWeight: 600, fontSize: 14, padding: 0 }}>My Drive</button>
+                {driveFolderPath.map((seg, i) => (
+                  <span key={seg.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ color: T.textMuted, fontSize: 13 }}>›</span>
+                    {i < driveFolderPath.length - 1
+                      ? <button onClick={() => browseDriveCrumb(i)} style={{ background: "none", border: "none", color: T.driveViolet, cursor: "pointer", fontWeight: 600, fontSize: 14, padding: 0 }}>{seg.name}</button>
+                      : <span style={{ color: T.text, fontWeight: 700, fontSize: 14 }}>{seg.name}</span>
+                    }
+                  </span>
+                ))}
+              </div>
+            )}
             {driveLayout === "list" ? (
               <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
                 {driveFiles.length === 0 ? <div style={{ padding: "40px 32px", textAlign: "center", color: T.textMuted, fontSize: 15 }}><div style={{ fontSize: 48, marginBottom: 12 }}>📂</div>No files found</div>
-                  : driveFiles.map(f => (
-                  <a key={f.id} href={f.webViewLink} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 20px", borderBottom: `1px solid ${T.borderLight}`, textDecoration: "none", color: T.text }}>
-                    <img src={f.iconLink} alt="" style={{ width: 24, height: 24 }} />
-                    <div style={{ flex: 1 }}><div style={{ fontWeight: 500, fontSize: 16 }}>{f.name}</div><div style={{ fontSize: 14, color: T.textMuted }}>{f.mimeType?.split(".").pop()} · Modified {fmtRel(f.modifiedTime)}</div></div>
-                    {f.starred && <span>⭐</span>}
-                  </a>
-                ))}
+                  : driveFiles.map(f => {
+                    const isFolder = f.mimeType === "application/vnd.google-apps.folder";
+                    if (isFolder) {
+                      return (
+                        <div key={f.id} onClick={() => browseDriveFolder({ id: f.id, name: f.name })} style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 20px", borderBottom: `1px solid ${T.borderLight}`, cursor: "pointer", color: T.text }}>
+                          <span style={{ fontSize: 22 }}>📁</span>
+                          <div style={{ flex: 1 }}><div style={{ fontWeight: 600, fontSize: 16 }}>{f.name}</div><div style={{ fontSize: 14, color: T.textMuted }}>Folder · Modified {fmtRel(f.modifiedTime)}</div></div>
+                          <span style={{ color: T.textMuted, fontSize: 18 }}>›</span>
+                        </div>
+                      );
+                    }
+                    return (
+                      <a key={f.id} href={f.webViewLink} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 20px", borderBottom: `1px solid ${T.borderLight}`, textDecoration: "none", color: T.text }}>
+                        <img src={f.iconLink} alt="" style={{ width: 24, height: 24 }} />
+                        <div style={{ flex: 1 }}><div style={{ fontWeight: 500, fontSize: 16 }}>{f.name}</div><div style={{ fontSize: 14, color: T.textMuted }}>Modified {fmtRel(f.modifiedTime)}</div></div>
+                        {f.starred && <span>⭐</span>}
+                      </a>
+                    );
+                  })}
               </div>
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
                 {driveFiles.length === 0 ? <div style={{ gridColumn: "1/-1", padding: "40px 32px", textAlign: "center", color: T.textMuted, fontSize: 16 }}><div style={{ fontSize: 48, marginBottom: 12 }}>📂</div>No files found</div>
-                  : driveFiles.map(f => (
-                  <a key={f.id} href={f.webViewLink} target="_blank" rel="noopener noreferrer" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "24px 16px", background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, textDecoration: "none", color: T.text, textAlign: "center", transition: "all 0.15s" }}>
-                    <img src={f.iconLink} alt="" style={{ width: 48, height: 48 }} />
-                    <div style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" }}>{f.name}</div>
-                    <div style={{ fontSize: 11, color: T.textMuted }}>{fmtRel(f.modifiedTime)}</div>
-                    {f.starred && <span style={{ fontSize: 12 }}>⭐</span>}
-                  </a>
-                ))}
+                  : driveFiles.map(f => {
+                    const isFolder = f.mimeType === "application/vnd.google-apps.folder";
+                    if (isFolder) {
+                      return (
+                        <div key={f.id} onClick={() => browseDriveFolder({ id: f.id, name: f.name })} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "24px 16px", background: T.driveVioletBg, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 12, cursor: "pointer", textAlign: "center" }}>
+                          <span style={{ fontSize: 48 }}>📁</span>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" }}>{f.name}</div>
+                          <div style={{ fontSize: 11, color: T.textMuted }}>{fmtRel(f.modifiedTime)}</div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <a key={f.id} href={f.webViewLink} target="_blank" rel="noopener noreferrer" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "24px 16px", background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, textDecoration: "none", color: T.text, textAlign: "center", transition: "all 0.15s" }}>
+                        <img src={f.iconLink} alt="" style={{ width: 48, height: 48 }} />
+                        <div style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" }}>{f.name}</div>
+                        <div style={{ fontSize: 11, color: T.textMuted }}>{fmtRel(f.modifiedTime)}</div>
+                        {f.starred && <span style={{ fontSize: 12 }}>⭐</span>}
+                      </a>
+                    );
+                  })}
               </div>
             )}
           </div>

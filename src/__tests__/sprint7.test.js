@@ -414,3 +414,104 @@ describe("extractDocFromEvent", () => {
     expect(extractDocFromEvent({ description: "See https://notion.so/my-doc" })).toBeNull();
   });
 });
+
+// ── Drive folder navigation ───────────────────────────────────────────────────
+// Pure logic mirroring browseDriveFolder / browseDriveCrumb in index.js
+
+function isDriveFolder(mimeType) {
+  return mimeType === "application/vnd.google-apps.folder";
+}
+
+function appendFolderPath(path, folder) {
+  return [...path, folder];
+}
+
+function crumbSlice(path, idx) {
+  // idx < 0 means root (clear)
+  if (idx < 0) return [];
+  return path.slice(0, idx + 1);
+}
+
+function buildBrowseUrl(folderId) {
+  const parentId = folderId || "root";
+  const q = encodeURIComponent(`'${parentId}' in parents and trashed=false`);
+  return `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,mimeType,modifiedTime,webViewLink,iconLink,owners,starred)&orderBy=folder,modifiedTime desc&pageSize=50`;
+}
+
+describe("isDriveFolder", () => {
+  test("returns true for folder mimeType", () => {
+    expect(isDriveFolder("application/vnd.google-apps.folder")).toBe(true);
+  });
+  test("returns false for document mimeType", () => {
+    expect(isDriveFolder("application/vnd.google-apps.document")).toBe(false);
+  });
+  test("returns false for undefined", () => {
+    expect(isDriveFolder(undefined)).toBe(false);
+  });
+});
+
+describe("appendFolderPath", () => {
+  test("appends folder to empty path", () => {
+    expect(appendFolderPath([], { id: "abc", name: "Reports" }))
+      .toEqual([{ id: "abc", name: "Reports" }]);
+  });
+  test("appends folder to existing path", () => {
+    const path = [{ id: "abc", name: "Reports" }];
+    expect(appendFolderPath(path, { id: "xyz", name: "2024" }))
+      .toEqual([{ id: "abc", name: "Reports" }, { id: "xyz", name: "2024" }]);
+  });
+  test("does not mutate original path", () => {
+    const path = [{ id: "abc", name: "Reports" }];
+    appendFolderPath(path, { id: "xyz", name: "2024" });
+    expect(path).toHaveLength(1);
+  });
+});
+
+describe("crumbSlice", () => {
+  const path = [
+    { id: "a", name: "Folder A" },
+    { id: "b", name: "Folder B" },
+    { id: "c", name: "Folder C" },
+  ];
+  test("idx -1 returns empty array (root)", () => {
+    expect(crumbSlice(path, -1)).toEqual([]);
+  });
+  test("idx 0 returns first element only", () => {
+    expect(crumbSlice(path, 0)).toEqual([{ id: "a", name: "Folder A" }]);
+  });
+  test("idx 1 returns first two elements", () => {
+    expect(crumbSlice(path, 1)).toEqual([
+      { id: "a", name: "Folder A" },
+      { id: "b", name: "Folder B" },
+    ]);
+  });
+  test("idx at last element returns full path", () => {
+    expect(crumbSlice(path, 2)).toEqual(path);
+  });
+  test("empty path with idx 0 returns empty", () => {
+    expect(crumbSlice([], 0)).toEqual([]);
+  });
+});
+
+describe("buildBrowseUrl", () => {
+  test("null folderId defaults to root", () => {
+    const url = buildBrowseUrl(null);
+    expect(url).toContain(encodeURIComponent("'root' in parents"));
+  });
+  test("folderId is embedded in query", () => {
+    const url = buildBrowseUrl("abc123");
+    expect(url).toContain(encodeURIComponent("'abc123' in parents"));
+  });
+  test("includes trashed=false", () => {
+    const url = buildBrowseUrl("abc123");
+    expect(url).toContain(encodeURIComponent("trashed=false"));
+  });
+  test("orders by folder then modifiedTime", () => {
+    const url = buildBrowseUrl("abc123");
+    expect(url).toContain("orderBy=folder,modifiedTime");
+  });
+  test("pageSize=50", () => {
+    const url = buildBrowseUrl("abc123");
+    expect(url).toContain("pageSize=50");
+  });
+});

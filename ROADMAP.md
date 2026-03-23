@@ -429,14 +429,6 @@ ED vote: loading spinners everywhere (6/6), error messages (6/6), toast on succe
 
 UX vote: fade transition on tab switch (6/6), header refinement (4/6 — secondary), loading skeletons (5/6)
 
-**COO panel (6/6):**
-> "The urgent box is the right pattern. Everything should be able to go urgent.
-> What about tasks? Overdue tasks should auto-appear in the urgent box, same as
-> stale drafts. Make the urgent box the north star — if it's empty, the day is
-> clean."
-
-COO vote: tasks in urgent box when overdue (6/6), stale draft auto-urgent already done (noted), urgent box empty = good signal (6/6)
-
 **CFO panel (5/6):**
 > "The side-by-side Classy + Pipeline layout is exactly what I needed. Now I can
 > see fundraising at a glance. Add a 'total in pipeline' dollar figure next to
@@ -452,18 +444,16 @@ CFO vote: pipeline dollar totals (4/6), Classy 7-day total shown (5/6)
 CEO vote: session expiry banner (6/6), auto-retry on token refresh (already built — note for CEO)
 
 **Product team resolution (Kayla as PM):**
-- Feature 1: Overdue tasks auto-appear in the Today Urgent box
-- Feature 2: Session expiry banner (detect 401 responses → show reconnect prompt)
-- Feature 3: Tab switch fade transition (CSS opacity transition on content area)
-- Feature 4: Pipeline dollar totals in Donor Pipeline widget
-- Feature 5: Loading skeleton on initial data load (Today tab key widgets)
+- Feature 1: Session expiry banner (detect 401 responses → show reconnect prompt)
+- Feature 2: Tab switch fade transition (CSS opacity transition on content area)
+- Feature 3: Pipeline dollar totals in Donor Pipeline widget
+- Feature 4: Loading skeleton on initial data load (Today tab key widgets)
 
 **Product team plan:**
-- Feature 1: Urgent box — add overdue tasks to auto-urgent list (no manual mark needed)
-- Feature 2: 401 detection in data fetches → `sessionExpired` state → banner with login link
-- Feature 3: CSS fade on tab content (opacity 0→1, 150ms)
-- Feature 4: Sum deal amounts in parsePipelineStages or show total in pipeline header
-- Feature 5: Skeleton loaders for email list, Today widgets
+- Feature 1: 401 detection in data fetches → `sessionExpired` state → banner with login link
+- Feature 2: CSS fade on tab content (opacity 0→1, 150ms)
+- Feature 3: Sum deal amounts in parsePipelineStages or show total in pipeline header
+- Feature 4: Skeleton loaders for email list, Today widgets
 
 **New env vars needed:** None
 **New API routes:** None
@@ -572,11 +562,6 @@ UX vote: daily AI briefing block on Today tab (5/6), email action suggestion on 
 
 CEO vote: explain classification reasoning on hover (5/6), pattern learning (2/6 — too complex now)
 
-**COO panel:**
-> "The urgent box works. But she still has to manually triage. What if the AI looked at the email list and said: 'These 3 need your attention today, everything else can wait'? That's the delegation view."
-
-COO vote: AI-suggested daily focus list (6/6), batch archive recommendation (4/6)
-
 **CRO panel:**
 > "Every donor email should get a confidence score: 'This looks like a major gift prospect.' Surface it before she replies."
 
@@ -605,5 +590,13 @@ CRO vote: donor intent signal on email row (5/6), HubSpot auto-lookup on open (4
 | #71/#72 | Week Ahead Prep button → Calendar tab navigation | 2026-03-23 |
 | #73 | Schedule Send (client-side queue, 60s interval) | 2026-03-23 |
 | #74 | Reply-all default (CC pre-filled with To field) | 2026-03-23 |
+| #75 | Email autocomplete sources from To/CC fields (parseAddressField) | 2026-03-23 |
+| #76 | Remove Urgent Box from Today tab | 2026-03-23 |
+| #77 | Calendar now-awareness: in-progress badge, countdown, event status | 2026-03-23 |
+| #78 | Multi-user settings (userName, orgName, accentColor) + Settings tab | 2026-03-23 |
+| #79 | Agenda doc link on calendar Prepare button (extractDocFromEvent) | 2026-03-23 |
+| #80 | Attendees autocomplete in EventForm + CC autocomplete in ComposeForm | 2026-03-23 |
+| #81 | Close open forms when switching tabs | 2026-03-23 |
+| #82 | Drive folder navigation: browse into folders with breadcrumb trail | 2026-03-23 |
 
-**Tests:** 362 total (up from 326 in Sprint 6). sprint7.test.js covers getScheduledTimeLabel, groupAgendaItems, driveFileIcon, getAutoScrollSpeed.
+**Tests:** 409 total (up from 362). sprint7.test.js adds parseAddressField, getEventStatus, minsUntil, getDefaultSettings, mergeSettings, extractDocFromEvent, isDriveFolder, appendFolderPath, crumbSlice, buildBrowseUrl.
