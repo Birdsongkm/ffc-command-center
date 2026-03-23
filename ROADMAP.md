@@ -2,7 +2,7 @@
 
 **Owner:** Kayla Birdsong, CEO / PM — Fresh Food Connect
 **Executor:** Claude (autonomous, recursive, continuous until Kayla says pause)
-**Last updated:** 2026-03-23 (Sprint 7 user issues #63–74 shipped, 362 tests passing)
+**Last updated:** 2026-03-23 (issues #75–84 shipped, 450 tests passing)
 
 ---
 
@@ -599,5 +599,8 @@ CRO vote: donor intent signal on email row (5/6), HubSpot auto-lookup on open (4
 | #81 | Close open forms when switching tabs | 2026-03-23 |
 | #82 | Drive folder navigation: browse into folders with breadcrumb trail | 2026-03-23 |
 | #83 | Dark mode toggle (🌙/☀️ in header, persisted to localStorage) | 2026-03-23 |
+| #84 | Email section rename (✏️ inline, persisted) + "Move to…" dropdown to reclassify emails | 2026-03-23 |
 
-**Tests:** 424 total (up from 409). darkmode.test.js adds DARK_T completeness, brightness polarity, theme switching logic.
+**Bug fix:** Dark mode SSR hydration crash — `useState` was reading `localStorage` on the server, causing a server/client mismatch that Next.js surfaced as "Application error: a client-side exception has occurred". Fixed by using `useState(false)` + `useEffect` to restore saved preference after hydration.
+
+**Tests:** 450 total (up from 424). emailSections.test.js adds getBucketLabel, getEmailSection, setBucketLabel, moveEmailToSection, removeEmailSectionOverride.
