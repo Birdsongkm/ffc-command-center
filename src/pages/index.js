@@ -1747,6 +1747,8 @@ export default function Home() {
   };
 
   useEffect(() => { if (auth && tab === "drive") fetchDrive(driveView); }, [auth, tab, driveView]);
+  // Close open forms/modals when switching tabs (#81)
+  useEffect(() => { setShowEventForm(null); setComposing(null); setShowTaskForm(null); }, [tab]);
 
   const fetchDrafts = async () => {
     const r = await fetch("/api/drafts");
