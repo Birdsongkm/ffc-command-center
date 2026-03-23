@@ -1451,6 +1451,8 @@ export default function Home() {
   useEffect(() => {
     try { localStorage.setItem('ffc_scheduled_emails', JSON.stringify(scheduledEmails)); } catch {}
   }, [scheduledEmails]);
+  const showToast = useCallback((msg) => setToast(msg), []);
+
   // Check and send due scheduled emails every 60s
   useEffect(() => {
     const check = async () => {
@@ -1469,8 +1471,6 @@ export default function Home() {
     const interval = setInterval(check, 60000);
     return () => clearInterval(interval);
   }, [scheduledEmails, showToast]);
-
-  const showToast = useCallback((msg) => setToast(msg), []);
 
   const startDragScroll = useCallback((initialClientY) => {
     const ref = dragScrollRef.current;
