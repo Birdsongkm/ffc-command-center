@@ -1,10 +1,11 @@
 /**
- * Sprint 7 — Intelligence & Clarity + User Issues #63–68
+ * Sprint 7 — Intelligence & Clarity + User Issues #63–75
  *
  * Tests for:
  * - groupAgendaItems(items) → items grouped by assignee
  * - driveFileIcon(mimeType) → emoji icon for Drive file type
  * - getAutoScrollSpeed(clientY, windowHeight) → autoscroll speed
+ * - parseAddressField(str) → parse comma-separated email addresses (#75)
  */
 
 // ── getScheduledTimeLabel ─────────────────────────────────────────────────────
@@ -155,5 +156,76 @@ describe("driveFileIcon", () => {
   test("null/undefined falls back to generic", () => {
     expect(driveFileIcon(null)).toBe('📄');
     expect(driveFileIcon(undefined)).toBe('📄');
+  });
+});
+
+// ── parseAddressField (#75) ───────────────────────────────────────────────────
+// Parses a comma-separated header field (To / CC) into { name, email } objects.
+function parseAddressField(str) {
+  if (!str) return [];
+  return str.split(",").flatMap(part => {
+    part = part.trim();
+    const match = part.match(/^(.*?)\s*<(.+?)>$/);
+    if (match) {
+      const name = match[1].replace(/"/g, "").trim();
+      const addr = match[2].trim().toLowerCase();
+      return addr ? [{ name: name || addr, email: addr }] : [];
+    }
+    if (part.includes("@")) return [{ name: part.toLowerCase(), email: part.toLowerCase() }];
+    return [];
+  });
+}
+
+describe("parseAddressField", () => {
+  test("empty / null returns empty array", () => {
+    expect(parseAddressField("")).toEqual([]);
+    expect(parseAddressField(null)).toEqual([]);
+    expect(parseAddressField(undefined)).toEqual([]);
+  });
+
+  test("plain email address", () => {
+    const result = parseAddressField("kayla@freshfoodconnect.org");
+    expect(result).toHaveLength(1);
+    expect(result[0].email).toBe("kayla@freshfoodconnect.org");
+    expect(result[0].name).toBe("kayla@freshfoodconnect.org");
+  });
+
+  test("display name + angle-bracket email", () => {
+    const result = parseAddressField("Laura Smith <laura@freshfoodconnect.org>");
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("Laura Smith");
+    expect(result[0].email).toBe("laura@freshfoodconnect.org");
+  });
+
+  test("quoted display name", () => {
+    const result = parseAddressField('"Brittany Jones" <brittany@example.org>');
+    expect(result[0].name).toBe("Brittany Jones");
+    expect(result[0].email).toBe("brittany@example.org");
+  });
+
+  test("multiple comma-separated addresses", () => {
+    const result = parseAddressField(
+      "Laura Smith <laura@freshfoodconnect.org>, Gretchen <gretchen@example.com>"
+    );
+    expect(result).toHaveLength(2);
+    expect(result.map(r => r.name)).toEqual(["Laura Smith", "Gretchen"]);
+  });
+
+  test("mixed plain and angle-bracket", () => {
+    const result = parseAddressField("foo@bar.com, Baz Qux <baz@qux.com>");
+    expect(result).toHaveLength(2);
+    expect(result[0].email).toBe("foo@bar.com");
+    expect(result[1].email).toBe("baz@qux.com");
+  });
+
+  test("email is lowercased", () => {
+    const result = parseAddressField("KAYLA@FreshFoodConnect.ORG");
+    expect(result[0].email).toBe("kayla@freshfoodconnect.org");
+  });
+
+  test("parts without @ are skipped", () => {
+    const result = parseAddressField("not-an-email, Real <real@email.com>");
+    expect(result).toHaveLength(1);
+    expect(result[0].email).toBe("real@email.com");
   });
 });

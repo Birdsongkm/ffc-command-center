@@ -309,6 +309,22 @@ function driveFileIcon(mimeType) {
   return '📄';
 }
 
+// Parses a comma-separated address header (To / CC) into { name, email } objects. (#75)
+function parseAddressField(str) {
+  if (!str) return [];
+  return str.split(",").flatMap(part => {
+    part = part.trim();
+    const match = part.match(/^(.*?)\s*<(.+?)>$/);
+    if (match) {
+      const name = match[1].replace(/"/g, "").trim();
+      const addr = match[2].trim().toLowerCase();
+      return addr ? [{ name: name || addr, email: addr }] : [];
+    }
+    if (part.includes("@")) return [{ name: part.toLowerCase(), email: part.toLowerCase() }];
+    return [];
+  });
+}
+
 function scoreSearchResult(item, query, type) {
   const q = query.toLowerCase().trim();
   if (!q) return 0;
@@ -748,6 +764,8 @@ function ComposeForm({ mode = "compose", email = null, onSend, onSchedule, onCan
   const [sending, setSending] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [showSugg, setShowSugg] = useState(false);
+  const [ccSuggestions, setCcSuggestions] = useState([]);
+  const [showCcSugg, setShowCcSugg] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [scheduleCustom, setScheduleCustom] = useState("");
   const inputStyle = { width: "100%", padding: "12px 16px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 16, background: T.bg, color: T.text, outline: "none", boxSizing: "border-box" };
@@ -771,6 +789,27 @@ function ComposeForm({ mode = "compose", email = null, onSend, onSchedule, onCan
     parts[parts.length - 1] = ` ${c.name} <${c.email}>`;
     setTo(parts.join(",").trimStart() + ", ");
     setShowSugg(false);
+  };
+
+  const handleCcChange = (val) => {
+    setCc(val);
+    const lastPart = val.split(",").pop().trim().toLowerCase();
+    if (lastPart.length >= 2) {
+      const matches = contacts.filter(c =>
+        c.name.toLowerCase().includes(lastPart) || c.email.toLowerCase().includes(lastPart)
+      ).slice(0, 6);
+      setCcSuggestions(matches);
+      setShowCcSugg(matches.length > 0);
+    } else {
+      setShowCcSugg(false);
+    }
+  };
+
+  const pickCcSuggestion = (c) => {
+    const parts = cc.split(",");
+    parts[parts.length - 1] = ` ${c.name} <${c.email}>`;
+    setCc(parts.join(",").trimStart() + ", ");
+    setShowCcSugg(false);
   };
 
   const handleSend = async () => {
@@ -814,7 +853,30 @@ function ComposeForm({ mode = "compose", email = null, onSend, onSchedule, onCan
           </div>
         )}
       </div>
-      <input placeholder="Cc" value={cc} onChange={e => setCc(e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
+      {/* CC field with autocomplete (#75) */}
+      <div style={{ position: "relative", marginBottom: 8 }}>
+        <input placeholder="Cc" value={cc} onChange={e => handleCcChange(e.target.value)}
+          onBlur={() => setTimeout(() => setShowCcSugg(false), 150)}
+          style={inputStyle} />
+        {showCcSugg && (
+          <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 200, boxShadow: "0 6px 24px rgba(0,0,0,0.12)", overflow: "hidden" }}>
+            {ccSuggestions.map((c, i) => (
+              <div key={i} onMouseDown={() => pickCcSuggestion(c)}
+                style={{ padding: "10px 16px", cursor: "pointer", fontSize: 15, display: "flex", alignItems: "center", gap: 10, borderBottom: i < ccSuggestions.length - 1 ? `1px solid ${T.borderLight}` : "none" }}
+                onMouseEnter={e => e.currentTarget.style.background = T.bg}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                <div style={{ width: 30, height: 30, borderRadius: "50%", background: T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: T.accent, flexShrink: 0 }}>
+                  {c.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, color: T.text }}>{c.name}</div>
+                  <div style={{ fontSize: 13, color: T.textMuted }}>{c.email}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <input placeholder="Subject" value={subject} onChange={e => setSubject(e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
       <textarea placeholder="Write your message..." value={body} onChange={e => setBody(e.target.value)} rows={6} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
       {signature && <div style={{ fontSize: 13, color: T.textMuted, marginTop: 6, padding: "8px 12px", background: T.bg, borderRadius: 6, borderLeft: `3px solid ${T.accent}` }}>Your signature will be appended</div>}
@@ -1287,21 +1349,18 @@ export default function Home() {
     if (ref.raf) { cancelAnimationFrame(ref.raf); ref.raf = null; }
   }, []);
 
-  // ── Build contacts list from loaded emails (for autocomplete) ──
+  // ── Build contacts list from loaded emails (for autocomplete) — #75 ──
   const contacts = useMemo(() => {
     const seen = new Map();
-    // Add team members first
-    TEAM.forEach(t => { if (t.email) seen.set(t.email, t.name); });
-    // Then add from emails
+    // Add team members first (highest priority)
+    TEAM.forEach(t => { if (t.email) seen.set(t.email.toLowerCase(), t.name); });
+    // Parse from, to, and cc fields so recipients Kayla sends to are included
     emails.forEach(e => {
-      const match = (e.from || "").match(/^(.*?)\s*<(.+?)>$/);
-      if (match) {
-        const name = match[1].replace(/"/g, "").trim();
-        const addr = match[2].trim();
-        if (addr && !seen.has(addr)) seen.set(addr, name || addr);
-      } else if (e.from && e.from.includes("@")) {
-        if (!seen.has(e.from)) seen.set(e.from, e.from);
-      }
+      [`${e.from || ""}`, `${e.to || ""}`, `${e.cc || ""}`].forEach(field => {
+        parseAddressField(field).forEach(({ name, email }) => {
+          if (!seen.has(email)) seen.set(email, name);
+        });
+      });
     });
     return Array.from(seen.entries()).map(([email, name]) => ({ email, name }));
   }, [emails]);
@@ -2034,62 +2093,7 @@ export default function Home() {
               {digest && <div style={{ marginTop: 12, padding: "12px 16px", background: "rgba(255,255,255,0.7)", borderRadius: 8, fontSize: 15, color: T.text }}>{digest.digest}</div>}
             </div>
 
-            {/* ── Urgent Box ── */}
-            {(() => {
-              const twoDaysAgo = Date.now() - 2 * 24 * 3600 * 1000;
-              const urgentEmails = emails.filter(e => urgentEmailIds.has(e.id));
-              const staleDrafts = drafts.filter(d => {
-                const ts = d.date ? new Date(d.date).getTime() : 0;
-                return ts > 0 && ts < twoDaysAgo;
-              });
-              const autoOverdueTasks = tasks.filter(t => !t.done && t.due && new Date(t.due) < new Date());
-              const total = urgentEmails.length + staleDrafts.length + autoOverdueTasks.length;
-              if (!total) return null;
-              return (
-                <div style={{ background: T.urgentCoralBg, border: `2px solid ${T.urgentCoral}`, borderRadius: 14, padding: "18px 22px", marginBottom: 26 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                    <span style={{ fontSize: 19 }}>⚡</span>
-                    <span style={{ fontSize: 17, fontWeight: 700, color: T.urgentCoral }}>Urgent</span>
-                    <span style={{ fontSize: 13, background: T.urgentCoral, color: "#fff", borderRadius: 8, padding: "2px 9px", fontWeight: 700 }}>{total}</span>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {autoOverdueTasks.map(t => (
-                      <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", background: T.card, borderRadius: 8, border: `1px solid ${T.danger}30` }}>
-                        <span style={{ fontSize: 13 }}>📋</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <span style={{ fontWeight: 600, fontSize: 14, color: T.danger }}>Overdue task</span>
-                          <span style={{ fontSize: 13, color: T.textMuted, marginLeft: 8 }}>{t.title}</span>
-                          <span style={{ fontSize: 12, color: T.danger, marginLeft: 8 }}>· due {t.due}</span>
-                        </div>
-                        <button onClick={() => setTab("tasks")} style={{ ...abtn(T.taskAmber, T.taskAmberBg), flexShrink: 0 }}>Go to Tasks</button>
-                      </div>
-                    ))}
-                    {urgentEmails.map(e => (
-                      <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", background: T.card, borderRadius: 8, border: `1px solid ${T.urgentCoral}30` }}>
-                        <span style={{ fontSize: 13 }}>✉️</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{e.from?.match(/^([^<]+)/)?.[1]?.trim() || e.from}</span>
-                          <span style={{ fontSize: 13, color: T.textMuted, marginLeft: 8 }}>{e.subject}</span>
-                        </div>
-                        <button onClick={() => { setTab("emails"); setExpandedEmail(e.id); fetchEmailBody(e.id); }} style={{ ...abtn(T.accent, T.accentBg), flexShrink: 0 }}>Open</button>
-                        <button onClick={() => setUrgentEmailIds(prev => { const n = new Set(prev); n.delete(e.id); return n; })} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, fontSize: 18, lineHeight: 1, padding: "0 2px" }} title="Dismiss">×</button>
-                      </div>
-                    ))}
-                    {staleDrafts.map(d => (
-                      <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", background: T.card, borderRadius: 8, border: `1px solid ${T.urgentCoral}30` }}>
-                        <span style={{ fontSize: 13 }}>✏️</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <span style={{ fontWeight: 600, fontSize: 14, color: T.taskAmber }}>Stale draft</span>
-                          <span style={{ fontSize: 13, color: T.textMuted, marginLeft: 8 }}>{d.subject || "(no subject)"}</span>
-                          <span style={{ fontSize: 12, color: T.urgentCoral, marginLeft: 8 }}>· {fmtRel(d.date)}</span>
-                        </div>
-                        <button onClick={() => setTab("emails")} style={{ ...abtn(T.taskAmber, T.taskAmberBg), flexShrink: 0 }}>Go to Drafts</button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
+            {/* Urgent Box removed per issue #76 */}
 
             {/* ── Weekly Brief Generator ── */}
             <div style={{ background: T.card, border: `1px solid ${T.accentBg}`, borderRadius: 14, padding: "20px 24px", marginBottom: 26 }}>
