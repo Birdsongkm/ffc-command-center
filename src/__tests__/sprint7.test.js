@@ -1,9 +1,54 @@
 /**
- * Sprint 7 — Intelligence & Clarity + User Issues #63–67
+ * Sprint 7 — Intelligence & Clarity + User Issues #63–68
  *
  * Tests for:
+ * - groupAgendaItems(items) → items grouped by assignee
  * - driveFileIcon(mimeType) → emoji icon for Drive file type
+ * - getAutoScrollSpeed(clientY, windowHeight) → autoscroll speed
  */
+
+// ── groupAgendaItems ──────────────────────────────────────────────────────────
+function groupAgendaItems(items) {
+  const groups = {};
+  (items || []).forEach(item => {
+    const key = item.assignee || 'General';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(item);
+  });
+  return groups;
+}
+
+describe("groupAgendaItems", () => {
+  test("empty array returns empty object", () => {
+    expect(groupAgendaItems([])).toEqual({});
+  });
+  test("null returns empty object", () => {
+    expect(groupAgendaItems(null)).toEqual({});
+  });
+  test("unassigned items go to General", () => {
+    const items = [{ id: '1', text: 'Review budget', assignee: '' }];
+    expect(groupAgendaItems(items)).toEqual({ General: [{ id: '1', text: 'Review budget', assignee: '' }] });
+  });
+  test("items grouped by assignee name", () => {
+    const items = [
+      { id: '1', text: 'Q1 recap', assignee: 'Laura' },
+      { id: '2', text: 'Follow up grant', assignee: 'Brittany' },
+      { id: '3', text: 'Budget review', assignee: 'Laura' },
+    ];
+    const g = groupAgendaItems(items);
+    expect(g['Laura']).toHaveLength(2);
+    expect(g['Brittany']).toHaveLength(1);
+  });
+  test("mixed assigned and unassigned", () => {
+    const items = [
+      { id: '1', text: 'General note', assignee: '' },
+      { id: '2', text: 'Task for Gretchen', assignee: 'Gretchen' },
+    ];
+    const g = groupAgendaItems(items);
+    expect(Object.keys(g)).toContain('General');
+    expect(Object.keys(g)).toContain('Gretchen');
+  });
+});
 
 // ── driveFileIcon ─────────────────────────────────────────────────────────────
 function driveFileIcon(mimeType) {

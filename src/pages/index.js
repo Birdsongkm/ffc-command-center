@@ -272,6 +272,16 @@ function suggestArchiveLabel(email) {
 }
 
 // ── Sprint 5: Global search + Team activity ───────────────────────────────────
+function groupAgendaItems(items) {
+  const groups = {};
+  (items || []).forEach(item => {
+    const key = item.assignee || 'General';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(item);
+  });
+  return groups;
+}
+
 function getAutoScrollSpeed(clientY, windowHeight, edgeThreshold = 70) {
   if (clientY < edgeThreshold) return -Math.round((1 - clientY / edgeThreshold) * 12);
   if (clientY > windowHeight - edgeThreshold) return Math.round((1 - (windowHeight - clientY) / edgeThreshold) * 12);
@@ -1154,6 +1164,11 @@ export default function Home() {
   const [teamNoteOpen, setTeamNoteOpen] = useState(null); // email of open team member
   const [teamNoteTexts, setTeamNoteTexts] = useState({}); // keyed by email
   const [teamNoteSaving, setTeamNoteSaving] = useState(null); // email currently saving
+  const [agendaItems, setAgendaItems] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('ffc_agenda_items') || '[]'); } catch { return []; }
+  });
+  const [agendaInput, setAgendaInput] = useState('');
+  const [agendaAssignee, setAgendaAssignee] = useState('');
   const [classDonations, setClassDonations] = useState([]); // Classy 7-day feed
   const [classDonationsLoading, setClassDonationsLoading] = useState(false);
   const [weeklyBrief, setWeeklyBrief] = useState(null); // { text, boardText } or null
@@ -1187,6 +1202,9 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== "undefined") localStorage.setItem("ffc_urgent_emails", JSON.stringify([...urgentEmailIds]));
   }, [urgentEmailIds]);
+  useEffect(() => {
+    try { localStorage.setItem('ffc_agenda_items', JSON.stringify(agendaItems)); } catch {}
+  }, [agendaItems]);
 
   const showToast = useCallback((msg) => setToast(msg), []);
 
@@ -2394,6 +2412,77 @@ export default function Home() {
                       );
                     })}
                   </div>
+                </div>
+              );
+            })()}
+
+            {/* ── Team Meeting Agenda ── */}
+            {(() => {
+              const grouped = groupAgendaItems(agendaItems.filter(a => !a.done));
+              const doneItems = agendaItems.filter(a => a.done);
+              const teamFirstNames = TEAM.map(t => t.name.split(' ')[0]);
+              return (
+                <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", marginBottom: 26 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                    <span style={{ fontSize: 19 }}>📋</span>
+                    <span style={{ fontSize: 18, fontWeight: 700, color: T.text }}>Team Meeting Agenda</span>
+                    {agendaItems.filter(a => !a.done).length > 0 && <span style={{ fontSize: 13, color: T.accent, background: T.accentBg, padding: "2px 9px", borderRadius: 6, fontWeight: 600 }}>{agendaItems.filter(a => !a.done).length}</span>}
+                  </div>
+                  {/* Add item row */}
+                  <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                    <input
+                      value={agendaInput}
+                      onChange={e => setAgendaInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && agendaInput.trim()) {
+                          const item = { id: `ag-${Date.now()}`, text: agendaInput.trim(), assignee: agendaAssignee, done: false };
+                          setAgendaItems(prev => [...prev, item]);
+                          setAgendaInput('');
+                        }
+                      }}
+                      placeholder="Add agenda item..."
+                      style={{ flex: 1, padding: "9px 14px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 14, outline: "none", color: T.text, background: T.bg }}
+                    />
+                    <select value={agendaAssignee} onChange={e => setAgendaAssignee(e.target.value)} style={{ padding: "9px 12px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 14, color: agendaAssignee ? T.text : T.textMuted, background: T.bg, cursor: "pointer" }}>
+                      <option value="">General</option>
+                      {teamFirstNames.map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                    <button onClick={() => {
+                      if (!agendaInput.trim()) return;
+                      const item = { id: `ag-${Date.now()}`, text: agendaInput.trim(), assignee: agendaAssignee, done: false };
+                      setAgendaItems(prev => [...prev, item]);
+                      setAgendaInput('');
+                    }} style={{ padding: "9px 18px", background: T.accent, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 14 }}>Add</button>
+                  </div>
+                  {/* Grouped items */}
+                  {Object.keys(grouped).length === 0 && doneItems.length === 0 && (
+                    <div style={{ fontSize: 14, color: T.textMuted, padding: "8px 0" }}>No agenda items yet — add items above</div>
+                  )}
+                  {Object.entries(grouped).map(([assignee, items]) => (
+                    <div key={assignee} style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: T.textDim, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>{assignee}</div>
+                      {items.map(item => (
+                        <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, marginBottom: 4 }}>
+                          <button onClick={() => setAgendaItems(prev => prev.map(a => a.id === item.id ? { ...a, done: true } : a))} style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${T.border}`, background: "none", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10 }} title="Mark done">○</button>
+                          <span style={{ flex: 1, fontSize: 14, color: T.text }}>{item.text}</span>
+                          <button onClick={() => setAgendaItems(prev => prev.filter(a => a.id !== item.id))} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, fontSize: 16, lineHeight: 1, padding: "0 2px" }} title="Delete">×</button>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                  {doneItems.length > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: T.textDim, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Done ({doneItems.length})</div>
+                      {doneItems.map(item => (
+                        <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", opacity: 0.5 }}>
+                          <span style={{ fontSize: 12, color: T.calGreen }}>✓</span>
+                          <span style={{ flex: 1, fontSize: 13, color: T.textMuted, textDecoration: "line-through" }}>{item.text}</span>
+                          <button onClick={() => setAgendaItems(prev => prev.filter(a => a.id !== item.id))} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, fontSize: 14, lineHeight: 1, padding: "0 2px" }}>×</button>
+                        </div>
+                      ))}
+                      <button onClick={() => setAgendaItems(prev => prev.filter(a => !a.done))} style={{ marginTop: 6, fontSize: 12, color: T.textMuted, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Clear done</button>
+                    </div>
+                  )}
                 </div>
               );
             })()}
