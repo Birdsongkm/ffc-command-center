@@ -1347,9 +1347,6 @@ export default function Home() {
   const [hsSearchError, setHsSearchError] = useState("");
   const [hsSearchDone, setHsSearchDone] = useState(false);
   const [aiDraftLoading, setAiDraftLoading] = useState(null); // emailId being drafted
-  const [urgentEmailIds, setUrgentEmailIds] = useState(() => {
-    try { return new Set(JSON.parse(localStorage.getItem("ffc_urgent_emails") || "[]")); } catch { return new Set(); }
-  });
   const [toDoEmailIds, setToDoEmailIds] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem("ffc_todo_emails") || "[]")); } catch { return new Set(); }
   });
@@ -1402,9 +1399,6 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== "undefined") localStorage.setItem("ffc_todo_emails", JSON.stringify([...toDoEmailIds]));
   }, [toDoEmailIds]);
-  useEffect(() => {
-    if (typeof window !== "undefined") localStorage.setItem("ffc_urgent_emails", JSON.stringify([...urgentEmailIds]));
-  }, [urgentEmailIds]);
   useEffect(() => {
     try { localStorage.setItem('ffc_agenda_items', JSON.stringify(agendaItems)); } catch {}
   }, [agendaItems]);
@@ -2001,10 +1995,6 @@ export default function Home() {
                   ? <button onClick={() => setToDoEmailIds(prev => { const n = new Set(prev); n.delete(email.id); return n; })} style={abtn(T.calGreen, T.calGreenBg)}>✓ Done</button>
                   : <button onClick={() => setToDoEmailIds(prev => new Set([...prev, email.id]))} style={abtn(T.accent, T.accentBg)}>📌 To Do</button>
                 }
-                {urgentEmailIds.has(email.id)
-                  ? <button onClick={() => setUrgentEmailIds(prev => { const n = new Set(prev); n.delete(email.id); return n; })} style={abtn(T.urgentCoral, T.urgentCoralBg)}>⚡ Urgent</button>
-                  : <button onClick={() => setUrgentEmailIds(prev => new Set([...prev, email.id]))} style={abtn(T.textMuted, T.bg)}>⚡ Urgent</button>
-                }
                 {isDebbieFinance && <button onClick={() => setFinancePanel(email)} style={abtn(T.taskAmber, T.taskAmberBg)}>📊 Finance Review</button>}
               </>
             )}
@@ -2377,9 +2367,8 @@ export default function Home() {
                 {needsReply.length === 0 ? <div style={{ padding: "24px 0", textAlign: "center", color: T.calGreen, fontSize: 15 }}><div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>You're all caught up!</div>
                   : needsReply.slice(0, 10).map(e => {
                     const av = senderAvatar(e.from);
-                    const isUrgent = urgentEmailIds.has(e.id);
                     return (
-                      <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: isUrgent ? T.urgentCoralBg : T.bg, border: `1px solid ${isUrgent ? T.urgentCoral : T.border}30`, borderRadius: 9, marginBottom: 6, cursor: "pointer", borderLeft: isUrgent ? `3px solid ${T.urgentCoral}` : undefined, transition: "all 0.15s" }} onClick={() => { setTab("emails"); setExpandedEmail(e.id); fetchEmailBody(e.id); }}>
+                      <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: T.bg, border: `1px solid ${T.border}30`, borderRadius: 9, marginBottom: 6, cursor: "pointer", transition: "all 0.15s" }} onClick={() => { setTab("emails"); setExpandedEmail(e.id); fetchEmailBody(e.id); }}>
                         <div style={{ width: 32, height: 32, borderRadius: "50%", background: av.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{av.initials}</div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontWeight: 600, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.from?.match(/^([^<]+)/)?.[1]?.trim() || e.from}</div>
@@ -2389,7 +2378,6 @@ export default function Home() {
                           <span style={{ fontSize: 12, color: T.textMuted }}>{fmtRel(e.date)}</span>
                           <button onClick={ev => { ev.stopPropagation(); setComposing({ to: e.from, subject: `Re: ${e.subject}`, body: "" }); }} style={abtn(T.accent, T.accentBg)}>Reply</button>
                           <button onClick={ev => { ev.stopPropagation(); emailAction("archive", e.id); }} style={abtn(T.textMuted, T.bg)}>Archive</button>
-                          <button onClick={ev => { ev.stopPropagation(); setUrgentEmailIds(prev => { const n = new Set(prev); isUrgent ? n.delete(e.id) : n.add(e.id); return n; }); }} style={abtn(isUrgent ? T.urgentCoral : T.textMuted, isUrgent ? T.urgentCoralBg : T.bg)} title="Mark urgent">⚡</button>
                         </div>
                       </div>
                     );
