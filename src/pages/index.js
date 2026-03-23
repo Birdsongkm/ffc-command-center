@@ -1429,8 +1429,9 @@ export default function Home() {
 
   const showToast = useCallback((msg) => setToast(msg), []);
 
-  const startDragScroll = useCallback(() => {
+  const startDragScroll = useCallback((initialClientY) => {
     const ref = dragScrollRef.current;
+    ref.clientY = initialClientY ?? window.innerHeight / 2;
     ref.active = true;
     const tick = () => {
       if (!ref.active) return;
@@ -1872,7 +1873,7 @@ export default function Home() {
   const draftAge = (ds) => { if (!ds) return ""; const days = Math.floor((Date.now() - new Date(ds).getTime()) / 86400000); if (days === 0) return "Today"; if (days === 1) return "1 day"; return `${days} days`; };
 
   // ── Drag/drop tasks ──
-  const handleTaskDragStart = (task) => { setDragTask(task); startDragScroll(); };
+  const handleTaskDragStart = (e, task) => { setDragTask(task); startDragScroll(e.clientY); };
   const handleTaskDragOver = (e, overTask, overCat) => { e.preventDefault(); setDragOverTask(overTask?.id || null); setDragOverCategory(overCat || null); };
   const handleTaskDrop = (e, targetTask, targetCategory) => {
     e.preventDefault();
@@ -2580,7 +2581,7 @@ export default function Home() {
                       return (
                       <div key={m.email}
                         draggable
-                        onDragStart={() => { setDragTeam(m.email); startDragScroll(); }}
+                        onDragStart={e => { setDragTeam(m.email); startDragScroll(e.clientY); }}
                         onDragEnd={() => { setDragTeam(null); setDragOverTeam(null); stopDragScroll(); }}
                         onDragOver={e => { e.preventDefault(); setDragOverTeam(m.email); }}
                         onDrop={() => {
@@ -2819,7 +2820,7 @@ export default function Home() {
                     {visibleEmails.map((e, i) => (
                       <div key={e.id}
                         draggable
-                        onDragStart={() => { setDraggingEmail(e); startDragScroll(); }}
+                        onDragStart={ev => { setDraggingEmail(e); startDragScroll(ev.clientY); }}
                         onDragEnd={() => { setDraggingEmail(null); setDragOverEmailBucket(null); stopDragScroll(); }}
                         style={{ cursor: "grab" }}>
                         {renderEmailRow(e, i)}
@@ -3027,7 +3028,7 @@ export default function Home() {
                     {catTasks.map(task => {
                       const urg = URGENCY.find(u => u.id === task.urgency);
                       return (
-                        <div key={task.id} draggable onDragStart={() => handleTaskDragStart(task)} onDragOver={(e) => handleTaskDragOver(e, task, cat.id)} onDrop={(e) => handleTaskDrop(e, task, cat.id)}
+                        <div key={task.id} draggable onDragStart={e => handleTaskDragStart(e, task)} onDragOver={(e) => handleTaskDragOver(e, task, cat.id)} onDrop={(e) => handleTaskDrop(e, task, cat.id)}
                           style={{ background: dragOverTask === task.id ? T.cardHover : T.surface, border: `1px solid ${dragOverTask === task.id ? cat.color : T.border}`, borderRadius: 8, padding: "16px 18px", marginBottom: 10, cursor: "grab", borderLeft: `4px solid ${urg?.dot || T.border}`, transition: "all 0.1s" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
                             <input type="checkbox" checked={task.done} onChange={() => { setTasks(prev => prev.map(t => t.id === task.id ? { ...t, done: !t.done } : t)); showToast(task.done ? "Task reopened" : "Task completed!"); }} style={{ cursor: "pointer", width: 20, height: 20, accentColor: cat.color }} />
