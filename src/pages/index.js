@@ -581,8 +581,8 @@ function LightbulbFAB() {
       {open && (
         <div onClick={e => e.stopPropagation()} style={{
           position: "fixed", bottom: 90, right: 28, width: 380,
-          background: T.card, borderRadius: 14, padding: 20,
-          boxShadow: "0 8px 36px rgba(0,0,0,0.16)", border: `1px solid ${T.border}`,
+          background: T.card, borderRadius: 14, padding: 24,
+          boxShadow: "0 8px 36px rgba(0,0,0,0.16)", border: `1.5px solid ${T.border}`,
           zIndex: 1001,
         }}>
           {/* Tab switcher */}
@@ -1801,7 +1801,7 @@ export default function Home() {
 
         {/* Row — click to expand */}
         <div onClick={() => { if (isExp) setExpandedEmail(null); else { setExpandedEmail(email.id); fetchEmailBody(email.id); fetchContactHistory(email.from); } }}
-          style={{ padding: emailDensity === "compact" ? "8px 16px" : "16px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
+          style={{ padding: emailDensity === "compact" ? "8px 14px" : "18px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, transition: "background 0.15s" }}>
           {/* Checkbox — shown on hover or when anything is selected */}
           {(isHov || selectedEmailIds.size > 0) && (
             <div onClick={e => { e.stopPropagation(); setSelectedEmailIds(prev => { const n = new Set(prev); n.has(email.id) ? n.delete(email.id) : n.add(email.id); return n; }); }}
@@ -2008,7 +2008,7 @@ export default function Home() {
         )}
 
         {/* TABS */}
-        <div style={{ display: "flex", gap: 4, marginBottom: 26, borderBottom: `2px solid ${T.border}`, paddingBottom: 0, alignItems: "flex-end", justifyContent: "center", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 4, marginBottom: 28, borderBottom: `2px solid ${T.border}`, paddingBottom: 0, alignItems: "flex-end", justifyContent: "center", flexWrap: "wrap" }}>
           {TABS.map(t => {
             if (t.id === "emails") {
               const isEmailActive = tab === "emails" || tab === "drafts";
@@ -2076,12 +2076,12 @@ export default function Home() {
         {tab === "today" && (
           <div className="tab-content">
             {/* Morning Briefing */}
-            <div style={{ background: `linear-gradient(135deg, ${T.accentBg}, ${T.calGreenBg})`, border: `1px solid ${T.calGreenBorder}`, borderRadius: 14, padding: "24px 28px", marginBottom: 26 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                <LeafIcon size={24} />
-                <span style={{ fontSize: 20, fontWeight: 700, color: T.text }}>Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}</span>
+            <div style={{ background: T.accentBg, border: `1px solid ${T.accent}30`, borderLeft: `5px solid ${T.accent}`, borderRadius: 14, padding: "28px 32px", marginBottom: 28 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                <LeafIcon size={26} />
+                <span style={{ fontSize: 22, fontWeight: 700, color: T.text }}>Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, Kayla ✨</span>
               </div>
-              <div style={{ fontSize: 17, lineHeight: 1.7, color: T.text }}>
+              <div style={{ fontSize: 17, lineHeight: 1.8, color: T.text }}>
                 {needsReply.length > 0 && <span style={{ fontWeight: 600, color: T.urgentCoral }}>{needsReply.length} email{needsReply.length !== 1 ? "s" : ""} need your reply</span>}
                 {needsReply.length > 0 && todayMeetings.length > 0 && <span style={{ color: T.textMuted }}> · </span>}
                 {todayMeetings.length > 0 && <span style={{ fontWeight: 600, color: T.calGreen }}>{todayMeetings.length} meeting{todayMeetings.length !== 1 ? "s" : ""} today</span>}
@@ -2203,11 +2203,11 @@ export default function Home() {
 
             {/* Donation Alerts */}
             {donationAlerts.length > 0 && (
-              <div style={{ marginBottom: 26 }}>
+              <div style={{ background: T.calGreenBg, border: `1px solid ${T.calGreenBorder}`, borderLeft: `5px solid ${T.calGreen}`, borderRadius: 14, padding: "20px 26px", marginBottom: 26 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                  <span style={{ fontSize: 19 }}>💚</span>
+                  <span style={{ fontSize: 22 }}>💚</span>
                   <span style={{ fontSize: 18, fontWeight: 700, color: T.calGreen }}>Donation Alerts</span>
-                  <span style={{ fontSize: 14, color: T.calGreen, background: T.calGreenBg, padding: "3px 11px", borderRadius: 8, fontWeight: 600 }}>{donationAlerts.length}</span>
+                  <span style={{ fontSize: 13, color: T.calGreen, background: "#fff", padding: "3px 11px", borderRadius: 8, fontWeight: 700, border: `1px solid ${T.calGreenBorder}` }}>{donationAlerts.length}</span>
                 </div>
                 {donationAlerts.slice(0, 3).map(e => {
                   const av = senderAvatar(e.from);
@@ -2226,21 +2226,21 @@ export default function Home() {
             )}
 
             {/* Needs Your Reply + Today's Schedule — 2 equal columns (#66: urgent section removed) */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24 }}>
 
               {/* Needs Your Reply — 1/2 */}
-              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px", borderTop: `4px solid ${T.urgentCoral}`, minWidth: 0 }}>
+              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "24px 28px", borderTop: `4px solid ${T.urgentCoral}`, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: needsReply.length ? 14 : 0 }}>
                   <span style={{ fontSize: 19 }}>✉️</span>
                   <span style={{ fontSize: 18, fontWeight: 700, color: T.urgentCoral }}>Needs Your Reply</span>
                   <span style={{ fontSize: 14, color: T.urgentCoral, background: T.urgentCoralBg, padding: "3px 11px", borderRadius: 8, fontWeight: 600 }}>{needsReply.length}</span>
                 </div>
-                {needsReply.length === 0 ? <div style={{ padding: "10px 0", color: T.calGreen, fontSize: 15 }}>You're all caught up!</div>
+                {needsReply.length === 0 ? <div style={{ padding: "24px 0", textAlign: "center", color: T.calGreen, fontSize: 15 }}><div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>You're all caught up!</div>
                   : needsReply.slice(0, 10).map(e => {
                     const av = senderAvatar(e.from);
                     const isUrgent = urgentEmailIds.has(e.id);
                     return (
-                      <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: isUrgent ? T.urgentCoralBg : T.bg, border: `1px solid ${isUrgent ? T.urgentCoral : T.border}30`, borderRadius: 9, marginBottom: 6, cursor: "pointer", borderLeft: isUrgent ? `3px solid ${T.urgentCoral}` : undefined }} onClick={() => { setTab("emails"); setExpandedEmail(e.id); fetchEmailBody(e.id); }}>
+                      <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: isUrgent ? T.urgentCoralBg : T.bg, border: `1px solid ${isUrgent ? T.urgentCoral : T.border}30`, borderRadius: 9, marginBottom: 6, cursor: "pointer", borderLeft: isUrgent ? `3px solid ${T.urgentCoral}` : undefined, transition: "all 0.15s" }} onClick={() => { setTab("emails"); setExpandedEmail(e.id); fetchEmailBody(e.id); }}>
                         <div style={{ width: 32, height: 32, borderRadius: "50%", background: av.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{av.initials}</div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontWeight: 600, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.from?.match(/^([^<]+)/)?.[1]?.trim() || e.from}</div>
@@ -2259,13 +2259,13 @@ export default function Home() {
               </div>
 
               {/* Today's Schedule — 1/2 */}
-              <div style={{ background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 14, padding: "20px 24px", borderTop: `4px solid ${T.calGreen}`, minWidth: 0 }}>
+              <div style={{ background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 14, padding: "24px 28px", borderTop: `4px solid ${T.calGreen}`, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                   <span style={{ fontSize: 19 }}>📅</span>
                   <span style={{ fontSize: 18, fontWeight: 700, color: T.calGreen }}>Today's Schedule</span>
                 </div>
                 <div>
-                  {events.length === 0 ? <div style={{ padding: 22, textAlign: "center", color: T.textMuted, fontSize: 16 }}>No events today</div>
+                  {events.length === 0 ? <div style={{ padding: "28px 16px", textAlign: "center", color: T.textMuted, fontSize: 15 }}><div style={{ fontSize: 44, marginBottom: 10 }}>📅</div>Nothing on the calendar today</div>
                     : events.map(ev => {
                     const real = isRealMeeting(ev);
                     const hasOthers = ev.attendees && ev.attendees.length > 1;
@@ -2273,8 +2273,8 @@ export default function Home() {
                     const isExpanded = expandedCalEvent === ev.id;
                     return (
                     <div key={ev.id} style={{ borderBottom: `1px solid ${T.borderLight}`, opacity: real ? 1 : 0.7 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", cursor: "pointer" }} onClick={() => setExpandedCalEvent(isExpanded ? null : ev.id)}>
-                        <div style={{ width: 48, textAlign: "center", flexShrink: 0 }}><div style={{ fontSize: 14, fontWeight: 700, color: T.calGreen }}>{fmtTime(ev.start)}</div></div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 18px", cursor: "pointer" }} onClick={() => setExpandedCalEvent(isExpanded ? null : ev.id)}>
+                        <div style={{ width: 56, textAlign: "center", flexShrink: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: T.calGreen, letterSpacing: "0.02em" }}>{fmtTime(ev.start)}</div></div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontWeight: 600, fontSize: 15, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.title}</div>
                           {ev.location && <div style={{ fontSize: 13, color: T.textMuted }}>📍 {ev.location}</div>}
@@ -2554,7 +2554,7 @@ export default function Home() {
                   </div>
                   {/* Grouped items */}
                   {Object.keys(grouped).length === 0 && doneItems.length === 0 && (
-                    <div style={{ fontSize: 14, color: T.textMuted, padding: "8px 0" }}>No agenda items yet — add items above</div>
+                    <div style={{ padding: "28px 16px", textAlign: "center", color: T.textMuted, fontSize: 14 }}><div style={{ fontSize: 36, marginBottom: 8 }}>📋</div>No agenda items yet — add items above</div>
                   )}
                   {Object.entries(grouped).map(([assignee, items]) => (
                     <div key={assignee} style={{ marginBottom: 12 }}>
@@ -2716,20 +2716,20 @@ export default function Home() {
         {/* ═══════════ CALENDAR TAB ═══════════ */}
         {tab === "calendar" && (
           <div className="tab-content">
-            <div style={{ display: "flex", gap: 8, marginBottom: 22 }}>
-              <button onClick={() => setCalView("today")} style={{ padding: "10px 22px", background: calView === "today" ? T.calGreenBg : T.bg, color: calView === "today" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "today" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Today</button>
-              <button onClick={() => { setCalView("week"); fetchWeekEvents(); }} style={{ padding: "10px 22px", background: calView === "week" ? T.calGreenBg : T.bg, color: calView === "week" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "week" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>This Week</button>
-              <button onClick={() => { setCalView("nextWeek"); fetchNextWeekEvents(); }} style={{ padding: "10px 22px", background: calView === "nextWeek" ? T.calGreenBg : T.bg, color: calView === "nextWeek" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "nextWeek" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Next Week</button>
-              <button onClick={() => { setCalView("pastWeek"); fetchPastWeekEvents(); }} style={{ padding: "10px 22px", background: calView === "pastWeek" ? T.calGreenBg : T.bg, color: calView === "pastWeek" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "pastWeek" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Past Week</button>
+            <div style={{ display: "flex", gap: 10, marginBottom: 26 }}>
+              <button onClick={() => setCalView("today")} style={{ padding: "11px 24px", background: calView === "today" ? T.calGreenBg : T.bg, color: calView === "today" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "today" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Today</button>
+              <button onClick={() => { setCalView("week"); fetchWeekEvents(); }} style={{ padding: "11px 24px", background: calView === "week" ? T.calGreenBg : T.bg, color: calView === "week" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "week" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>This Week</button>
+              <button onClick={() => { setCalView("nextWeek"); fetchNextWeekEvents(); }} style={{ padding: "11px 24px", background: calView === "nextWeek" ? T.calGreenBg : T.bg, color: calView === "nextWeek" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "nextWeek" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Next Week</button>
+              <button onClick={() => { setCalView("pastWeek"); fetchPastWeekEvents(); }} style={{ padding: "11px 24px", background: calView === "pastWeek" ? T.calGreenBg : T.bg, color: calView === "pastWeek" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "pastWeek" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Past Week</button>
               <div style={{ flex: 1 }} />
-              <button onClick={() => setShowEventForm({})} style={{ padding: "10px 22px", background: T.calGreen, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>+ New Event</button>
+              <button onClick={() => setShowEventForm({})} style={{ padding: "11px 24px", background: T.calGreen, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>+ New Event</button>
             </div>
             {showEventForm && !showEventForm.prefillFromEmail && <EventForm onSave={(data) => { calendarAction("create", { event: data }); setShowEventForm(null); }} onCancel={() => setShowEventForm(null)} />}
 
             {calView === "today" && (
               <div>
                 <h3 style={{ fontSize: 18, fontWeight: 700, color: T.calGreen, marginBottom: 16 }}>Today — {fmtDate(new Date())}</h3>
-                {events.length === 0 ? <div style={{ padding: 32, textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, fontSize: 16 }}>No events today</div>
+                {events.length === 0 ? <div style={{ padding: "48px 32px", textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, fontSize: 15 }}><div style={{ fontSize: 52, marginBottom: 14 }}>🌿</div>No events today — enjoy the breathing room!</div>
                   : events.map(ev => (
                   <div key={ev.id} style={{ background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 10, padding: "18px 22px", marginBottom: 12, display: "flex", alignItems: "center", gap: 16, opacity: isRealMeeting(ev) ? 1 : 0.5 }}>
                     <div style={{ minWidth: 66, textAlign: "center" }}><div style={{ fontSize: 16, fontWeight: 700, color: T.calGreen }}>{fmtTime(ev.start)}</div><div style={{ fontSize: 14, color: T.textMuted }}>{fmtTime(ev.end)}</div></div>
@@ -2800,7 +2800,7 @@ export default function Home() {
                   days[day].push(ev);
                 });
                 const entries = Object.entries(days);
-                if (entries.length === 0) return <div style={{ padding: 32, textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, fontSize: 16 }}>No events next week</div>;
+                if (entries.length === 0) return <div style={{ padding: "48px 32px", textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, fontSize: 15 }}><div style={{ fontSize: 48, marginBottom: 12 }}>📆</div>No events next week</div>;
                 return entries.map(([day, dayEvents]) => (
                   <div key={day} style={{ marginBottom: 24 }}>
                     <h4 style={{ fontSize: 17, fontWeight: 700, color: T.calGreen, marginBottom: 12, paddingBottom: 6, borderBottom: `2px solid ${T.calGreenBorder}` }}>{day}</h4>
@@ -2831,7 +2831,7 @@ export default function Home() {
                     days[day].push(ev);
                   });
                   const entries = Object.entries(days).reverse(); // most recent first
-                  if (entries.length === 0) return <div style={{ padding: 32, textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, fontSize: 16 }}>No meetings last week</div>;
+                  if (entries.length === 0) return <div style={{ padding: "48px 32px", textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, fontSize: 15 }}><div style={{ fontSize: 48, marginBottom: 12 }}>📆</div>No meetings last week</div>;
                   return entries.map(([day, dayEvents]) => (
                     <div key={day} style={{ marginBottom: 24 }}>
                       <h4 style={{ fontSize: 17, fontWeight: 700, color: T.calGreen, marginBottom: 12, paddingBottom: 6, borderBottom: `2px solid ${T.calGreenBorder}` }}>{day}</h4>
@@ -2864,22 +2864,22 @@ export default function Home() {
               <span style={{ fontSize: 18, fontWeight: 700, color: T.taskAmber }}>Task Board</span>
               <button onClick={() => setShowTaskForm({})} style={{ padding: "10px 22px", background: T.taskAmber, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>+ New Task</button>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(310px, 1fr))", gap: 20 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 26 }}>
               {allCategories.map(cat => {
                 const catTasks = tasks.filter(t => t.category === cat.id && !t.done).sort((a, b) => (a.order || 0) - (b.order || 0));
                 const doneTasks = tasks.filter(t => t.category === cat.id && t.done);
                 return (
                   <div key={cat.id} onDragOver={(e) => handleTaskDragOver(e, null, cat.id)} onDrop={(e) => handleTaskDrop(e, null, cat.id)}
-                    style={{ background: dragOverCategory === cat.id ? cat.bg : T.card, border: `2px solid ${dragOverCategory === cat.id ? cat.color : T.border}`, borderRadius: 14, padding: 20, minHeight: 130, borderTop: `4px solid ${cat.color}`, transition: "all 0.15s" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                    style={{ background: dragOverCategory === cat.id ? cat.bg : T.card, border: `2px solid ${dragOverCategory === cat.id ? cat.color : T.border}`, borderRadius: 14, padding: 22, minHeight: 130, borderTop: `4px solid ${cat.color}`, transition: "all 0.15s" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
                       <span style={{ fontWeight: 700, fontSize: 17, color: cat.color }}>{cat.label}</span>
-                      <span style={{ fontSize: 14, color: T.textMuted, background: cat.bg, padding: "3px 10px", borderRadius: 6 }}>{catTasks.length}</span>
+                      <span style={{ fontSize: 13, color: T.textMuted, background: cat.bg, padding: "4px 12px", borderRadius: 6, fontWeight: 600 }}>{catTasks.length}</span>
                     </div>
                     {catTasks.map(task => {
                       const urg = URGENCY.find(u => u.id === task.urgency);
                       return (
                         <div key={task.id} draggable onDragStart={() => handleTaskDragStart(task)} onDragOver={(e) => handleTaskDragOver(e, task, cat.id)} onDrop={(e) => handleTaskDrop(e, task, cat.id)}
-                          style={{ background: dragOverTask === task.id ? T.cardHover : T.surface, border: `1px solid ${dragOverTask === task.id ? cat.color : T.border}`, borderRadius: 8, padding: "14px 16px", marginBottom: 10, cursor: "grab", borderLeft: `4px solid ${urg?.dot || T.border}`, transition: "all 0.1s" }}>
+                          style={{ background: dragOverTask === task.id ? T.cardHover : T.surface, border: `1px solid ${dragOverTask === task.id ? cat.color : T.border}`, borderRadius: 8, padding: "16px 18px", marginBottom: 10, cursor: "grab", borderLeft: `4px solid ${urg?.dot || T.border}`, transition: "all 0.1s" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
                             <input type="checkbox" checked={task.done} onChange={() => { setTasks(prev => prev.map(t => t.id === task.id ? { ...t, done: !t.done } : t)); showToast(task.done ? "Task reopened" : "Task completed!"); }} style={{ cursor: "pointer", width: 20, height: 20, accentColor: cat.color }} />
                             <span style={{ flex: 1, fontWeight: 600, fontSize: 16, color: T.text }}>{task.title}</span>
@@ -2938,7 +2938,7 @@ export default function Home() {
             </div>
             {driveLayout === "list" ? (
               <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
-                {driveFiles.length === 0 ? <div style={{ padding: 32, textAlign: "center", color: T.textMuted, fontSize: 16 }}>No files found</div>
+                {driveFiles.length === 0 ? <div style={{ padding: "40px 32px", textAlign: "center", color: T.textMuted, fontSize: 15 }}><div style={{ fontSize: 48, marginBottom: 12 }}>📂</div>No files found</div>
                   : driveFiles.map(f => (
                   <a key={f.id} href={f.webViewLink} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 20px", borderBottom: `1px solid ${T.borderLight}`, textDecoration: "none", color: T.text }}>
                     <img src={f.iconLink} alt="" style={{ width: 24, height: 24 }} />
@@ -2948,11 +2948,11 @@ export default function Home() {
                 ))}
               </div>
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12 }}>
-                {driveFiles.length === 0 ? <div style={{ gridColumn: "1/-1", padding: 32, textAlign: "center", color: T.textMuted, fontSize: 16 }}>No files found</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
+                {driveFiles.length === 0 ? <div style={{ gridColumn: "1/-1", padding: "40px 32px", textAlign: "center", color: T.textMuted, fontSize: 16 }}><div style={{ fontSize: 48, marginBottom: 12 }}>📂</div>No files found</div>
                   : driveFiles.map(f => (
-                  <a key={f.id} href={f.webViewLink} target="_blank" rel="noopener noreferrer" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "20px 14px", background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, textDecoration: "none", color: T.text, textAlign: "center" }}>
-                    <img src={f.iconLink} alt="" style={{ width: 40, height: 40 }} />
+                  <a key={f.id} href={f.webViewLink} target="_blank" rel="noopener noreferrer" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "24px 16px", background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, textDecoration: "none", color: T.text, textAlign: "center", transition: "all 0.15s" }}>
+                    <img src={f.iconLink} alt="" style={{ width: 48, height: 48 }} />
                     <div style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" }}>{f.name}</div>
                     <div style={{ fontSize: 11, color: T.textMuted }}>{fmtRel(f.modifiedTime)}</div>
                     {f.starred && <span style={{ fontSize: 12 }}>⭐</span>}
@@ -2974,14 +2974,15 @@ export default function Home() {
               <button onClick={fetchDrafts} style={{ padding: "8px 18px", background: T.infoBg, color: T.info, border: `1px solid ${T.info}30`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>Refresh</button>
             </div>
             {drafts.length === 0 ? (
-              <div style={{ padding: 44, textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}` }}>
-                <div style={{ fontSize: 17, marginBottom: 8 }}>Loading drafts...</div>
+              <div style={{ padding: "52px 32px", textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 48, marginBottom: 14 }}>✍️</div>
+                <div style={{ fontSize: 17, marginBottom: 8, fontWeight: 600 }}>Loading drafts...</div>
                 <div style={{ fontSize: 15 }}>If nothing appears, click Refresh above</div>
               </div>
             ) : drafts.map(d => {
               const isEditing = editingDraft?.id === d.id;
               return (
-              <div key={d.id} style={{ background: T.card, border: `1px solid ${isEditing ? T.info : T.border}`, borderRadius: 10, padding: "18px 22px", marginBottom: 12 }}>
+              <div key={d.id} style={{ background: T.card, border: `1px solid ${isEditing ? T.info : T.border}`, borderRadius: 12, padding: "20px 26px", marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600, fontSize: 16, color: T.text }}>{d.subject || "(No subject)"}</div>
@@ -3052,7 +3053,7 @@ export default function Home() {
               <button onClick={() => { if (!newStickyText.trim()) return; setStickyNotes(prev => [{ id: Date.now().toString(), text: newStickyText.trim(), createdAt: new Date().toISOString(), processed: false }, ...prev]); setNewStickyText(""); showToast("Captured!"); }}
                 style={{ padding: "14px 24px", background: "#B8A030", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 16, alignSelf: "flex-end" }}>Capture</button>
             </div>
-            {stickyNotes.length === 0 ? <div style={{ padding: 44, textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, fontSize: 16 }}>Nothing here yet. Type something above to capture a quick thought.</div>
+            {stickyNotes.length === 0 ? <div style={{ padding: "48px 32px", textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, fontSize: 15 }}><div style={{ fontSize: 48, marginBottom: 12 }}>💭</div>Nothing here yet. Type something above to capture a quick thought.</div>
               : stickyNotes.map(note => (
               <div key={note.id} style={{ background: note.processed ? T.bg : T.stickyYellowBg, border: `1px solid ${note.processed ? T.border : T.stickyYellowBorder}`, borderRadius: 10, padding: "16px 20px", marginBottom: 10, opacity: note.processed ? 0.6 : 1 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
