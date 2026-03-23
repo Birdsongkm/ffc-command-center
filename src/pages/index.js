@@ -272,6 +272,12 @@ function suggestArchiveLabel(email) {
 }
 
 // ── Sprint 5: Global search + Team activity ───────────────────────────────────
+function getAutoScrollSpeed(clientY, windowHeight, edgeThreshold = 70) {
+  if (clientY < edgeThreshold) return -Math.round((1 - clientY / edgeThreshold) * 12);
+  if (clientY > windowHeight - edgeThreshold) return Math.round((1 - (windowHeight - clientY) / edgeThreshold) * 12);
+  return 0;
+}
+
 function driveFileIcon(mimeType) {
   if (!mimeType) return '📄';
   if (mimeType === 'application/vnd.google-apps.folder') return '📁';
@@ -1072,6 +1078,7 @@ export default function Home() {
   const [dragTask, setDragTask] = useState(null);
   const [dragOverTask, setDragOverTask] = useState(null);
   const [dragOverCategory, setDragOverCategory] = useState(null);
+  const dragScrollRef = useRef({ raf: null, clientY: 0, active: false });
   const [teamOrder, setTeamOrder] = useState(() => {
     try { return JSON.parse(localStorage.getItem('ffc_team_order') || 'null') || []; } catch { return []; }
   });
@@ -1182,6 +1189,24 @@ export default function Home() {
   }, [urgentEmailIds]);
 
   const showToast = useCallback((msg) => setToast(msg), []);
+
+  const startDragScroll = useCallback(() => {
+    const ref = dragScrollRef.current;
+    ref.active = true;
+    const tick = () => {
+      if (!ref.active) return;
+      const speed = getAutoScrollSpeed(ref.clientY, window.innerHeight);
+      if (speed !== 0) window.scrollBy(0, speed);
+      ref.raf = requestAnimationFrame(tick);
+    };
+    ref.raf = requestAnimationFrame(tick);
+  }, []);
+
+  const stopDragScroll = useCallback(() => {
+    const ref = dragScrollRef.current;
+    ref.active = false;
+    if (ref.raf) { cancelAnimationFrame(ref.raf); ref.raf = null; }
+  }, []);
 
   // ── Build contacts list from loaded emails (for autocomplete) ──
   const contacts = useMemo(() => {
@@ -1561,7 +1586,7 @@ export default function Home() {
   const draftAge = (ds) => { if (!ds) return ""; const days = Math.floor((Date.now() - new Date(ds).getTime()) / 86400000); if (days === 0) return "Today"; if (days === 1) return "1 day"; return `${days} days`; };
 
   // ── Drag/drop tasks ──
-  const handleTaskDragStart = (task) => setDragTask(task);
+  const handleTaskDragStart = (task) => { setDragTask(task); startDragScroll(); };
   const handleTaskDragOver = (e, overTask, overCat) => { e.preventDefault(); setDragOverTask(overTask?.id || null); setDragOverCategory(overCat || null); };
   const handleTaskDrop = (e, targetTask, targetCategory) => {
     e.preventDefault();
@@ -1574,7 +1599,7 @@ export default function Home() {
       if (targetTask && targetTask.id !== dragTask.id) { const moving = updated.splice(dragIdx, 1)[0]; const targetIdx = updated.findIndex(t => t.id === targetTask.id); updated.splice(targetIdx, 0, moving); }
       return updated.map((t, i) => ({ ...t, order: i }));
     });
-    setDragTask(null); setDragOverTask(null); setDragOverCategory(null);
+    setDragTask(null); setDragOverTask(null); setDragOverCategory(null); stopDragScroll();
   };
 
   const abtn = (color, bg) => ({ padding: "4px 9px", background: bg, color, border: `1px solid ${color}30`, borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 500, whiteSpace: "nowrap" });
@@ -1805,7 +1830,7 @@ export default function Home() {
         a { color: ${T.emailBlue}; }
       `}</style>
 
-      <div style={{ maxWidth: 1600, margin: "0 auto", padding: "22px 18px" }}>
+      <div style={{ maxWidth: 1600, margin: "0 auto", padding: "22px 18px" }} onDragOver={e => { dragScrollRef.current.clientY = e.clientY; }} onDragEnd={stopDragScroll} onDrop={stopDragScroll}>
 
         {/* HEADER with daily quote */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 26 }}>
@@ -2312,8 +2337,8 @@ export default function Home() {
                       return (
                       <div key={m.email}
                         draggable
-                        onDragStart={() => setDragTeam(m.email)}
-                        onDragEnd={() => { setDragTeam(null); setDragOverTeam(null); }}
+                        onDragStart={() => { setDragTeam(m.email); startDragScroll(); }}
+                        onDragEnd={() => { setDragTeam(null); setDragOverTeam(null); stopDragScroll(); }}
                         onDragOver={e => { e.preventDefault(); setDragOverTeam(m.email); }}
                         onDrop={() => {
                           if (!dragTeam || dragTeam === m.email) return;
@@ -2474,8 +2499,8 @@ export default function Home() {
                     {visibleEmails.map((e, i) => (
                       <div key={e.id}
                         draggable
-                        onDragStart={() => setDraggingEmail(e)}
-                        onDragEnd={() => { setDraggingEmail(null); setDragOverEmailBucket(null); }}
+                        onDragStart={() => { setDraggingEmail(e); startDragScroll(); }}
+                        onDragEnd={() => { setDraggingEmail(null); setDragOverEmailBucket(null); stopDragScroll(); }}
                         style={{ cursor: "grab" }}>
                         {renderEmailRow(e, i)}
                       </div>
