@@ -2,7 +2,7 @@
 
 **Owner:** Kayla Birdsong, CEO / PM — Fresh Food Connect
 **Executor:** Claude (autonomous, recursive, continuous until Kayla says pause)
-**Last updated:** 2026-03-21 (Sprint 6 complete + Claude panel review shipped, 326 tests passing)
+**Last updated:** 2026-03-23 (Sprint 7 user issues #63–74 shipped, 362 tests passing)
 
 ---
 
@@ -553,7 +553,7 @@ CEO vote: session expiry banner (6/6), auto-retry on token refresh (already buil
 ---
 
 ## Sprint 7 — Intelligence & Clarity
-*Status: PLANNED — next to execute*
+*Status: IN PROGRESS — user issues #63–74 shipped 2026-03-23; planned features below pending*
 
 ### Panel deliberation
 
@@ -590,3 +590,20 @@ CRO vote: donor intent signal on email row (5/6), HubSpot auto-lookup on open (4
 
 **New env vars needed:** None (ANTHROPIC_API_KEY already in use)
 **New API routes:** POST /api/ai-triage (batch), GET /api/ai-explain?id= (per-email)
+
+### User issues shipped in Sprint 7 (pre-planned-features)
+
+| Issue | Title | Shipped |
+|---|---|---|
+| #63 | Drag-to-scroll autoscroll | 2026-03-22 |
+| #64 | Sales domains misrouted to newsletter | 2026-03-22 |
+| #65/#66 | Remove Urgent column from inbox grid | 2026-03-22 |
+| #67 | Team Meeting Agenda block on Today tab | 2026-03-22 |
+| #68 | Drive list/grid toggle + email density toggle | 2026-03-22 |
+| #69 | Past Week tab in Calendar + follow-up actions | 2026-03-22 |
+| #70 | AI Prep button on calendar event cards | 2026-03-22 |
+| #71/#72 | Week Ahead Prep button → Calendar tab navigation | 2026-03-23 |
+| #73 | Schedule Send (client-side queue, 60s interval) | 2026-03-23 |
+| #74 | Reply-all default (CC pre-filled with To field) | 2026-03-23 |
+
+**Tests:** 362 total (up from 326 in Sprint 6). sprint7.test.js covers getScheduledTimeLabel, groupAgendaItems, driveFileIcon, getAutoScrollSpeed.
