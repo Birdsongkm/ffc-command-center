@@ -1099,6 +1099,8 @@ export default function Home() {
   const [driveFiles, setDriveFiles] = useState([]);
   const [driveSearch, setDriveSearch] = useState("");
   const [driveView, setDriveView] = useState("recent");
+  const [driveLayout, setDriveLayout] = useState(() => { try { return localStorage.getItem('ffc_drive_layout') || 'list'; } catch { return 'list'; } });
+  const [emailDensity, setEmailDensity] = useState(() => { try { return localStorage.getItem('ffc_email_density') || 'comfortable'; } catch { return 'comfortable'; } });
   const [drafts, setDrafts] = useState([]);
   const [draftsTotal, setDraftsTotal] = useState(0);
 
@@ -1675,7 +1677,7 @@ export default function Home() {
 
         {/* Row — click to expand */}
         <div onClick={() => { if (isExp) setExpandedEmail(null); else { setExpandedEmail(email.id); fetchEmailBody(email.id); fetchContactHistory(email.from); } }}
-          style={{ padding: "16px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
+          style={{ padding: emailDensity === "compact" ? "8px 16px" : "16px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
           {/* Checkbox — shown on hover or when anything is selected */}
           {(isHov || selectedEmailIds.size > 0) && (
             <div onClick={e => { e.stopPropagation(); setSelectedEmailIds(prev => { const n = new Set(prev); n.has(email.id) ? n.delete(email.id) : n.add(email.id); return n; }); }}
@@ -2536,7 +2538,13 @@ export default function Home() {
           <div className="tab-content">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
               <div style={{ fontSize: 15, color: T.textMuted }}>{emails.length} unread · sorted by most recent · drag to reclassify</div>
-              {nextPage && <button onClick={() => fetchData(nextPage)} style={{ padding: "6px 16px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>Load More</button>}
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                {/* Density toggle */}
+                {[{ id: "comfortable", icon: "≡", title: "Comfortable" }, { id: "compact", icon: "⊟", title: "Compact" }].map(d => (
+                  <button key={d.id} onClick={() => { setEmailDensity(d.id); try { localStorage.setItem('ffc_email_density', d.id); } catch {} }} title={d.title} style={{ padding: "5px 10px", background: emailDensity === d.id ? T.emailBlueBg : T.bg, color: emailDensity === d.id ? T.emailBlue : T.textMuted, border: `1px solid ${emailDensity === d.id ? T.emailBlueBorder : T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 16 }}>{d.icon}</button>
+                ))}
+                {nextPage && <button onClick={() => fetchData(nextPage)} style={{ padding: "6px 16px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>Load More</button>}
+              </div>
             </div>
             {/* Selection action toolbar */}
             {selectedEmailIds.size > 0 && (
@@ -2849,21 +2857,40 @@ export default function Home() {
                 style={{ flex: 1, padding: "12px 18px", border: `1px solid ${T.driveVioletBorder}`, borderRadius: 8, fontSize: 16, background: T.surface, color: T.text, outline: "none" }} />
               <button onClick={() => fetchDrive("search", driveSearch)} style={{ padding: "12px 22px", background: T.driveViolet, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 16 }}>Search</button>
             </div>
-            <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
+            <div style={{ display: "flex", gap: 6, marginBottom: 18, alignItems: "center" }}>
               {[{ id: "recent", label: "Recent" }, { id: "starred", label: "Starred" }].map(v => (
                 <button key={v.id} onClick={() => { setDriveView(v.id); fetchDrive(v.id); }} style={{ padding: "8px 18px", background: driveView === v.id ? T.driveVioletBg : T.bg, color: driveView === v.id ? T.driveViolet : T.textMuted, border: `1px solid ${driveView === v.id ? T.driveVioletBorder : T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>{v.label}</button>
               ))}
-            </div>
-            <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
-              {driveFiles.length === 0 ? <div style={{ padding: 32, textAlign: "center", color: T.textMuted, fontSize: 16 }}>No files found</div>
-                : driveFiles.map(f => (
-                <a key={f.id} href={f.webViewLink} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 20px", borderBottom: `1px solid ${T.borderLight}`, textDecoration: "none", color: T.text }}>
-                  <img src={f.iconLink} alt="" style={{ width: 24, height: 24 }} />
-                  <div style={{ flex: 1 }}><div style={{ fontWeight: 500, fontSize: 16 }}>{f.name}</div><div style={{ fontSize: 14, color: T.textMuted }}>{f.mimeType?.split(".").pop()} · Modified {fmtRel(f.modifiedTime)}</div></div>
-                  {f.starred && <span>⭐</span>}
-                </a>
+              <div style={{ flex: 1 }} />
+              {/* Layout toggle */}
+              {[{ id: "list", icon: "☰" }, { id: "grid", icon: "⊞" }].map(l => (
+                <button key={l.id} onClick={() => { setDriveLayout(l.id); try { localStorage.setItem('ffc_drive_layout', l.id); } catch {} }} title={l.id === "list" ? "List view" : "Grid view"} style={{ padding: "8px 12px", background: driveLayout === l.id ? T.driveVioletBg : T.bg, color: driveLayout === l.id ? T.driveViolet : T.textMuted, border: `1px solid ${driveLayout === l.id ? T.driveVioletBorder : T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 17 }}>{l.icon}</button>
               ))}
             </div>
+            {driveLayout === "list" ? (
+              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
+                {driveFiles.length === 0 ? <div style={{ padding: 32, textAlign: "center", color: T.textMuted, fontSize: 16 }}>No files found</div>
+                  : driveFiles.map(f => (
+                  <a key={f.id} href={f.webViewLink} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 20px", borderBottom: `1px solid ${T.borderLight}`, textDecoration: "none", color: T.text }}>
+                    <img src={f.iconLink} alt="" style={{ width: 24, height: 24 }} />
+                    <div style={{ flex: 1 }}><div style={{ fontWeight: 500, fontSize: 16 }}>{f.name}</div><div style={{ fontSize: 14, color: T.textMuted }}>{f.mimeType?.split(".").pop()} · Modified {fmtRel(f.modifiedTime)}</div></div>
+                    {f.starred && <span>⭐</span>}
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12 }}>
+                {driveFiles.length === 0 ? <div style={{ gridColumn: "1/-1", padding: 32, textAlign: "center", color: T.textMuted, fontSize: 16 }}>No files found</div>
+                  : driveFiles.map(f => (
+                  <a key={f.id} href={f.webViewLink} target="_blank" rel="noopener noreferrer" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "20px 14px", background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, textDecoration: "none", color: T.text, textAlign: "center" }}>
+                    <img src={f.iconLink} alt="" style={{ width: 40, height: 40 }} />
+                    <div style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" }}>{f.name}</div>
+                    <div style={{ fontSize: 11, color: T.textMuted }}>{fmtRel(f.modifiedTime)}</div>
+                    {f.starred && <span style={{ fontSize: 12 }}>⭐</span>}
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
