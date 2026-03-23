@@ -234,6 +234,15 @@ describe('classifyEmail', () => {
     test('snippet has "saw your organization" → sales', () => {
       expect(classifyEmail({ from: 'rep@company.com', subject: 'Quick question', snippet: 'I saw your organization and thought we could help', recipientCount: 1 })).toBe('sales');
     });
+    test('from apollo.io with List-Unsubscribe header → sales not newsletter (#64)', () => {
+      expect(classifyEmail({ from: 'rep@apollo.io', subject: 'Quick question', listUnsubscribe: '<https://apollo.io/unsubscribe>', recipientCount: 1 })).toBe('sales');
+    });
+    test('from outreach.io with List-Id header → sales not newsletter (#64)', () => {
+      expect(classifyEmail({ from: 'sender@outreach.io', subject: 'Following up', listId: 'outreach.list.io', recipientCount: 1 })).toBe('sales');
+    });
+    test('from salesloft.com with bulk precedence → sales not newsletter (#64)', () => {
+      expect(classifyEmail({ from: 'rep@salesloft.com', subject: 'Partnership opportunity', precedence: 'bulk', recipientCount: 1 })).toBe('sales');
+    });
   });
 });
 

@@ -95,6 +95,14 @@ function classifyEmail(e) {
   const isMassSend = recipientCount >= 20;
 
   if (isMassSend && !from.includes("classy") && !from.includes("hubspot")) return "fyi-mass";
+  // Sales outreach platforms: check before newsletter — these tools add List-Unsubscribe headers
+  // for CAN-SPAM compliance, which would otherwise misroute them to newsletter (#64)
+  const salesFromDomains = [
+    "apollo.io", "outreach.io", "salesloft.com", "mailshake.com", "lemlist.com",
+    "woodpecker.co", "reply.io", "yesware.com", "mixmax.com", "persistiq.com",
+    "klenty.com", "instantly.ai", "smartlead.ai", "saleshandy.com",
+  ];
+  if (salesFromDomains.some(d => from.includes(d))) return "sales";
   // Invoices before newsletter: billing emails often carry List-Unsubscribe headers
   // (e.g. Turing, QuickBooks) which would otherwise route them to newsletter instead of Financial
   if (subj.includes("invoice") || subj.includes("receipt") || subj.includes("payment") || subj.includes("billing") || subj.includes("statement") || subj.includes("your order") || subj.includes("charge") || subj.includes("subscription renewal")) return "invoices";
@@ -109,13 +117,6 @@ function classifyEmail(e) {
   if (from.includes("classy")) return "classy-recurring";
   if (from.includes("noreply") || from.includes("no-reply") || from.includes("notifications@") || from.includes("mailer-daemon") || from.includes("postmaster")) return "automated";
   if (from.includes("freshfoodconnect") || from.includes("@ffc")) return "team";
-  // Sales/spam: known outreach platform domains → always sales
-  const salesFromDomains = [
-    "apollo.io", "outreach.io", "salesloft.com", "mailshake.com", "lemlist.com",
-    "woodpecker.co", "reply.io", "yesware.com", "mixmax.com", "persistiq.com",
-    "klenty.com", "instantly.ai", "smartlead.ai", "saleshandy.com",
-  ];
-  if (salesFromDomains.some(d => from.includes(d))) return "sales";
   // Sales/spam: subject/snippet keyword deep scan
   const salesSignals = [
     "quick call", "15 minutes", "30 minutes", "45 minutes", "hop on a call", "schedule a demo",
