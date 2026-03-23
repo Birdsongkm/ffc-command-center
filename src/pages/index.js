@@ -1236,9 +1236,9 @@ function MagicLoginScreen() {
 
 export default function Home() {
   // ── Dark mode — issue #83 ──
-  const [darkMode, setDarkMode] = useState(() => {
-    try { return localStorage.getItem('ffc_dark_mode') === 'true'; } catch { return false; }
-  });
+  // Always start false (SSR-safe) — useEffect reads saved preference after hydration.
+  // Reading localStorage inside useState causes server/client hydration mismatch → crash.
+  const [darkMode, setDarkMode] = useState(false);
   // Reassign module-level T so all sub-components (ComposeForm, EventForm, etc.) see the current theme.
   T = darkMode ? DARK_T : LIGHT_T;
   // BUCKETS defined here so it picks up the current T values
@@ -1345,6 +1345,12 @@ export default function Home() {
   const [draggingEmail, setDraggingEmail] = useState(null);
   const [dragOverEmailBucket, setDragOverEmailBucket] = useState(null);
   const [emailBucketOverrides, setEmailBucketOverrides] = useState({});
+  const [bucketLabels, setBucketLabels] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("ffc_bucket_labels") || "{}"); } catch { return {}; }
+  });
+  const [editingBucketLabel, setEditingBucketLabel] = useState(null); // bucketKey being renamed
+  const [editingLabelValue, setEditingLabelValue] = useState("");
+  const [movingEmailId, setMovingEmailId] = useState(null); // email id with open "Move to…" dropdown
   const [learnedBuckets, setLearnedBuckets] = useState(() => {
     try { return JSON.parse(localStorage.getItem("ffc_learned_buckets") || "{}"); } catch { return {}; }
   });
@@ -1432,9 +1438,16 @@ export default function Home() {
   useEffect(() => {
     try { localStorage.setItem('ffc_user_settings', JSON.stringify(userSettings)); } catch {}
   }, [userSettings]);
+  // Read saved dark mode preference after hydration (cannot read localStorage during SSR)
+  useEffect(() => {
+    try { if (localStorage.getItem('ffc_dark_mode') === 'true') setDarkMode(true); } catch {}
+  }, []);
   useEffect(() => {
     try { localStorage.setItem('ffc_dark_mode', darkMode ? 'true' : 'false'); } catch {}
   }, [darkMode]);
+  useEffect(() => {
+    try { localStorage.setItem('ffc_bucket_labels', JSON.stringify(bucketLabels)); } catch {}
+  }, [bucketLabels]);
   useEffect(() => {
     try { localStorage.setItem('ffc_scheduled_emails', JSON.stringify(scheduledEmails)); } catch {}
   }, [scheduledEmails]);
@@ -2027,6 +2040,25 @@ export default function Home() {
                   : <button onClick={() => setToDoEmailIds(prev => new Set([...prev, email.id]))} style={abtn(T.accent, T.accentBg)}>📌 To Do</button>
                 }
                 {isDebbieFinance && <button onClick={() => setFinancePanel(email)} style={abtn(T.taskAmber, T.taskAmberBg)}>📊 Finance Review</button>}
+                <div style={{ position: "relative" }}>
+                  <button onClick={() => setMovingEmailId(movingEmailId === email.id ? null : email.id)} style={abtn(T.driveViolet, T.driveVioletBg)}>📂 Move to…</button>
+                  {movingEmailId === email.id && (
+                    <div style={{ position: "absolute", top: "110%", left: 0, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: 8, zIndex: 100, minWidth: 220, boxShadow: "0 4px 16px rgba(0,0,0,0.13)" }}>
+                      {Object.entries(BUCKETS).map(([key, bInfo]) => (
+                        <button key={key} onClick={() => { setEmailBucketOverrides(prev => ({ ...prev, [email.id]: key })); setMovingEmailId(null); }}
+                          style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 12px", background: effectiveBucket === key ? bInfo.bg : "transparent", color: effectiveBucket === key ? bInfo.color : T.text, border: "none", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: effectiveBucket === key ? 700 : 400 }}>
+                          {bInfo.icon} {bucketLabels[key] || bInfo.label}
+                        </button>
+                      ))}
+                      {emailBucketOverrides[email.id] && (
+                        <button onClick={() => { setEmailBucketOverrides(prev => { const u = { ...prev }; delete u[email.id]; return u; }); setMovingEmailId(null); }}
+                          style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 12px", background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 12, marginTop: 6 }}>
+                          ↺ Reset to auto-classified
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </div>
@@ -2823,10 +2855,21 @@ export default function Home() {
                     }}>
                     {/* Bucket header */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
                         <span style={{ fontSize: 17 }}>{info.icon}</span>
-                        <span style={{ fontWeight: 700, fontSize: 16, color: info.color }}>{info.label}</span>
-                        <span style={{ fontSize: 13, color: info.color, background: info.bg, padding: "2px 9px", borderRadius: 6, fontWeight: 600 }}>{bucketEmails.length}</span>
+                        {editingBucketLabel === bucket ? (
+                          <form onSubmit={e => { e.preventDefault(); setBucketLabels(prev => { const updated = { ...prev }; if (editingLabelValue.trim()) updated[bucket] = editingLabelValue.trim(); else delete updated[bucket]; return updated; }); setEditingBucketLabel(null); }} style={{ display: "flex", gap: 6, alignItems: "center", flex: 1 }}>
+                            <input autoFocus value={editingLabelValue} onChange={e => setEditingLabelValue(e.target.value)} onBlur={() => { setBucketLabels(prev => { const updated = { ...prev }; if (editingLabelValue.trim()) updated[bucket] = editingLabelValue.trim(); else delete updated[bucket]; return updated; }); setEditingBucketLabel(null); }}
+                              style={{ fontSize: 15, fontWeight: 700, color: info.color, border: `1px solid ${info.color}`, borderRadius: 6, padding: "2px 8px", background: T.bg, outline: "none", width: "100%" }} />
+                          </form>
+                        ) : (
+                          <>
+                            <span style={{ fontWeight: 700, fontSize: 16, color: info.color }}>{bucketLabels[bucket] || info.label}</span>
+                            <span style={{ fontSize: 13, color: info.color, background: info.bg, padding: "2px 9px", borderRadius: 6, fontWeight: 600 }}>{bucketEmails.length}</span>
+                            <button onClick={() => { setEditingBucketLabel(bucket); setEditingLabelValue(bucketLabels[bucket] || info.label); }} title="Rename section" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: T.textDim, padding: "0 2px", lineHeight: 1 }}>✏️</button>
+                            {bucketLabels[bucket] && <button onClick={() => setBucketLabels(prev => { const u = { ...prev }; delete u[bucket]; return u; })} title="Reset to default name" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: T.textDim, padding: "0 2px" }}>↺</button>}
+                          </>
+                        )}
                       </div>
                       <div style={{ display: "flex", gap: 4 }}>
                         <button onClick={() => {
