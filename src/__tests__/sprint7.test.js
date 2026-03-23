@@ -353,3 +353,64 @@ describe("mergeSettings", () => {
     expect(s.accentColor).toBe("#4A90D9");
   });
 });
+
+
+// ── extractDocFromEvent (#79) ─────────────────────────────────────────────────
+// Extracts first Google Doc/Sheet/Slides/Drive URL from an event description
+// or attachments array. Returns URL string or null.
+function extractDocFromEvent(ev) {
+  if (!ev) return null;
+  // Check attachments array (Google Calendar API format)
+  if (Array.isArray(ev.attachments)) {
+    for (const a of ev.attachments) {
+      if (a.fileUrl && a.fileUrl.includes("docs.google.com")) return a.fileUrl;
+      if (a.fileUrl && a.fileUrl.includes("drive.google.com")) return a.fileUrl;
+    }
+  }
+  // Check description for Google URLs
+  const desc = ev.description || "";
+  const match = desc.match(/https?:\/\/(docs|drive)\.google\.com\/[^\s"<>]*/i);
+  return match ? match[0] : null;
+}
+
+describe("extractDocFromEvent", () => {
+  test("null event returns null", () => {
+    expect(extractDocFromEvent(null)).toBeNull();
+  });
+
+  test("event with no description and no attachments returns null", () => {
+    expect(extractDocFromEvent({ title: "Standup" })).toBeNull();
+  });
+
+  test("description with Google Docs URL returns it", () => {
+    const url = "https://docs.google.com/document/d/1abc123/edit";
+    expect(extractDocFromEvent({ description: `Agenda: ${url}` })).toBe(url);
+  });
+
+  test("description with Drive URL returns it", () => {
+    const url = "https://drive.google.com/file/d/xyz/view";
+    expect(extractDocFromEvent({ description: `See ${url} for details` })).toBe(url);
+  });
+
+  test("description with HTML href Google Doc link returns the URL", () => {
+    const url = "https://docs.google.com/document/d/1abc/edit";
+    const desc = `<html><a href="${url}">Agenda Doc</a></html>`;
+    expect(extractDocFromEvent({ description: desc })).toBe(url);
+  });
+
+  test("attachments array with Google Docs fileUrl returns it", () => {
+    const url = "https://docs.google.com/document/d/1abc/edit";
+    expect(extractDocFromEvent({ attachments: [{ fileUrl: url, title: "Agenda" }] })).toBe(url);
+  });
+
+  test("attachments checked before description", () => {
+    const attUrl = "https://docs.google.com/document/d/ATTACH/edit";
+    const descUrl = "https://docs.google.com/document/d/DESC/edit";
+    const result = extractDocFromEvent({ attachments: [{ fileUrl: attUrl }], description: descUrl });
+    expect(result).toBe(attUrl);
+  });
+
+  test("non-Google URL in description returns null", () => {
+    expect(extractDocFromEvent({ description: "See https://notion.so/my-doc" })).toBeNull();
+  });
+});
