@@ -338,6 +338,14 @@ function getEventStatus(ev, now) {
   return "upcoming";
 }
 
+// ── User settings helpers (#78) ───────────────────────────────────────────────
+function getDefaultSettings() {
+  return { userName: "Kayla", orgName: "Fresh Food Connect", accentColor: "#2D7A3A" };
+}
+function mergeSettings(saved) {
+  return Object.assign({}, getDefaultSettings(), saved || {});
+}
+
 // Returns "In Xm" / "In Xh Xm" label for future events (#77)
 function minsUntil(ev, now) {
   const start = new Date(ev.start).getTime();
@@ -1164,6 +1172,10 @@ export default function Home() {
   const [auth, setAuth] = useState(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [tab, setTab] = useState("today");
+  // User settings — localStorage-backed, configurable via Settings tab (#78)
+  const [userSettings, setUserSettings] = useState(() => {
+    try { return mergeSettings(JSON.parse(localStorage.getItem("ffc_user_settings") || "null")); } catch { return getDefaultSettings(); }
+  });
   const [emailDropdownOpen, setEmailDropdownOpen] = useState(false);
   const [emails, setEmails] = useState([]);
   const [events, setEvents] = useState([]);
@@ -1333,6 +1345,9 @@ export default function Home() {
   useEffect(() => {
     try { localStorage.setItem('ffc_agenda_items', JSON.stringify(agendaItems)); } catch {}
   }, [agendaItems]);
+  useEffect(() => {
+    try { localStorage.setItem('ffc_user_settings', JSON.stringify(userSettings)); } catch {}
+  }, [userSettings]);
   useEffect(() => {
     try { localStorage.setItem('ffc_scheduled_emails', JSON.stringify(scheduledEmails)); } catch {}
   }, [scheduledEmails]);
@@ -1983,6 +1998,7 @@ export default function Home() {
     { id: "calendar", label: "Calendar", color: T.calGreen, icon: "📅" },
     { id: "tasks", label: "Tasks", color: T.taskAmber, icon: "📋" },
     { id: "drive", label: "Drive", color: T.driveViolet, icon: "📁" },
+    { id: "settings", label: "Settings", color: T.textMuted, icon: "⚙️" },
   ];
 
   // ═══════════════════════════════════════════════
@@ -2105,7 +2121,7 @@ export default function Home() {
             <div style={{ background: T.accentBg, border: `1px solid ${T.accent}30`, borderLeft: `5px solid ${T.accent}`, borderRadius: 14, padding: "28px 32px", marginBottom: 28 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
                 <LeafIcon size={26} />
-                <span style={{ fontSize: 22, fontWeight: 700, color: T.text }}>Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, Kayla ✨</span>
+                <span style={{ fontSize: 22, fontWeight: 700, color: T.text }}>Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, {userSettings.userName} ✨</span>
               </div>
               <div style={{ fontSize: 17, lineHeight: 1.8, color: T.text }}>
                 {needsReply.length > 0 && <span style={{ fontWeight: 600, color: T.urgentCoral }}>{needsReply.length} email{needsReply.length !== 1 ? "s" : ""} need your reply</span>}
@@ -3087,6 +3103,52 @@ export default function Home() {
         )}
 
         {/* ═══════════ STICKY / QUICK CAPTURE TAB ═══════════ */}
+        {/* ═══════════ SETTINGS TAB (#78) ═══════════ */}
+        {tab === "settings" && (
+          <div className="tab-content">
+            <div style={{ maxWidth: 560, margin: "0 auto" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 28 }}>
+                <span style={{ fontSize: 22 }}>⚙️</span>
+                <span style={{ fontSize: 20, fontWeight: 700, color: T.text }}>Settings</span>
+                <span style={{ fontSize: 14, color: T.textMuted, marginLeft: 4 }}>Personalize your command center</span>
+              </div>
+
+              {/* Profile */}
+              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "24px 28px", marginBottom: 20 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 18 }}>👤 Profile</div>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: T.textMuted, display: "block", marginBottom: 6 }}>Your name</label>
+                  <input value={userSettings.userName} onChange={e => setUserSettings(s => ({ ...s, userName: e.target.value }))}
+                    placeholder="Your name" style={{ width: "100%", padding: "11px 14px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 15, background: T.bg, color: T.text, outline: "none", boxSizing: "border-box" }} />
+                  <div style={{ fontSize: 12, color: T.textMuted, marginTop: 5 }}>Shown in the greeting on your home screen</div>
+                </div>
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: T.textMuted, display: "block", marginBottom: 6 }}>Organization name</label>
+                  <input value={userSettings.orgName} onChange={e => setUserSettings(s => ({ ...s, orgName: e.target.value }))}
+                    placeholder="Organization name" style={{ width: "100%", padding: "11px 14px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 15, background: T.bg, color: T.text, outline: "none", boxSizing: "border-box" }} />
+                  <div style={{ fontSize: 12, color: T.textMuted, marginTop: 5 }}>Your nonprofit or company name</div>
+                </div>
+              </div>
+
+              {/* Data */}
+              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "24px 28px", marginBottom: 20 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 18 }}>🗂 Data & Privacy</div>
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  <button onClick={() => { if (confirm("Clear all tasks, notes, and local preferences? This cannot be undone.")) { localStorage.clear(); showToast("Local data cleared — reload the page"); } }} style={{ padding: "10px 20px", background: T.dangerBg, color: T.danger, border: `1px solid ${T.danger}30`, borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>Clear all local data</button>
+                  <button onClick={() => { const data = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith("ffc_")) data[k] = localStorage.getItem(k); } const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "ffc-settings-backup.json"; a.click(); }} style={{ padding: "10px 20px", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>Export settings backup</button>
+                </div>
+              </div>
+
+              {/* About */}
+              <div style={{ background: T.accentBg, border: `1px solid ${T.accent}20`, borderRadius: 14, padding: "20px 28px", textAlign: "center" }}>
+                <LeafIcon size={28} />
+                <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginTop: 8 }}>{userSettings.orgName} Command Center</div>
+                <div style={{ fontSize: 13, color: T.textMuted, marginTop: 4 }}>Built for executive directors who run fast and care deeply.</div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {tab === "sticky" && (
           <div className="tab-content">
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 22 }}>

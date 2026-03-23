@@ -308,3 +308,48 @@ describe("minsUntil", () => {
     expect(minsUntil({ start: "2026-03-23T13:00:00" }, now)).toBe("");
   });
 });
+
+// ── getDefaultSettings (#78) ──────────────────────────────────────────────────
+// Returns default settings object for new users.
+function getDefaultSettings() {
+  return {
+    userName: "Kayla",
+    orgName: "Fresh Food Connect",
+    accentColor: "#2D7A3A",
+  };
+}
+
+// Merges saved settings with defaults so new fields are always present.
+function mergeSettings(saved) {
+  return Object.assign({}, getDefaultSettings(), saved || {});
+}
+
+describe("getDefaultSettings", () => {
+  test("returns expected defaults", () => {
+    const s = getDefaultSettings();
+    expect(s.userName).toBe("Kayla");
+    expect(s.orgName).toBe("Fresh Food Connect");
+    expect(s.accentColor).toBeDefined();
+  });
+});
+
+describe("mergeSettings", () => {
+  test("null/undefined returns all defaults", () => {
+    const s = mergeSettings(null);
+    expect(s.userName).toBe("Kayla");
+    expect(s.orgName).toBe("Fresh Food Connect");
+  });
+
+  test("partial settings merged with defaults", () => {
+    const s = mergeSettings({ userName: "Alex" });
+    expect(s.userName).toBe("Alex");
+    expect(s.orgName).toBe("Fresh Food Connect");
+  });
+
+  test("all fields overridden", () => {
+    const s = mergeSettings({ userName: "Jordan", orgName: "FoodBank DC", accentColor: "#4A90D9" });
+    expect(s.userName).toBe("Jordan");
+    expect(s.orgName).toBe("FoodBank DC");
+    expect(s.accentColor).toBe("#4A90D9");
+  });
+});
