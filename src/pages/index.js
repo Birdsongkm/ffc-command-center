@@ -959,7 +959,7 @@ function ComposeForm({ mode = "compose", email = null, onSend, onSchedule, onCan
 // ═══════════════════════════════════════════════
 //  EVENT FORM
 // ═══════════════════════════════════════════════
-function EventForm({ event = null, onSave, onCancel, prefillFromEmail = null }) {
+function EventForm({ event = null, onSave, onCancel, prefillFromEmail = null, contacts = [] }) {
   const now = new Date();
   const ds = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() + 1, 0);
   const de = new Date(ds.getTime() + 3600000);
@@ -970,7 +970,31 @@ function EventForm({ event = null, onSave, onCancel, prefillFromEmail = null }) 
   const [location, setLocation] = useState(event?.location || "");
   const [desc, setDesc] = useState(event?.description || "");
   const [saving, setSaving] = useState(false);
+  const [atSuggs, setAtSuggs] = useState([]);
+  const [showAtSugg, setShowAtSugg] = useState(false);
   const inputStyle = { width: "100%", padding: "12px 16px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 16, background: T.bg, color: T.text, outline: "none", boxSizing: "border-box" };
+
+  const handleAttendeesChange = (val) => {
+    setAttendees(val);
+    const last = val.split(",").pop().trim().toLowerCase();
+    if (last.length >= 2) {
+      const matches = contacts.filter(c =>
+        c.name.toLowerCase().includes(last) || c.email.toLowerCase().includes(last)
+      ).slice(0, 6);
+      setAtSuggs(matches);
+      setShowAtSugg(matches.length > 0);
+    } else {
+      setShowAtSugg(false);
+    }
+  };
+
+  const pickAtSugg = (c) => {
+    const parts = attendees.split(",");
+    parts[parts.length - 1] = ` ${c.email}`;
+    setAttendees(parts.join(",").trimStart() + ", ");
+    setShowAtSugg(false);
+  };
+
   return (
     <div style={{ background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 12, padding: 22, marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
@@ -982,7 +1006,31 @@ function EventForm({ event = null, onSave, onCancel, prefillFromEmail = null }) 
         <input type="datetime-local" value={start} onChange={e => setStart(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
         <input type="datetime-local" value={end} onChange={e => setEnd(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
       </div>
-      <input placeholder="Attendees (comma-separated emails)" value={attendees} onChange={e => setAttendees(e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
+      {/* Attendees with autocomplete (#80) */}
+      <div style={{ position: "relative", marginBottom: 8 }}>
+        <input placeholder="Attendees (comma-separated)" value={attendees}
+          onChange={e => handleAttendeesChange(e.target.value)}
+          onBlur={() => setTimeout(() => setShowAtSugg(false), 150)}
+          style={inputStyle} />
+        {showAtSugg && (
+          <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: T.card, border: `1px solid ${T.calGreenBorder}`, borderRadius: 8, zIndex: 200, boxShadow: "0 6px 24px rgba(0,0,0,0.12)", overflow: "hidden" }}>
+            {atSuggs.map((c, i) => (
+              <div key={i} onMouseDown={() => pickAtSugg(c)}
+                style={{ padding: "10px 16px", cursor: "pointer", fontSize: 15, display: "flex", alignItems: "center", gap: 10, borderBottom: i < atSuggs.length - 1 ? `1px solid ${T.borderLight}` : "none" }}
+                onMouseEnter={e => e.currentTarget.style.background = T.bg}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                <div style={{ width: 28, height: 28, borderRadius: "50%", background: T.calGreenBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: T.calGreen, flexShrink: 0 }}>
+                  {c.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, color: T.text, fontSize: 14 }}>{c.name}</div>
+                  <div style={{ fontSize: 13, color: T.textMuted }}>{c.email}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <input placeholder="Location" value={location} onChange={e => setLocation(e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
       <textarea placeholder="Description" value={desc} onChange={e => setDesc(e.target.value)} rows={3} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
       <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
@@ -2126,7 +2174,7 @@ export default function Home() {
             </div>
           </div>
         )}
-        {showEventForm && <EventForm prefillFromEmail={showEventForm.prefillFromEmail} onSave={(data) => { calendarAction("create", { event: data }); setShowEventForm(null); }} onCancel={() => setShowEventForm(null)} />}
+        {showEventForm && <EventForm prefillFromEmail={showEventForm.prefillFromEmail} contacts={contacts} onSave={(data) => { calendarAction("create", { event: data }); setShowEventForm(null); }} onCancel={() => setShowEventForm(null)} />}
 
         {/* ═══════════ TODAY TAB ═══════════ */}
         {tab === "today" && (
@@ -2780,7 +2828,7 @@ export default function Home() {
               <div style={{ flex: 1 }} />
               <button onClick={() => setShowEventForm({})} style={{ padding: "11px 24px", background: T.calGreen, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>+ New Event</button>
             </div>
-            {showEventForm && !showEventForm.prefillFromEmail && <EventForm onSave={(data) => { calendarAction("create", { event: data }); setShowEventForm(null); }} onCancel={() => setShowEventForm(null)} />}
+            {showEventForm && !showEventForm.prefillFromEmail && <EventForm contacts={contacts} onSave={(data) => { calendarAction("create", { event: data }); setShowEventForm(null); }} onCancel={() => setShowEventForm(null)} />}
 
             {calView === "today" && (
               <div>
