@@ -598,5 +598,6 @@ CRO vote: donor intent signal on email row (5/6), HubSpot auto-lookup on open (4
 | #80 | Attendees autocomplete in EventForm + CC autocomplete in ComposeForm | 2026-03-23 |
 | #81 | Close open forms when switching tabs | 2026-03-23 |
 | #82 | Drive folder navigation: browse into folders with breadcrumb trail | 2026-03-23 |
+| #83 | Dark mode toggle (🌙/☀️ in header, persisted to localStorage) | 2026-03-23 |
 
-**Tests:** 409 total (up from 362). sprint7.test.js adds parseAddressField, getEventStatus, minsUntil, getDefaultSettings, mergeSettings, extractDocFromEvent, isDriveFolder, appendFolderPath, crumbSlice, buildBrowseUrl.
+**Tests:** 424 total (up from 409). darkmode.test.js adds DARK_T completeness, brightness polarity, theme switching logic.

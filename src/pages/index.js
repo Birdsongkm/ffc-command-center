@@ -4,7 +4,7 @@ import Head from "next/head";
 // ═══════════════════════════════════════════════
 //  THEME
 // ═══════════════════════════════════════════════
-const T = {
+const LIGHT_T = {
   bg: "#E0E0E0", surface: "#FFFFFF", card: "#FFFFFF", cardHover: "#D4D4D4",
   border: "#D8E4D2", borderLight: "#E8F0E4", text: "#2C3E2C", textMuted: "#6B8068",
   textDim: "#94AC8E", accent: "#4A9B4A", accentDark: "#357A35", accentBg: "#E8F5E8",
@@ -18,6 +18,25 @@ const T = {
   stickyYellow: "#F5E642", stickyYellowBg: "#FFFDE8", stickyYellowBorder: "#E8E0A0",
   leafDecor: "#4A9B4A",
 };
+
+const DARK_T = {
+  bg: "#111827", surface: "#1F2937", card: "#1F2937", cardHover: "#2D3748",
+  border: "#2A4A2A", borderLight: "#1A3020", text: "#E8F0E8", textMuted: "#9CAE98",
+  textDim: "#7A9278", accent: "#5AAD5A", accentDark: "#4A9B4A", accentBg: "#0F2010",
+  gold: "#D4A840", goldBg: "#1F1A00", danger: "#E06868", dangerBg: "#200808",
+  info: "#5A9BC5", infoBg: "#0A1820", white: "#1F2937",
+  emailBlue: "#4A90D4", emailBlueBg: "#0A1828", emailBlueBorder: "#1A3855",
+  calGreen: "#4AAD6A", calGreenBg: "#081A10", calGreenBorder: "#1A4A28",
+  taskAmber: "#D4A840", taskAmberBg: "#1F1A00", taskAmberBorder: "#3A3010",
+  driveViolet: "#9B7ADA", driveVioletBg: "#120A28", driveVioletBorder: "#2A1A4A",
+  urgentCoral: "#E06868", urgentCoralBg: "#200808", urgentCoralBorder: "#3A1010",
+  stickyYellow: "#F5E642", stickyYellowBg: "#1A1A00", stickyYellowBorder: "#3A3A10",
+  leafDecor: "#5AAD5A",
+};
+
+// Mutable module-level reference — reassigned at the top of each render
+// so all sub-components (LightbulbFAB, ComposeForm, etc.) see the current theme.
+let T = LIGHT_T;
 
 const CATEGORIES = [
   { id: "fundraising", label: "Fundraising", color: "#7C5AC4", bg: "#F0EBF9" },
@@ -521,21 +540,6 @@ function getSuggestedAction(history, bucket, threshold = 3) {
   return count >= threshold ? { action: topAction, count } : null;
 }
 
-const BUCKETS = {
-  "needs-response": { label: "Important / Not Addressed", icon: "✉️", color: T.urgentCoral, bg: T.urgentCoralBg, border: T.urgentCoralBorder, priority: 1 },
-  "to-do": { label: "To Do", icon: "☑️", color: T.accent, bg: T.accentBg, border: T.border, priority: 2 },
-  "team": { label: "Team / Internal", icon: "👥", color: T.emailBlue, bg: T.emailBlueBg, border: T.emailBlueBorder, priority: 3 },
-  "classy-onetime": { label: "Donation Alerts", icon: "💚", color: T.calGreen, bg: T.calGreenBg, border: T.calGreenBorder, priority: 4 },
-  "invoices": { label: "Invoices & Receipts", icon: "🧾", color: T.taskAmber, bg: T.taskAmberBg, border: T.taskAmberBorder, priority: 5 },
-  "fyi-mass": { label: "FYI / Mass Sends", icon: "📋", color: T.info, bg: T.infoBg, border: T.emailBlueBorder, priority: 6 },
-  "classy-recurring": { label: "Classy Platform", icon: "🔄", color: T.driveViolet, bg: T.driveVioletBg, border: T.driveVioletBorder, priority: 7 },
-  "financial": { label: "Financial / Donations", icon: "💰", color: T.taskAmber, bg: T.taskAmberBg, border: T.taskAmberBorder, priority: 4 },
-  "calendar-notif": { label: "Calendar Notifications", icon: "📅", color: T.calGreen, bg: T.calGreenBg, border: T.calGreenBorder, priority: 8 },
-  "docs-activity": { label: "Docs & Drive Activity", icon: "📄", color: T.driveViolet, bg: T.driveVioletBg, border: T.driveVioletBorder, priority: 9 },
-  "automated": { label: "Automated / System", icon: "⚙️", color: T.textMuted, bg: "#F5F5F5", border: T.border, priority: 10 },
-  "newsletter": { label: "Newsletters & Lists", icon: "📰", color: T.textMuted, bg: "#F5F5F5", border: T.border, priority: 11 },
-  "sales": { label: "Likely Sales / Spam", icon: "🚫", color: T.danger, bg: T.dangerBg, border: "#E5B0B030", priority: 12 },
-};
 
 const PAGE_SIZE = 10; // emails per page within each bucket
 
@@ -1231,6 +1235,29 @@ function MagicLoginScreen() {
 }
 
 export default function Home() {
+  // ── Dark mode — issue #83 ──
+  const [darkMode, setDarkMode] = useState(() => {
+    try { return localStorage.getItem('ffc_dark_mode') === 'true'; } catch { return false; }
+  });
+  // Reassign module-level T so all sub-components (ComposeForm, EventForm, etc.) see the current theme.
+  T = darkMode ? DARK_T : LIGHT_T;
+  // BUCKETS defined here so it picks up the current T values
+  const BUCKETS = {
+    "needs-response": { label: "Important / Not Addressed", icon: "✉️", color: T.urgentCoral, bg: T.urgentCoralBg, border: T.urgentCoralBorder, priority: 1 },
+    "to-do": { label: "To Do", icon: "☑️", color: T.accent, bg: T.accentBg, border: T.border, priority: 2 },
+    "team": { label: "Team / Internal", icon: "👥", color: T.emailBlue, bg: T.emailBlueBg, border: T.emailBlueBorder, priority: 3 },
+    "classy-onetime": { label: "Donation Alerts", icon: "💚", color: T.calGreen, bg: T.calGreenBg, border: T.calGreenBorder, priority: 4 },
+    "invoices": { label: "Invoices & Receipts", icon: "🧾", color: T.taskAmber, bg: T.taskAmberBg, border: T.taskAmberBorder, priority: 5 },
+    "fyi-mass": { label: "FYI / Mass Sends", icon: "📋", color: T.info, bg: T.infoBg, border: T.emailBlueBorder, priority: 6 },
+    "classy-recurring": { label: "Classy Platform", icon: "🔄", color: T.driveViolet, bg: T.driveVioletBg, border: T.driveVioletBorder, priority: 7 },
+    "financial": { label: "Financial / Donations", icon: "💰", color: T.taskAmber, bg: T.taskAmberBg, border: T.taskAmberBorder, priority: 4 },
+    "calendar-notif": { label: "Calendar Notifications", icon: "📅", color: T.calGreen, bg: T.calGreenBg, border: T.calGreenBorder, priority: 8 },
+    "docs-activity": { label: "Docs & Drive Activity", icon: "📄", color: T.driveViolet, bg: T.driveVioletBg, border: T.driveVioletBorder, priority: 9 },
+    "automated": { label: "Automated / System", icon: "⚙️", color: T.textMuted, bg: darkMode ? "#1A1A1A" : "#F5F5F5", border: T.border, priority: 10 },
+    "newsletter": { label: "Newsletters & Lists", icon: "📰", color: T.textMuted, bg: darkMode ? "#1A1A1A" : "#F5F5F5", border: T.border, priority: 11 },
+    "sales": { label: "Likely Sales / Spam", icon: "🚫", color: T.danger, bg: T.dangerBg, border: `${T.danger}30`, priority: 12 },
+  };
+
   const [auth, setAuth] = useState(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [tab, setTab] = useState("today");
@@ -1405,6 +1432,9 @@ export default function Home() {
   useEffect(() => {
     try { localStorage.setItem('ffc_user_settings', JSON.stringify(userSettings)); } catch {}
   }, [userSettings]);
+  useEffect(() => {
+    try { localStorage.setItem('ffc_dark_mode', darkMode ? 'true' : 'false'); } catch {}
+  }, [darkMode]);
   useEffect(() => {
     try { localStorage.setItem('ffc_scheduled_emails', JSON.stringify(scheduledEmails)); } catch {}
   }, [scheduledEmails]);
@@ -2126,8 +2156,9 @@ export default function Home() {
             <div style={{ fontSize: 13, color: T.textMuted, fontStyle: "italic", paddingLeft: 44 }}>"{dailyQuote.text}" <span style={{ fontStyle: "normal", fontWeight: 600 }}>— {dailyQuote.attr}</span></div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={() => setDarkMode(d => !d)} title={darkMode ? "Switch to light mode" : "Switch to dark mode"} style={{ padding: "10px 13px", background: darkMode ? T.card : T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 18, lineHeight: 1 }}>{darkMode ? "☀️" : "🌙"}</button>
             <button onClick={() => { setSearchOpen(true); setSearchQuery(""); setSearchIdx(0); }} style={{ padding: "10px 16px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>🔍 Search <span style={{ fontSize: 11, opacity: 0.7 }}>⌘K</span></button>
-            <button onClick={() => setTab("sticky")} style={{ padding: "10px 18px", background: "#FFF8E8", color: "#B8A030", border: "1px solid #E8D890", borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: "pointer" }}>📌 Capture</button>
+            <button onClick={() => setTab("sticky")} style={{ padding: "10px 18px", background: darkMode ? T.stickyYellowBg : "#FFF8E8", color: darkMode ? T.stickyYellow : "#B8A030", border: `1px solid ${darkMode ? T.stickyYellowBorder : "#E8D890"}`, borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: "pointer" }}>📌 Capture</button>
             <button onClick={() => setComposing("compose")} style={{ padding: "10px 22px", background: T.accent, color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 16, cursor: "pointer" }}>+ Compose</button>
           </div>
         </div>
