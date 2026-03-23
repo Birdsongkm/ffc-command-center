@@ -271,6 +271,16 @@ function suggestArchiveLabel(email) {
 }
 
 // ── Sprint 5: Global search + Team activity ───────────────────────────────────
+function driveFileIcon(mimeType) {
+  if (!mimeType) return '📄';
+  if (mimeType === 'application/vnd.google-apps.folder') return '📁';
+  if (mimeType === 'application/vnd.google-apps.document') return '📝';
+  if (mimeType === 'application/vnd.google-apps.spreadsheet') return '📊';
+  if (mimeType === 'application/vnd.google-apps.presentation') return '📽';
+  if (mimeType === 'application/pdf') return '📕';
+  return '📄';
+}
+
 function scoreSearchResult(item, query, type) {
   const q = query.toLowerCase().trim();
   if (!q) return 0;
@@ -436,6 +446,16 @@ const BUCKETS = {
 };
 
 const PAGE_SIZE = 10; // emails per page within each bucket
+
+// Color palette for user-created task sections (cycles through on add)
+const CUSTOM_CAT_PALETTE = [
+  { color: "#5A7FC4", bg: "#EBF0FB" },
+  { color: "#C47A3A", bg: "#FFF4E8" },
+  { color: "#4AC4A4", bg: "#EBF9F5" },
+  { color: "#A44AC4", bg: "#F5EBF9" },
+  { color: "#C4444A", bg: "#FFF0F0" },
+  { color: "#6B8068", bg: "#F0F5EE" },
+];
 
 // ═══════════════════════════════════════════════
 //  LIGHTBULB FAB — product feedback → GitHub issue
@@ -815,7 +835,7 @@ function EventForm({ event = null, onSave, onCancel, prefillFromEmail = null }) 
 // ═══════════════════════════════════════════════
 //  TASK FORM
 // ═══════════════════════════════════════════════
-function TaskForm({ task = null, onSave, onCancel, prefillFromEmail = null }) {
+function TaskForm({ task = null, onSave, onCancel, prefillFromEmail = null, categories = CATEGORIES }) {
   const [title, setTitle] = useState(task?.title || (prefillFromEmail?.subject || ""));
   const [category, setCategory] = useState(task?.category || "admin");
   const [urgency, setUrgency] = useState(task?.urgency || "medium");
@@ -830,7 +850,7 @@ function TaskForm({ task = null, onSave, onCancel, prefillFromEmail = null }) {
       </div>
       <input placeholder="Task title" value={title} onChange={e => setTitle(e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
       <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-        <select value={category} onChange={e => setCategory(e.target.value)} style={{ ...inputStyle, flex: 1 }}>{CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select>
+        <select value={category} onChange={e => setCategory(e.target.value)} style={{ ...inputStyle, flex: 1 }}>{categories.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select>
         <select value={urgency} onChange={e => setUrgency(e.target.value)} style={{ ...inputStyle, flex: 1 }}>{URGENCY.map(u => <option key={u.id} value={u.id}>{u.label}</option>)}</select>
       </div>
       <input type="date" value={due} onChange={e => setDue(e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
@@ -1043,6 +1063,11 @@ export default function Home() {
     return [];
   });
   const [showTaskForm, setShowTaskForm] = useState(null);
+  const [customCategories, setCustomCategories] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("ffc_custom_cats") || "[]"); } catch { return []; }
+  });
+  const [showAddSection, setShowAddSection] = useState(false);
+  const [newSectionName, setNewSectionName] = useState("");
   const [dragTask, setDragTask] = useState(null);
   const [dragOverTask, setDragOverTask] = useState(null);
   const [dragOverCategory, setDragOverCategory] = useState(null);
@@ -1085,8 +1110,16 @@ export default function Home() {
   const [bucketPages, setBucketPages] = useState({}); // bucket → current page index
   const [expandedCalEvent, setExpandedCalEvent] = useState(null); // event id expanded in Today's Schedule
   const [docModal, setDocModal] = useState(null); // { title, content } or null
+  const [docModalMode, setDocModalMode] = useState("create"); // "create" | "link"
   const [docSaving, setDocSaving] = useState(false);
   const [docFolderUrl, setDocFolderUrl] = useState("");
+  const [docFolderSearch, setDocFolderSearch] = useState("");
+  const [docFolderResults, setDocFolderResults] = useState([]);
+  const [docFolderSearching, setDocFolderSearching] = useState(false);
+  const [docSelectedFolder, setDocSelectedFolder] = useState(null); // { id, name }
+  const [docLinkSearch, setDocLinkSearch] = useState("");
+  const [docLinkResults, setDocLinkResults] = useState([]);
+  const [docLinkSearching, setDocLinkSearching] = useState(false);
   const [hsModal, setHsModal] = useState(null); // { note, subject } or null
   const [hsContacts, setHsContacts] = useState([]);
   const [hsContactSearch, setHsContactSearch] = useState("");
@@ -1493,6 +1526,7 @@ export default function Home() {
     const ia = BUCKET_ORDER.indexOf(a); const ib = BUCKET_ORDER.indexOf(b);
     return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
   });
+  const allCategories = [...CATEGORIES, ...customCategories];
   const needsReply = emailsByBucket["needs-response"] || [];
   const donationAlerts = emailsByBucket["classy-onetime"] || [];
   const todayMeetings = events.filter(isRealMeeting);
@@ -1852,7 +1886,7 @@ export default function Home() {
         {showTaskForm && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={() => setShowTaskForm(null)}>
             <div style={{ width: "100%", maxWidth: 500 }} onClick={e => e.stopPropagation()}>
-              <TaskForm prefillFromEmail={showTaskForm.prefillFromEmail} onSave={(task) => { setTasks(prev => [...prev, task]); setShowTaskForm(null); showToast("Task created!"); }} onCancel={() => setShowTaskForm(null)} />
+              <TaskForm prefillFromEmail={showTaskForm.prefillFromEmail} categories={allCategories} onSave={(task) => { setTasks(prev => [...prev, task]); setShowTaskForm(null); showToast("Task created!"); }} onCancel={() => setShowTaskForm(null)} />
             </div>
           </div>
         )}
@@ -2611,7 +2645,7 @@ export default function Home() {
               <button onClick={() => setShowTaskForm({})} style={{ padding: "10px 22px", background: T.taskAmber, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>+ New Task</button>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(310px, 1fr))", gap: 20 }}>
-              {CATEGORIES.map(cat => {
+              {allCategories.map(cat => {
                 const catTasks = tasks.filter(t => t.category === cat.id && !t.done).sort((a, b) => (a.order || 0) - (b.order || 0));
                 const doneTasks = tasks.filter(t => t.category === cat.id && t.done);
                 return (
@@ -2646,6 +2680,20 @@ export default function Home() {
                   </div>
                 );
               })}
+              {/* Add Section card */}
+              <div style={{ background: T.card, border: `2px dashed ${T.border}`, borderRadius: 14, padding: 20, minHeight: 130, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                {showAddSection ? (
+                  <>
+                    <input autoFocus value={newSectionName} onChange={e => setNewSectionName(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { if (!newSectionName.trim()) return; const palette = CUSTOM_CAT_PALETTE[customCategories.length % CUSTOM_CAT_PALETTE.length]; const nc = { id: `custom-${Date.now()}`, label: newSectionName.trim(), ...palette }; const next = [...customCategories, nc]; setCustomCategories(next); try { localStorage.setItem("ffc_custom_cats", JSON.stringify(next)); } catch {} setNewSectionName(""); setShowAddSection(false); } if (e.key === "Escape") { setNewSectionName(""); setShowAddSection(false); } }} placeholder="Section name..." style={{ width: "100%", padding: "10px 14px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 15, background: T.bg, color: T.text, boxSizing: "border-box", outline: "none" }} />
+                    <div style={{ display: "flex", gap: 8, width: "100%" }}>
+                      <button onClick={() => { if (!newSectionName.trim()) return; const palette = CUSTOM_CAT_PALETTE[customCategories.length % CUSTOM_CAT_PALETTE.length]; const nc = { id: `custom-${Date.now()}`, label: newSectionName.trim(), ...palette }; const next = [...customCategories, nc]; setCustomCategories(next); try { localStorage.setItem("ffc_custom_cats", JSON.stringify(next)); } catch {} setNewSectionName(""); setShowAddSection(false); }} style={{ flex: 1, padding: "8px 0", background: T.taskAmber, color: "#fff", border: "none", borderRadius: 7, cursor: "pointer", fontWeight: 600, fontSize: 14 }}>Add</button>
+                      <button onClick={() => { setNewSectionName(""); setShowAddSection(false); }} style={{ padding: "8px 14px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14 }}>Cancel</button>
+                    </div>
+                  </>
+                ) : (
+                  <button onClick={() => setShowAddSection(true)} style={{ padding: "12px 22px", background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 9, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>+ Add Section</button>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -2793,47 +2841,163 @@ export default function Home() {
 
       {/* ═══════════ GOOGLE DOC MODAL ═══════════ */}
       {docModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ background: T.card, borderRadius: 14, padding: "28px 32px", width: 480, maxWidth: "92vw", boxShadow: "0 12px 48px rgba(0,0,0,0.22)" }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: T.text, marginBottom: 6 }}>📄 Save as Google Doc</div>
-            <div style={{ fontSize: 14, color: T.textMuted, marginBottom: 20 }}>"{docModal.title}"</div>
-            <label style={{ fontSize: 14, fontWeight: 600, color: T.text, display: "block", marginBottom: 6 }}>
-              Save to folder <span style={{ fontWeight: 400, color: T.textMuted }}>(paste Drive folder URL or leave blank for My Drive)</span>
-            </label>
-            <input
-              value={docFolderUrl}
-              onChange={e => setDocFolderUrl(e.target.value)}
-              placeholder="https://drive.google.com/drive/folders/..."
-              style={{ width: "100%", padding: "11px 14px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 15, marginBottom: 20, boxSizing: "border-box", outline: "none", color: T.text, background: T.bg }}
-            />
-            <div style={{ display: "flex", gap: 10 }}>
-              <button
-                disabled={docSaving}
-                onClick={async () => {
-                  setDocSaving(true);
-                  let folderId = null;
-                  const m = docFolderUrl.match(/\/folders\/([a-zA-Z0-9_-]+)/);
-                  if (m) folderId = m[1];
-                  const r = await fetch("/api/create-doc", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ title: docModal.title, content: docModal.content, folderId }),
-                  });
-                  const data = await r.json();
-                  setDocSaving(false);
-                  if (data.url) {
-                    showToast("Doc created!");
-                    window.open(data.url, "_blank");
-                    setDocModal(null);
-                    setDocFolderUrl("");
-                  } else {
-                    showToast("Failed: " + (data.error || "Unknown error"));
-                  }
-                }}
-                style={{ flex: 1, padding: "11px", background: T.accent, color: "#fff", border: "none", borderRadius: 8, cursor: docSaving ? "default" : "pointer", fontWeight: 600, fontSize: 15 }}
-              >{docSaving ? "Creating..." : "Create Doc & Open"}</button>
-              <button onClick={() => { setDocModal(null); setDocFolderUrl(""); }} style={{ padding: "11px 20px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15 }}>Cancel</button>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => { setDocModal(null); setDocModalMode("create"); setDocFolderUrl(""); setDocFolderSearch(""); setDocFolderResults([]); setDocSelectedFolder(null); setDocLinkSearch(""); setDocLinkResults([]); }}>
+          <div style={{ background: T.card, borderRadius: 14, padding: "28px 32px", width: 500, maxWidth: "92vw", boxShadow: "0 12px 48px rgba(0,0,0,0.22)" }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: T.text, marginBottom: 6 }}>📄 Google Doc</div>
+            <div style={{ fontSize: 14, color: T.textMuted, marginBottom: 16 }}>"{docModal.title}"</div>
+
+            {/* Mode toggle */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 20, background: T.bg, borderRadius: 8, padding: 4 }}>
+              {[{ id: "create", label: "Create new doc" }, { id: "link", label: "Link to existing" }].map(m => (
+                <button key={m.id} onClick={() => setDocModalMode(m.id)} style={{ flex: 1, padding: "8px 0", background: docModalMode === m.id ? T.card : "transparent", color: docModalMode === m.id ? T.text : T.textMuted, border: docModalMode === m.id ? `1px solid ${T.border}` : "1px solid transparent", borderRadius: 6, cursor: "pointer", fontWeight: docModalMode === m.id ? 600 : 400, fontSize: 14 }}>{m.label}</button>
+              ))}
             </div>
+
+            {docModalMode === "link" ? (
+              <>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <input
+                    autoFocus
+                    value={docLinkSearch}
+                    onChange={e => setDocLinkSearch(e.target.value)}
+                    onKeyDown={async e => {
+                      if (e.key === "Enter" && docLinkSearch.trim()) {
+                        setDocLinkSearching(true);
+                        try {
+                          const r = await fetch(`/api/drive?action=search&q=${encodeURIComponent(docLinkSearch.trim())}`, { credentials: "include" });
+                          const d = await r.json();
+                          setDocLinkResults(d.files || []);
+                        } catch { setDocLinkResults([]); }
+                        setDocLinkSearching(false);
+                      }
+                    }}
+                    placeholder="Search Drive files..."
+                    style={{ flex: 1, padding: "10px 14px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 15, boxSizing: "border-box", outline: "none", color: T.text, background: T.bg }}
+                  />
+                  <button disabled={docLinkSearching} onClick={async () => {
+                    if (!docLinkSearch.trim()) return;
+                    setDocLinkSearching(true);
+                    try {
+                      const r = await fetch(`/api/drive?action=search&q=${encodeURIComponent(docLinkSearch.trim())}`, { credentials: "include" });
+                      const d = await r.json();
+                      setDocLinkResults(d.files || []);
+                    } catch { setDocLinkResults([]); }
+                    setDocLinkSearching(false);
+                  }} style={{ padding: "10px 16px", background: T.driveViolet, color: "#fff", border: "none", borderRadius: 8, cursor: docLinkSearching ? "default" : "pointer", fontWeight: 600, fontSize: 14 }}>
+                    {docLinkSearching ? "..." : "Search"}
+                  </button>
+                </div>
+                {docLinkResults.length > 0 && (
+                  <div style={{ border: `1px solid ${T.border}`, borderRadius: 8, overflow: "hidden", marginBottom: 8, maxHeight: 260, overflowY: "auto" }}>
+                    {docLinkResults.map(f => (
+                      <div key={f.id} onClick={() => { window.open(f.webViewLink, "_blank"); setDocModal(null); setDocModalMode("create"); setDocFolderUrl(""); setDocFolderSearch(""); setDocFolderResults([]); setDocSelectedFolder(null); setDocLinkSearch(""); setDocLinkResults([]); }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: `1px solid ${T.borderLight}`, cursor: "pointer", background: T.bg }}>
+                        <span style={{ fontSize: 18 }}>{driveFileIcon(f.mimeType)}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, color: T.text, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</div>
+                          <div style={{ fontSize: 12, color: T.textMuted }}>{new Date(f.modifiedTime).toLocaleDateString()}</div>
+                        </div>
+                        <span style={{ fontSize: 12, color: T.driveViolet, fontWeight: 600 }}>Open →</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {docLinkResults.length === 0 && docLinkSearch && !docLinkSearching && (
+                  <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 8 }}>No files found — try a different search</div>
+                )}
+                <button onClick={() => { setDocModal(null); setDocModalMode("create"); setDocFolderUrl(""); setDocFolderSearch(""); setDocFolderResults([]); setDocSelectedFolder(null); setDocLinkSearch(""); setDocLinkResults([]); }} style={{ width: "100%", marginTop: 8, padding: "11px 20px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15 }}>Cancel</button>
+              </>
+            ) : (
+              <>
+            {/* Folder search */}
+            <label style={{ fontSize: 14, fontWeight: 600, color: T.text, display: "block", marginBottom: 6 }}>
+              Save to folder <span style={{ fontWeight: 400, color: T.textMuted }}>(search or leave blank for My Drive)</span>
+            </label>
+            {docSelectedFolder ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: T.driveVioletBg, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 8, marginBottom: 14 }}>
+                <span style={{ fontSize: 16 }}>📁</span>
+                <span style={{ flex: 1, fontWeight: 600, fontSize: 15, color: T.driveViolet }}>{docSelectedFolder.name}</span>
+                <button onClick={() => { setDocSelectedFolder(null); setDocFolderResults([]); setDocFolderSearch(""); }} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, fontSize: 18 }}>×</button>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <input
+                    value={docFolderSearch}
+                    onChange={e => setDocFolderSearch(e.target.value)}
+                    onKeyDown={async e => {
+                      if (e.key === "Enter" && docFolderSearch.trim()) {
+                        setDocFolderSearching(true);
+                        try {
+                          const r = await fetch(`/api/drive?action=folders&q=${encodeURIComponent(docFolderSearch.trim())}`, { credentials: "include" });
+                          const d = await r.json();
+                          setDocFolderResults(d.files || []);
+                        } catch { setDocFolderResults([]); }
+                        setDocFolderSearching(false);
+                      }
+                    }}
+                    placeholder="Search for a folder..."
+                    style={{ flex: 1, padding: "10px 14px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 15, boxSizing: "border-box", outline: "none", color: T.text, background: T.bg }}
+                  />
+                  <button disabled={docFolderSearching} onClick={async () => {
+                    if (!docFolderSearch.trim()) return;
+                    setDocFolderSearching(true);
+                    try {
+                      const r = await fetch(`/api/drive?action=folders&q=${encodeURIComponent(docFolderSearch.trim())}`, { credentials: "include" });
+                      const d = await r.json();
+                      setDocFolderResults(d.files || []);
+                    } catch { setDocFolderResults([]); }
+                    setDocFolderSearching(false);
+                  }} style={{ padding: "10px 16px", background: T.driveViolet, color: "#fff", border: "none", borderRadius: 8, cursor: docFolderSearching ? "default" : "pointer", fontWeight: 600, fontSize: 14 }}>
+                    {docFolderSearching ? "..." : "Search"}
+                  </button>
+                </div>
+                {docFolderResults.length > 0 && (
+                  <div style={{ border: `1px solid ${T.border}`, borderRadius: 8, overflow: "hidden", marginBottom: 8 }}>
+                    {docFolderResults.map(f => (
+                      <div key={f.id} onClick={() => { setDocSelectedFolder({ id: f.id, name: f.name }); setDocFolderResults([]); setDocFolderSearch(""); }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: `1px solid ${T.borderLight}`, cursor: "pointer", background: T.bg }}>
+                        <span style={{ fontSize: 16 }}>📁</span>
+                        <span style={{ fontSize: 14, color: T.text }}>{f.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {docFolderResults.length === 0 && docFolderSearch && !docFolderSearching && (
+                  <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 8 }}>No folders found — try a different search</div>
+                )}
+              </>
+            )}
+
+                <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+                  <button
+                    disabled={docSaving}
+                    onClick={async () => {
+                      setDocSaving(true);
+                      let folderId = docSelectedFolder?.id || null;
+                      if (!folderId) {
+                        const m = docFolderUrl.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+                        if (m) folderId = m[1];
+                      }
+                      const r = await fetch("/api/create-doc", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ title: docModal.title, content: docModal.content, folderId }),
+                      });
+                      const data = await r.json();
+                      setDocSaving(false);
+                      if (data.url) {
+                        showToast("Doc created!");
+                        window.open(data.url, "_blank");
+                        setDocModal(null); setDocModalMode("create"); setDocFolderUrl(""); setDocFolderSearch(""); setDocFolderResults([]); setDocSelectedFolder(null); setDocLinkSearch(""); setDocLinkResults([]);
+                      } else {
+                        showToast("Failed: " + (data.error || "Unknown error"));
+                      }
+                    }}
+                    style={{ flex: 1, padding: "11px", background: T.accent, color: "#fff", border: "none", borderRadius: 8, cursor: docSaving ? "default" : "pointer", fontWeight: 600, fontSize: 15 }}
+                  >{docSaving ? "Creating..." : "Create Doc & Open"}</button>
+                  <button onClick={() => { setDocModal(null); setDocModalMode("create"); setDocFolderUrl(""); setDocFolderSearch(""); setDocFolderResults([]); setDocSelectedFolder(null); setDocLinkSearch(""); setDocLinkResults([]); }} style={{ padding: "11px 20px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15 }}>Cancel</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
