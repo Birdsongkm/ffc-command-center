@@ -1061,6 +1061,7 @@ export default function Home() {
   const [calView, setCalView] = useState("today");
   const [weekEvents, setWeekEvents] = useState([]);
   const [nextWeekEvents, setNextWeekEvents] = useState([]);
+  const [pastWeekEvents, setPastWeekEvents] = useState([]);
   const [showEventForm, setShowEventForm] = useState(null);
   const [preppedEvents, setPreppedEvents] = useState(() => {
     if (typeof window !== "undefined") { try { return JSON.parse(localStorage.getItem("ffc_prepped") || "{}"); } catch { return {}; } }
@@ -1481,6 +1482,15 @@ export default function Home() {
     const r = await fetch("/api/calendar-actions", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ action: "range", startDate: start.toISOString(), endDate: end.toISOString() }) });
     const d = await r.json();
     if (d.success) setNextWeekEvents(d.events || []);
+  };
+
+  const fetchPastWeekEvents = async () => {
+    const now = new Date();
+    const end = new Date(now); end.setHours(0, 0, 0, 0);
+    const start = new Date(end); start.setDate(end.getDate() - 7);
+    const r = await fetch("/api/calendar-actions", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ action: "range", startDate: start.toISOString(), endDate: end.toISOString() }) });
+    const d = await r.json();
+    if (d.success) setPastWeekEvents(d.events || []);
   };
 
   const fetchWeekPrep = async (prepNext = false) => {
@@ -2223,10 +2233,27 @@ export default function Home() {
                               {ev.attendees.map(a => a.name || a.email).join(", ")}
                             </div>
                           )}
-                          <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+                          <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
                             {ev.htmlLink && <a href={ev.htmlLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: T.calGreen, fontWeight: 600, textDecoration: "none" }}>📅 See in Google Calendar →</a>}
                             <span style={{ color: T.textDim }}>{fmtTime(ev.start)} – {fmtTime(ev.end)}</span>
+                            {hasOthers && (
+                              <button onClick={() => fetchAiPrep(ev)} style={{ padding: "5px 13px", background: aiPrep[ev.id]?.text ? T.goldBg : T.accentBg, color: aiPrep[ev.id]?.text ? T.gold : T.accent, border: `1px solid ${aiPrep[ev.id]?.text ? T.taskAmberBorder : T.accent}30`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                                {aiPrep[ev.id]?.loading ? "✨ Prepping..." : aiPrep[ev.id]?.text ? "✨ View Prep" : "✨ AI Prep"}
+                              </button>
+                            )}
                           </div>
+                          {aiPrep[ev.id]?.text && (
+                            <div style={{ marginTop: 10, padding: "12px 16px", background: T.goldBg, border: `1px solid ${T.taskAmberBorder}`, borderRadius: 8, fontSize: 13, color: T.text, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                                <span style={{ fontWeight: 700, color: T.taskAmber }}>✨ AI Meeting Prep</span>
+                                <button onClick={() => setAiPrep(prev => { const n = { ...prev }; delete n[ev.id]; return n; })} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, fontSize: 16 }}>×</button>
+                              </div>
+                              {aiPrep[ev.id].text}
+                            </div>
+                          )}
+                          {aiPrep[ev.id]?.error && (
+                            <div style={{ marginTop: 6, color: T.danger, fontSize: 12, padding: "6px 10px", background: T.dangerBg, borderRadius: 6 }}>{aiPrep[ev.id].error}</div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -2616,6 +2643,7 @@ export default function Home() {
               <button onClick={() => setCalView("today")} style={{ padding: "10px 22px", background: calView === "today" ? T.calGreenBg : T.bg, color: calView === "today" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "today" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Today</button>
               <button onClick={() => { setCalView("week"); fetchWeekEvents(); }} style={{ padding: "10px 22px", background: calView === "week" ? T.calGreenBg : T.bg, color: calView === "week" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "week" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>This Week</button>
               <button onClick={() => { setCalView("nextWeek"); fetchNextWeekEvents(); }} style={{ padding: "10px 22px", background: calView === "nextWeek" ? T.calGreenBg : T.bg, color: calView === "nextWeek" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "nextWeek" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Next Week</button>
+              <button onClick={() => { setCalView("pastWeek"); fetchPastWeekEvents(); }} style={{ padding: "10px 22px", background: calView === "pastWeek" ? T.calGreenBg : T.bg, color: calView === "pastWeek" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "pastWeek" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Past Week</button>
               <div style={{ flex: 1 }} />
               <button onClick={() => setShowEventForm({})} style={{ padding: "10px 22px", background: T.calGreen, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>+ New Event</button>
             </div>
@@ -2710,6 +2738,44 @@ export default function Home() {
                   </div>
                 ));
               })()}</div>
+            )}
+
+            {/* Past Week — for meeting follow-ups (#70) */}
+            {calView === "pastWeek" && (
+              <div>
+                <div style={{ padding: "10px 16px", background: T.accentBg, border: `1px solid ${T.accent}30`, borderRadius: 10, marginBottom: 20, fontSize: 14, color: T.accent, fontWeight: 500 }}>
+                  📋 Use this view to follow up on last week's meetings — send notes, log outcomes, or create tasks.
+                </div>
+                {(() => {
+                  const days = {};
+                  pastWeekEvents.filter(isRealMeeting).forEach(ev => {
+                    const day = new Date(ev.start).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+                    if (!days[day]) days[day] = [];
+                    days[day].push(ev);
+                  });
+                  const entries = Object.entries(days).reverse(); // most recent first
+                  if (entries.length === 0) return <div style={{ padding: 32, textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, fontSize: 16 }}>No meetings last week</div>;
+                  return entries.map(([day, dayEvents]) => (
+                    <div key={day} style={{ marginBottom: 24 }}>
+                      <h4 style={{ fontSize: 17, fontWeight: 700, color: T.calGreen, marginBottom: 12, paddingBottom: 6, borderBottom: `2px solid ${T.calGreenBorder}` }}>{day}</h4>
+                      {dayEvents.map(ev => (
+                        <div key={ev.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "14px 18px", marginBottom: 10 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 10 }}>
+                            <span style={{ fontWeight: 600, fontSize: 15, color: T.calGreen, minWidth: 66 }}>{fmtTime(ev.start)}</span>
+                            <span style={{ fontSize: 16, color: T.text, fontWeight: 600, flex: 1 }}>{ev.title}</span>
+                            {ev.attendees?.length > 1 && <span style={{ fontSize: 12, color: T.textMuted }}>{ev.attendees.length} attendees</span>}
+                          </div>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            <button onClick={() => setComposing({ to: ev.attendees?.filter(a => !a.self).map(a => a.email).join(', ') || '', subject: `Follow-up: ${ev.title}`, body: '' })} style={{ padding: "6px 14px", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>✉️ Send follow-up</button>
+                            <button onClick={() => setShowTaskForm({ title: `Follow up: ${ev.title}`, category: "admin" })} style={{ padding: "6px 14px", background: T.taskAmberBg, color: T.taskAmber, border: `1px solid ${T.taskAmberBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>📋 Create task</button>
+                            <button onClick={() => setDocModal({ title: `Notes: ${ev.title} — ${day}`, content: `Meeting: ${ev.title}\nDate: ${day}\nAttendees: ${ev.attendees?.map(a => a.name || a.email).join(', ') || ''}\n\nNotes:\n` })} style={{ padding: "6px 14px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>📝 Log notes to Doc</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ));
+                })()}
+              </div>
             )}
           </div>
         )}
