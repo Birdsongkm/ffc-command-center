@@ -2,7 +2,7 @@
 
 **Owner:** Kayla Birdsong, CEO / PM — Fresh Food Connect
 **Executor:** Claude (autonomous, recursive, continuous until Kayla says pause)
-**Last updated:** 2026-03-23 (Sprint 9 shipped — 6 calendar improvements, 539 tests passing)
+**Last updated:** 2026-03-24 (issue #85 shipped — forward with attachments, 569 tests passing)
 
 ---
 
@@ -600,6 +600,7 @@ CRO vote: donor intent signal on email row (5/6), HubSpot auto-lookup on open (4
 | #82 | Drive folder navigation: browse into folders with breadcrumb trail | 2026-03-23 |
 | #83 | Dark mode toggle (🌙/☀️ in header, persisted to localStorage) | 2026-03-23 |
 | #84 | Email section rename (✏️ inline, persisted) + "Move to…" dropdown to reclassify emails | 2026-03-23 |
+| #85 | Forward emails with attachments included by default (pre-checked; multipart/mixed MIME) | 2026-03-24 |
 
 **Bug fix:** Dark mode SSR hydration crash — `useState` was reading `localStorage` on the server, causing a server/client mismatch that Next.js surfaced as "Application error: a client-side exception has occurred". Fixed by using `useState(false)` + `useEffect` to restore saved preference after hydration.
 
