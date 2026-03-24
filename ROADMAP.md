@@ -2,7 +2,7 @@
 
 **Owner:** Kayla Birdsong, CEO / PM — Fresh Food Connect
 **Executor:** Claude (autonomous, recursive, continuous until Kayla says pause)
-**Last updated:** 2026-03-23 (issues #75–84 shipped, 450 tests passing)
+**Last updated:** 2026-03-23 (Sprint 9 shipped — 6 calendar improvements, 539 tests passing)
 
 ---
 
@@ -664,3 +664,57 @@ CRO vote: BCC (6/6), reply-only default (5/6)
 
 **Tests added:** 25 new tests (gmail-improvements.test.js) — **475 total passing**
 **Pure functions tested:** `buildRawEmail` (BCC variant), `buildComposeInitialCc`, `buildReplyAllCc`, `validateBcc`
+
+---
+
+## Sprint 9 — Calendar Tab Improvements ✅ COMPLETE
+*Shipped: 2026-03-23 | 539 tests passing*
+
+### Panel deliberation — Calendar tab vs. Google Calendar
+
+All 7 panels reviewed the current Calendar tab against what Google Calendar itself provides.
+
+**ED Users panel (6/6):**
+> "I need to edit an event directly from the calendar tab — I created a meeting with the wrong attendees and had to hunt through Google Calendar to fix it. Also: I see events listed but I can't tell if they're 30 minutes or 2 hours. Duration matters for prep."
+ED vote: edit event inline (6/6), attendee RSVP status visible (5/6), event duration shown (4/6)
+
+**UX panel (6/6):**
+> "The Today view shows 'Nothing on the calendar today' when there ARE events — they're just focus blocks. That's a lie. Show 'No meetings today (2 calendar blocks hidden)'. Also: duration is GCal table stakes. Every calendar shows it."
+UX vote: accurate empty state (6/6), duration display (6/6), edit event (5/6)
+
+**Unicorn CEO panel (6/6):**
+> "Edit events inline. Right now creating a meeting with wrong attendees requires leaving the app. That's 3 extra clicks × 10 events/week = 30 minutes/week wasted. Second: attendee RSVP status — 'who hasn't accepted?' is a daily question before any meeting."
+CEO vote: edit event (6/6), attendee RSVP status (5/6)
+
+**Data panel (6/6):**
+> "Duration enables time audit: how many hours/week is Kayla in meetings? That's a leading indicator. Calendar tab badge showing today's meeting count is zero-cognitive-load awareness."
+Data vote: duration (6/6), calendar tab badge (5/6), attendee RSVP (4/6)
+
+**CFO panel (6/6):**
+> "Edit events is essential — we reschedule constantly. RSVP status matters for quorum on board meetings."
+CFO vote: edit event (6/6), RSVP status (5/6)
+
+**COO panel (6/6):**
+> "The empty state bug is a trust issue. When the app shows 'nothing today' but I know I have a focus block, I stop trusting the data. Fix it. Duration and edit are high-value ops improvements."
+COO vote: edit event (6/6), accurate empty state (6/6), duration (5/6)
+
+**CRO panel (5/6):**
+> "RSVP status on attendees before a donor meeting — critical for briefing Kayla. Also: location as a maps link saves the extra step of copying and pasting an address."
+CRO vote: RSVP status (6/6), location maps link (5/6), calendar badge (4/6)
+
+**Product team resolution (Kayla as PM):**
+- All 6 improvements approved. Vote tallies: edit event (29), RSVP status (21), duration (17), accurate empty state (15), calendar badge (9), maps link (5). All cleared the bar.
+
+### What shipped
+
+| Feature | Panel mandate | Status |
+|---|---|---|
+| ✏️ Edit event inline — edit button on all calendar views opens EventForm pre-filled | ED + CEO + CFO + COO (6/6) | ✅ |
+| Event duration display ("1h 30m") — shown below time on all views | UX + Data (6/6) | ✅ |
+| Attendee RSVP status chips — ✓/✗/? per attendee on Today + This Week views | CEO + CFO + CRO (6/6) | ✅ |
+| Accurate empty state — "No meetings today (N calendar blocks hidden)" when all events are blocks | UX + COO (6/6) | ✅ |
+| Calendar tab badge — today's real meeting count on tab nav button | Data (5/6) | ✅ |
+| Location maps link — physical locations become clickable Google Maps links | CRO (5/6) | ✅ |
+
+**Pure functions added:** `formatDuration`, `getAttendeeRsvpIcon`, `getAttendeeRsvpColor`, `calendarEmptyStateMessage`, `countTodayMeetings`, `buildMapsUrl`, `isVideoCallLocation`, `summarizeAttendeeRsvp`
+**Tests added:** 64 new tests (sprint9.test.js) — **539 total passing**

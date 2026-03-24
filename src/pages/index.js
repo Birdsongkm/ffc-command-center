@@ -392,6 +392,97 @@ function minsUntil(ev, now) {
   return rem > 0 ? `In ${hrs}h ${rem}m` : `In ${hrs}h`;
 }
 
+// ── Sprint 9: Calendar tab improvements ──────────────────────────────────────
+
+// Returns human-readable duration string, e.g. "1h 30m", "45m", "2h"
+function formatDuration(startISO, endISO) {
+  if (!startISO || !endISO) return '';
+  const start = new Date(startISO);
+  const end = new Date(endISO);
+  const diffMs = end - start;
+  if (diffMs <= 0) return '';
+  const totalMins = Math.round(diffMs / 60000);
+  const hours = Math.floor(totalMins / 60);
+  const mins = totalMins % 60;
+  if (hours === 0) return `${mins}m`;
+  if (mins === 0) return `${hours}h`;
+  return `${hours}h ${mins}m`;
+}
+
+// Returns icon for an attendee RSVP status
+function getAttendeeRsvpIcon(status) {
+  switch ((status || '').toLowerCase()) {
+    case 'accepted': return '✓';
+    case 'declined': return '✗';
+    case 'tentative': return '?';
+    case 'needsaction': return '–';
+    default: return '–';
+  }
+}
+
+// Returns a semantic color key for RSVP status
+function getAttendeeRsvpColor(status) {
+  switch ((status || '').toLowerCase()) {
+    case 'accepted': return 'accepted';
+    case 'declined': return 'declined';
+    case 'tentative': return 'tentative';
+    default: return 'pending';
+  }
+}
+
+// Returns the appropriate empty state message for the calendar today view.
+// Returns null when there are real meetings to show.
+function calendarEmptyStateMessage(events) {
+  if (!events || events.length === 0) return { type: 'no-events', text: 'No events today — enjoy the breathing room!' };
+  const realCount = events.filter(isRealMeeting).length;
+  const blockedCount = events.length - realCount;
+  if (realCount === 0) {
+    return {
+      type: 'no-meetings',
+      text: 'No meetings today',
+      subtext: blockedCount === 1 ? `(${blockedCount} calendar block hidden)` : `(${blockedCount} calendar blocks hidden)`,
+    };
+  }
+  return null;
+}
+
+// Returns count of real meetings today (for Calendar tab badge)
+function countTodayMeetings(events) {
+  if (!events || events.length === 0) return 0;
+  return events.filter(isRealMeeting).length;
+}
+
+// Returns Google Maps URL for a location string, or null if empty/whitespace
+function buildMapsUrl(location) {
+  if (!location || !location.trim()) return null;
+  return `https://maps.google.com/?q=${encodeURIComponent(location.trim())}`;
+}
+
+// Returns true if a location string is a video call link (not a physical address)
+function isVideoCallLocation(location) {
+  if (!location) return false;
+  return location.startsWith('http') && (
+    location.includes('meet.google') ||
+    location.includes('zoom.us') ||
+    location.includes('teams.microsoft') ||
+    location.includes('webex.com')
+  );
+}
+
+// Returns summary counts of attendee RSVP statuses
+function summarizeAttendeeRsvp(attendees) {
+  if (!attendees || attendees.length === 0) return { accepted: 0, declined: 0, tentative: 0, pending: 0 };
+  const summary = { accepted: 0, declined: 0, tentative: 0, pending: 0 };
+  attendees.forEach(a => {
+    const s = (a.status || '').toLowerCase();
+    if (s === 'accepted') summary.accepted++;
+    else if (s === 'declined') summary.declined++;
+    else if (s === 'tentative') summary.tentative++;
+    else summary.pending++;
+  });
+  return summary;
+}
+
 function scoreSearchResult(item, query, type) {
   const q = query.toLowerCase().trim();
   if (!q) return 0;
@@ -2319,6 +2410,7 @@ export default function Home() {
               }}>
                 <span style={{ fontSize: t.label ? 16 : 20 }}>{t.icon}</span>{t.label ? ` ${t.label}` : ""}
                 {t.id === "tasks" && pendingTasks > 0 && <span style={{ background: T.taskAmber, color: "#fff", borderRadius: 10, padding: "2px 9px", fontSize: 13, fontWeight: 700 }}>{pendingTasks}</span>}
+                {t.id === "calendar" && countTodayMeetings(events) > 0 && <span style={{ background: T.calGreen, color: "#fff", borderRadius: 10, padding: "2px 9px", fontSize: 13, fontWeight: 700 }}>{countTodayMeetings(events)}</span>}
               </button>
             );
           })}
@@ -2342,7 +2434,7 @@ export default function Home() {
             </div>
           </div>
         )}
-        {showEventForm && <EventForm prefillFromEmail={showEventForm.prefillFromEmail} contacts={contacts} onSave={(data) => { calendarAction("create", { event: data }); setShowEventForm(null); }} onCancel={() => setShowEventForm(null)} />}
+        {showEventForm && <EventForm event={showEventForm.event || null} prefillFromEmail={showEventForm.prefillFromEmail} contacts={contacts} onSave={(data) => { if (data.eventId) { calendarAction("update", { eventId: data.eventId, event: data }); } else { calendarAction("create", { event: data }); } setShowEventForm(null); }} onCancel={() => setShowEventForm(null)} />}
 
         {/* ═══════════ TODAY TAB ═══════════ */}
         {tab === "today" && (
@@ -3005,34 +3097,62 @@ export default function Home() {
               <div style={{ flex: 1 }} />
               <button onClick={() => setShowEventForm({})} style={{ padding: "11px 24px", background: T.calGreen, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>+ New Event</button>
             </div>
-            {showEventForm && !showEventForm.prefillFromEmail && <EventForm contacts={contacts} onSave={(data) => { calendarAction("create", { event: data }); setShowEventForm(null); }} onCancel={() => setShowEventForm(null)} />}
+            {showEventForm && !showEventForm.prefillFromEmail && <EventForm event={showEventForm.event || null} contacts={contacts} onSave={(data) => { if (data.eventId) { calendarAction("update", { eventId: data.eventId, event: data }); } else { calendarAction("create", { event: data }); } setShowEventForm(null); }} onCancel={() => setShowEventForm(null)} />}
 
             {calView === "today" && (
               <div>
                 <h3 style={{ fontSize: 18, fontWeight: 700, color: T.calGreen, marginBottom: 16 }}>Today — {fmtDate(new Date())}</h3>
-                {events.length === 0 ? <div style={{ padding: "48px 32px", textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, fontSize: 15 }}><div style={{ fontSize: 52, marginBottom: 14 }}>🌿</div>No events today — enjoy the breathing room!</div>
-                  : events.map(ev => {
+                {(() => {
+                  const emptyState = calendarEmptyStateMessage(events);
+                  if (emptyState) {
+                    return (
+                      <div style={{ padding: "48px 32px", textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, fontSize: 15 }}>
+                        <div style={{ fontSize: 52, marginBottom: 14 }}>🌿</div>
+                        <div style={{ fontWeight: 600, fontSize: 16, color: T.text, marginBottom: 6 }}>{emptyState.text}</div>
+                        {emptyState.subtext && <div style={{ fontSize: 13, color: T.textDim }}>{emptyState.subtext}</div>}
+                      </div>
+                    );
+                  }
+                  return events.map(ev => {
                     const evStatus = getEventStatus(ev);
                     const isNow = evStatus === "inprogress";
                     const isSoon = evStatus === "soon";
                     const isPast = evStatus === "past";
                     const real = isRealMeeting(ev);
+                    const duration = formatDuration(ev.start, ev.end);
+                    const mapsUrl = !isVideoCallLocation(ev.location) ? buildMapsUrl(ev.location) : null;
                     return (
                   <div key={ev.id} style={{ background: isNow ? T.calGreenBg : T.card, border: `2px solid ${isNow ? T.calGreen : isSoon ? T.calGreenBorder : T.calGreenBorder}`, borderLeft: isNow ? `5px solid ${T.calGreen}` : isSoon ? `5px solid ${T.taskAmber}` : undefined, borderRadius: 10, padding: "18px 22px", marginBottom: 12, display: "flex", alignItems: "center", gap: 16, opacity: (real || isNow) ? 1 : 0.5, transition: "all 0.15s" }}>
                     <div style={{ minWidth: 66, textAlign: "center" }}>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: isNow ? T.calGreen : T.calGreen }}>{fmtTime(ev.start)}</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: T.calGreen }}>{fmtTime(ev.start)}</div>
                       <div style={{ fontSize: 13, color: T.textMuted }}>{fmtTime(ev.end)}</div>
+                      {duration && <div style={{ fontSize: 11, color: T.textDim, marginTop: 2 }}>{duration}</div>}
                       {isNow && <div style={{ marginTop: 4, fontSize: 11, fontWeight: 700, color: "#fff", background: T.calGreen, borderRadius: 4, padding: "2px 6px" }}>▶ NOW</div>}
                       {isSoon && <div style={{ marginTop: 4, fontSize: 11, fontWeight: 700, color: T.taskAmber, background: T.taskAmberBg, borderRadius: 4, padding: "2px 6px" }}>{minsUntil(ev)}</div>}
                       {isPast && <div style={{ marginTop: 4, fontSize: 11, color: T.textMuted }}>Done</div>}
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 600, fontSize: 17, color: T.text }}>{ev.title}</div>
-                      {ev.location && <div style={{ fontSize: 14, color: T.textMuted, marginTop: 3 }}>📍 {ev.location}</div>}
+                      {ev.location && (
+                        <div style={{ fontSize: 14, color: T.textMuted, marginTop: 3 }}>
+                          📍 {mapsUrl ? <a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{ color: T.calGreen, textDecoration: "none", fontWeight: 500 }}>{ev.location}</a> : ev.location}
+                        </div>
+                      )}
                       {ev.description && <div style={{ fontSize: 13, color: T.textMuted, marginTop: 4, lineHeight: 1.5, maxHeight: 40, overflow: "hidden" }}>{ev.description.replace(/<[^>]*>/g, "").slice(0, 120)}{ev.description.length > 120 ? "…" : ""}</div>}
                       {ev.attendees?.length > 1 && (
-                        <div style={{ display: "flex", gap: 4, marginTop: 6, alignItems: "center" }}>
-                          {ev.attendees.slice(0, 6).map((a, i) => { const av = senderAvatar(a.name || a.email); return <div key={i} title={a.name || a.email} style={{ width: 24, height: 24, borderRadius: "50%", background: av.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, border: "2px solid #fff", boxShadow: "0 1px 3px rgba(0,0,0,0.15)" }}>{av.initials}</div>; })}
+                        <div style={{ display: "flex", gap: 4, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
+                          {ev.attendees.slice(0, 6).map((a, i) => {
+                            const av = senderAvatar(a.name || a.email);
+                            const rsvpIcon = getAttendeeRsvpIcon(a.status);
+                            const rsvpCol = getAttendeeRsvpColor(a.status);
+                            const rsvpColor = rsvpCol === 'accepted' ? T.calGreen : rsvpCol === 'declined' ? T.danger : rsvpCol === 'tentative' ? T.gold : T.textDim;
+                            return (
+                              <div key={i} title={`${a.name || a.email} — ${a.status || 'pending'}`} style={{ display: "flex", alignItems: "center", gap: 3, background: T.bg, borderRadius: 12, padding: "2px 7px 2px 2px", border: `1px solid ${T.border}` }}>
+                                <div style={{ width: 22, height: 22, borderRadius: "50%", background: av.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700 }}>{av.initials}</div>
+                                <span style={{ fontSize: 11, color: rsvpColor, fontWeight: 700 }}>{rsvpIcon}</span>
+                              </div>
+                            );
+                          })}
                           {ev.attendees.length > 6 && <span style={{ fontSize: 12, color: T.textMuted }}>+{ev.attendees.length - 6} more</span>}
                         </div>
                       )}
@@ -3040,11 +3160,13 @@ export default function Home() {
                     <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
                       {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "9px 18px", background: isNow ? T.calGreen : T.calGreenBg, color: isNow ? "#fff" : T.calGreen, borderRadius: 7, textDecoration: "none", fontSize: 15, fontWeight: 700, border: `1px solid ${T.calGreenBorder}` }}>📹 {isNow ? "Join Now!" : "Join Call"}</a>}
                       {real && !preppedEvents[ev.id] && (() => { const docUrl = extractDocFromEvent(ev); return docUrl ? <a href={docUrl} target="_blank" rel="noopener noreferrer" style={{ padding: "9px 16px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 7, fontSize: 14, fontWeight: 600, textDecoration: "none", display: "inline-block" }}>📄 Open Agenda</a> : <button onClick={() => { setTab("drive"); setDriveSearch(ev.title); fetchDrive("search", ev.title); }} style={{ padding: "9px 16px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 7, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Prepare</button>; })()}
+                      {real && <button onClick={() => setShowEventForm({ event: ev })} style={{ padding: "9px 16px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>✏️ Edit</button>}
                       {real && <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "9px 16px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>{preppedEvents[ev.id] ? "✓ Prepped" : "Prep Done"}</button>}
                     </div>
                   </div>
-                  );
-                })}
+                    );
+                  });
+                })()}
               </div>
             )}
 
@@ -3068,23 +3190,39 @@ export default function Home() {
                       const wkStatus = getEventStatus(ev);
                       const wkNow = wkStatus === "inprogress";
                       const wkSoon = wkStatus === "soon";
+                      const wkDuration = formatDuration(ev.start, ev.end);
+                      const wkMapsUrl = !isVideoCallLocation(ev.location) ? buildMapsUrl(ev.location) : null;
                       return (
                       <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", marginBottom: 6, background: wkNow ? T.calGreenBg : T.card, border: `1px solid ${wkNow ? T.calGreen : T.border}`, borderLeft: wkNow ? `4px solid ${T.calGreen}` : wkSoon ? `4px solid ${T.taskAmber}` : undefined, borderRadius: 8, opacity: isRealMeeting(ev) ? 1 : 0.5 }}>
                         <div style={{ minWidth: 70, textAlign: "center" }}>
                           <span style={{ fontWeight: 600, fontSize: 14, color: T.calGreen, display: "block" }}>{fmtTime(ev.start)}</span>
+                          {wkDuration && <span style={{ fontSize: 11, color: T.textDim, display: "block" }}>{wkDuration}</span>}
                           {wkNow && <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: T.calGreen, borderRadius: 3, padding: "1px 5px", display: "inline-block", marginTop: 2 }}>▶ NOW</span>}
                           {wkSoon && <span style={{ fontSize: 10, fontWeight: 700, color: T.taskAmber, display: "block", marginTop: 2 }}>{minsUntil(ev)}</span>}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 16, color: T.text, fontWeight: wkNow ? 700 : 400 }}>{ev.title}</div>
+                          {ev.location && <div style={{ fontSize: 13, color: T.textMuted, marginTop: 2 }}>📍 {wkMapsUrl ? <a href={wkMapsUrl} target="_blank" rel="noopener noreferrer" style={{ color: T.calGreen, textDecoration: "none" }}>{ev.location}</a> : ev.location}</div>}
                           {ev.attendees?.length > 1 && (
-                            <div style={{ display: "flex", gap: 3, marginTop: 4 }}>
-                              {ev.attendees.slice(0, 5).map((a, i) => { const av = senderAvatar(a.name || a.email); return <div key={i} title={a.name || a.email} style={{ width: 20, height: 20, borderRadius: "50%", background: av.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, border: "1.5px solid #fff" }}>{av.initials}</div>; })}
+                            <div style={{ display: "flex", gap: 3, marginTop: 4, flexWrap: "wrap" }}>
+                              {ev.attendees.slice(0, 5).map((a, i) => {
+                                const av = senderAvatar(a.name || a.email);
+                                const rsvpIcon = getAttendeeRsvpIcon(a.status);
+                                const rsvpCol = getAttendeeRsvpColor(a.status);
+                                const rsvpColor = rsvpCol === 'accepted' ? T.calGreen : rsvpCol === 'declined' ? T.danger : rsvpCol === 'tentative' ? T.gold : T.textDim;
+                                return (
+                                  <div key={i} title={`${a.name || a.email} — ${a.status || 'pending'}`} style={{ display: "flex", alignItems: "center", gap: 2, background: T.bg, borderRadius: 10, padding: "1px 5px 1px 2px", border: `1px solid ${T.border}` }}>
+                                    <div style={{ width: 18, height: 18, borderRadius: "50%", background: av.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 700 }}>{av.initials}</div>
+                                    <span style={{ fontSize: 10, color: rsvpColor, fontWeight: 700 }}>{rsvpIcon}</span>
+                                  </div>
+                                );
+                              })}
                               {ev.attendees.length > 5 && <span style={{ fontSize: 11, color: T.textMuted }}>+{ev.attendees.length - 5}</span>}
                             </div>
                           )}
                         </div>
                         {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 14px", background: wkNow ? T.calGreen : T.calGreenBg, color: wkNow ? "#fff" : T.calGreen, borderRadius: 6, textDecoration: "none", fontSize: 14, fontWeight: 600, border: `1px solid ${T.calGreenBorder}` }}>📹 {wkNow ? "Join Now" : "Join"}</a>}
+                        <button onClick={() => setShowEventForm({ event: ev })} style={{ padding: "6px 12px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>✏️</button>
                         <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "6px 14px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>{preppedEvents[ev.id] ? "✓ Prepped" : "Prep Done"}</button>
                       </div>
                     ); })}
@@ -3107,14 +3245,24 @@ export default function Home() {
                 return entries.map(([day, dayEvents]) => (
                   <div key={day} style={{ marginBottom: 24 }}>
                     <h4 style={{ fontSize: 17, fontWeight: 700, color: T.calGreen, marginBottom: 12, paddingBottom: 6, borderBottom: `2px solid ${T.calGreenBorder}` }}>{day}</h4>
-                    {dayEvents.map(ev => (
+                    {dayEvents.map(ev => {
+                      const nwDuration = formatDuration(ev.start, ev.end);
+                      const nwMapsUrl = !isVideoCallLocation(ev.location) ? buildMapsUrl(ev.location) : null;
+                      return (
                       <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", marginBottom: 6, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, opacity: isRealMeeting(ev) ? 1 : 0.5 }}>
-                        <span style={{ fontWeight: 600, fontSize: 15, color: T.calGreen, minWidth: 66 }}>{fmtTime(ev.start)}</span>
-                        <span style={{ fontSize: 16, color: T.text, flex: 1 }}>{ev.title}</span>
+                        <div style={{ minWidth: 66, textAlign: "center" }}>
+                          <span style={{ fontWeight: 600, fontSize: 15, color: T.calGreen, display: "block" }}>{fmtTime(ev.start)}</span>
+                          {nwDuration && <span style={{ fontSize: 11, color: T.textDim, display: "block" }}>{nwDuration}</span>}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ fontSize: 16, color: T.text }}>{ev.title}</span>
+                          {ev.location && <div style={{ fontSize: 13, color: T.textMuted, marginTop: 2 }}>📍 {nwMapsUrl ? <a href={nwMapsUrl} target="_blank" rel="noopener noreferrer" style={{ color: T.calGreen, textDecoration: "none" }}>{ev.location}</a> : ev.location}</div>}
+                        </div>
                         {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 14px", background: T.calGreen, color: "#fff", borderRadius: 6, textDecoration: "none", fontSize: 14, fontWeight: 600 }}>Join</a>}
+                        <button onClick={() => setShowEventForm({ event: ev })} style={{ padding: "6px 12px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>✏️</button>
                         <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "6px 14px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>{preppedEvents[ev.id] ? "✓ Prepped" : "Prep Done"}</button>
                       </div>
-                    ))}
+                    ); })}
                   </div>
                 ));
               })()}</div>
