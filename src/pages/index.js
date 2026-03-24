@@ -895,7 +895,7 @@ function SnoozePicker({ onSnooze, onCancel }) {
 // ═══════════════════════════════════════════════
 //  COMPOSE / REPLY / FORWARD FORM — with autocomplete
 // ═══════════════════════════════════════════════
-function ComposeForm({ mode = "compose", email = null, onSend, onSchedule, onCancel, signature = "", suggestedForwardTo = "", prefillBody = "", contacts = [] }) {
+function ComposeForm({ mode = "compose", email = null, onSend, onSchedule, onCancel, signature = "", suggestedForwardTo = "", prefillBody = "", contacts = [], forwardAttachments = [] }) {
   const [to, setTo] = useState(mode === "reply" && email ? (email.replyTo || email.from || "") : (mode === "forward" ? suggestedForwardTo : ""));
   // Reply defaults to sender-only (not reply-all). User can click "Reply All" to expand CC.
   const [cc, setCc] = useState("");
@@ -915,6 +915,11 @@ function ComposeForm({ mode = "compose", email = null, onSend, onSchedule, onCan
   const [showBccSugg, setShowBccSugg] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [scheduleCustom, setScheduleCustom] = useState("");
+  const [selectedAttachmentIds, setSelectedAttachmentIds] = useState(() => forwardAttachments.map(a => a.attachmentId));
+  // Sync pre-selection when attachments load after compose opens
+  React.useEffect(() => {
+    setSelectedAttachmentIds(forwardAttachments.map(a => a.attachmentId));
+  }, [forwardAttachments.length]);
 
   // Build CC string for reply-all: To + CC from original email, minus known own address
   const replyAllCc = mode === "reply" && email
@@ -1000,7 +1005,13 @@ function ComposeForm({ mode = "compose", email = null, onSend, onSchedule, onCan
     try {
       const payload = { to, cc, bcc: bcc || "", subject, body: body + (signature ? `\n--\n${signature.replace(/<[^>]*>/g, "")}` : "") };
       if (mode === "reply" && email) { payload.threadId = email.threadId; payload.inReplyTo = email.messageId; payload.references = email.messageId; payload.originalMessageId = email.id; }
-      if (mode === "forward" && email) { payload.forward = true; payload.originalBody = email.snippet || ""; }
+      if (mode === "forward" && email) {
+        payload.forward = true;
+        payload.originalBody = email.snippet || "";
+        payload.originalMessageId = email.id;
+        const selected = forwardAttachments.filter(a => selectedAttachmentIds.includes(a.attachmentId));
+        if (selected.length > 0) payload.forwardAttachments = selected;
+      }
       await onSend(payload);
     } finally { setSending(false); }
   };
@@ -1102,6 +1113,21 @@ function ComposeForm({ mode = "compose", email = null, onSend, onSchedule, onCan
       <input placeholder="Subject" value={subject} onChange={e => setSubject(e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
       <textarea placeholder="Write your message..." value={body} onChange={e => setBody(e.target.value)} rows={6} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
       {signature && <div style={{ fontSize: 13, color: T.textMuted, marginTop: 6, padding: "8px 12px", background: T.bg, borderRadius: 6, borderLeft: `3px solid ${T.accent}` }}>Your signature will be appended</div>}
+      {mode === "forward" && forwardAttachments.length > 0 && (
+        <div style={{ marginTop: 10, padding: "10px 14px", background: T.bg, borderRadius: 8, border: `1px solid ${T.border}` }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, marginBottom: 6 }}>📎 Attachments from original email:</div>
+          {forwardAttachments.map(att => (
+            <label key={att.attachmentId} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.text, cursor: "pointer", marginBottom: 4 }}>
+              <input type="checkbox" checked={selectedAttachmentIds.includes(att.attachmentId)}
+                onChange={() => setSelectedAttachmentIds(prev =>
+                  prev.includes(att.attachmentId) ? prev.filter(id => id !== att.attachmentId) : [...prev, att.attachmentId]
+                )} />
+              {att.filename}
+              {att.size > 0 && <span style={{ color: T.textMuted, fontSize: 12 }}>({Math.round(att.size / 1024)}KB)</span>}
+            </label>
+          ))}
+        </div>
+      )}
       <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
         <button onClick={handleSend} disabled={sending || !to.trim()} style={{ padding: "11px 26px", background: T.accent, color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 16, cursor: "pointer", opacity: sending ? 0.6 : 1 }}>{sending ? "Sending..." : "Send"}</button>
         <div style={{ position: "relative" }}>
@@ -2283,7 +2309,7 @@ export default function Home() {
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14, paddingTop: 14, borderTop: `1px solid ${T.borderLight}` }}>
                 <button onClick={() => setComposing({ mode: "reply", email })} style={abtn(T.emailBlue, T.emailBlueBg)}>↩ Reply</button>
                 <button onClick={() => fetchAiDraft(email)} style={{ ...abtn(T.accent, T.accentBg), fontWeight: 700 }} disabled={aiDraftLoading === email.id} title="AI writes a first draft for you to review">{aiDraftLoading === email.id ? "✨ Drafting..." : "✨ Draft Reply"}</button>
-                <button onClick={() => setComposing({ mode: "forward", email })} style={abtn(T.driveViolet, T.driveVioletBg)}>↗ Forward</button>
+                <button onClick={() => { fetchEmailBody(email.id); setComposing({ mode: "forward", email }); }} style={abtn(T.driveViolet, T.driveVioletBg)}>↗ Forward</button>
                 <button onClick={() => emailAction("markRead", email.id)} style={abtn(T.textMuted, T.bg)}>✓ Mark Read</button>
                 <button onClick={() => emailAction("trash", email.id)} style={abtn(T.danger, T.dangerBg)}>🗑 Delete</button>
                 <button onClick={() => emailAction("star", email.id)} style={abtn(T.gold, T.goldBg)}>⭐ Star</button>
@@ -2300,7 +2326,7 @@ export default function Home() {
 
             {composing && composing.email?.id === email.id && (
               <div style={{ marginTop: 14 }}>
-                <ComposeForm mode={composing.mode} email={email} onSend={sendEmail} onSchedule={scheduleEmail} onCancel={() => setComposing(null)} signature={signature} prefillBody={composing.prefillBody || ""} contacts={contacts} />
+                <ComposeForm mode={composing.mode} email={email} onSend={sendEmail} onSchedule={scheduleEmail} onCancel={() => setComposing(null)} signature={signature} prefillBody={composing.prefillBody || ""} contacts={contacts} forwardAttachments={composing.mode === "forward" ? (emailBody[email.id]?.attachments || []) : []} />
               </div>
             )}
           </div>

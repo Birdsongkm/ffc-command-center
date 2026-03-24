@@ -81,6 +81,26 @@ function getHeaderValue(headers, name) {
   return header?.value || '';
 }
 
+function extractAttachments(payload) {
+  if (!payload || !payload.parts) return [];
+  const result = [];
+  function walk(parts) {
+    for (const part of parts) {
+      if (part.parts) { walk(part.parts); continue; }
+      if (part.filename && part.body && part.body.attachmentId) {
+        result.push({
+          filename: part.filename,
+          mimeType: part.mimeType || 'application/octet-stream',
+          attachmentId: part.body.attachmentId,
+          size: part.body.size || 0,
+        });
+      }
+    }
+  }
+  walk(payload.parts);
+  return result;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -124,6 +144,7 @@ export default async function handler(req, res) {
       threadId: message.threadId,
       labels: message.labelIds || [],
       snippet: message.snippet,
+      attachments: extractAttachments(message.payload),
     });
   } catch (error) {
     console.error('Error fetching email body:', error);
