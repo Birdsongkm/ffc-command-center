@@ -806,8 +806,10 @@ function SnoozePicker({ onSnooze, onCancel }) {
 // ═══════════════════════════════════════════════
 function ComposeForm({ mode = "compose", email = null, onSend, onSchedule, onCancel, signature = "", suggestedForwardTo = "", prefillBody = "", contacts = [] }) {
   const [to, setTo] = useState(mode === "reply" && email ? (email.replyTo || email.from || "") : (mode === "forward" ? suggestedForwardTo : ""));
-  // Reply-all by default (#74): include original To + CC recipients in the CC field
-  const [cc, setCc] = useState(mode === "reply" && email ? [email.to, email.cc].filter(v => v && v.trim()).join(', ') : "");
+  // Reply defaults to sender-only (not reply-all). User can click "Reply All" to expand CC.
+  const [cc, setCc] = useState("");
+  const [bcc, setBcc] = useState("");
+  const [showBcc, setShowBcc] = useState(false);
   const [subject, setSubject] = useState(
     mode === "reply" ? `Re: ${(email?.subject || "").replace(/^Re:\s*/i, "")}` :
     mode === "forward" ? `Fwd: ${email?.subject || ""}` : ""
@@ -818,8 +820,24 @@ function ComposeForm({ mode = "compose", email = null, onSend, onSchedule, onCan
   const [showSugg, setShowSugg] = useState(false);
   const [ccSuggestions, setCcSuggestions] = useState([]);
   const [showCcSugg, setShowCcSugg] = useState(false);
+  const [bccSuggestions, setBccSuggestions] = useState([]);
+  const [showBccSugg, setShowBccSugg] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [scheduleCustom, setScheduleCustom] = useState("");
+
+  // Build CC string for reply-all: To + CC from original email, minus known own address
+  const replyAllCc = mode === "reply" && email
+    ? [email.to, email.cc].filter(v => v && v.trim()).join(', ')
+    : "";
+  const isReplyAll = mode === "reply" && cc === replyAllCc && replyAllCc !== "";
+
+  const handleReplyAllToggle = () => {
+    if (isReplyAll) {
+      setCc(""); // Switch back to reply-to-sender
+    } else {
+      setCc(replyAllCc); // Expand to reply-all
+    }
+  };
   const inputStyle = { width: "100%", padding: "12px 16px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 16, background: T.bg, color: T.text, outline: "none", boxSizing: "border-box" };
 
   const handleToChange = (val) => {
@@ -864,11 +882,32 @@ function ComposeForm({ mode = "compose", email = null, onSend, onSchedule, onCan
     setShowCcSugg(false);
   };
 
+  const handleBccChange = (val) => {
+    setBcc(val);
+    const lastPart = val.split(",").pop().trim().toLowerCase();
+    if (lastPart.length >= 2) {
+      const matches = contacts.filter(c =>
+        c.name.toLowerCase().includes(lastPart) || c.email.toLowerCase().includes(lastPart)
+      ).slice(0, 6);
+      setBccSuggestions(matches);
+      setShowBccSugg(matches.length > 0);
+    } else {
+      setShowBccSugg(false);
+    }
+  };
+
+  const pickBccSuggestion = (c) => {
+    const parts = bcc.split(",");
+    parts[parts.length - 1] = ` ${c.name} <${c.email}>`;
+    setBcc(parts.join(",").trimStart() + ", ");
+    setShowBccSugg(false);
+  };
+
   const handleSend = async () => {
     if (!to.trim()) return;
     setSending(true);
     try {
-      const payload = { to, cc, subject, body: body + (signature ? `\n--\n${signature.replace(/<[^>]*>/g, "")}` : "") };
+      const payload = { to, cc, bcc: bcc || "", subject, body: body + (signature ? `\n--\n${signature.replace(/<[^>]*>/g, "")}` : "") };
       if (mode === "reply" && email) { payload.threadId = email.threadId; payload.inReplyTo = email.messageId; payload.references = email.messageId; payload.originalMessageId = email.id; }
       if (mode === "forward" && email) { payload.forward = true; payload.originalBody = email.snippet || ""; }
       await onSend(payload);
@@ -878,7 +917,21 @@ function ComposeForm({ mode = "compose", email = null, onSend, onSchedule, onCan
   return (
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 22, marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <span style={{ fontWeight: 600, fontSize: 17, color: T.text }}>{mode === "reply" ? "Reply" : mode === "forward" ? "Forward" : "New Email"}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontWeight: 600, fontSize: 17, color: T.text }}>{mode === "reply" ? "Reply" : mode === "forward" ? "Forward" : "New Email"}</span>
+          {mode === "reply" && replyAllCc && (
+            <button onClick={handleReplyAllToggle}
+              style={{ padding: "4px 12px", fontSize: 13, fontWeight: 600, background: isReplyAll ? T.emailBlueBg : T.bg, color: isReplyAll ? T.emailBlue : T.textMuted, border: `1px solid ${isReplyAll ? T.emailBlue : T.border}`, borderRadius: 20, cursor: "pointer" }}
+              title={isReplyAll ? "Switch to reply-to-sender only" : "Reply to all recipients"}>
+              {isReplyAll ? "↩↩ Reply All" : "↩ Reply — click for Reply All"}
+            </button>
+          )}
+          <button onClick={() => setShowBcc(s => !s)}
+            style={{ padding: "4px 10px", fontSize: 12, fontWeight: 600, background: showBcc ? T.accentBg : T.bg, color: showBcc ? T.accent : T.textMuted, border: `1px solid ${showBcc ? T.accent : T.border}`, borderRadius: 20, cursor: "pointer" }}
+            title="Add BCC recipients">
+            {showBcc ? "− BCC" : "+ BCC"}
+          </button>
+        </div>
         <button onClick={onCancel} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: T.textMuted }}>×</button>
       </div>
       {/* To field with autocomplete */}
@@ -929,6 +982,32 @@ function ComposeForm({ mode = "compose", email = null, onSend, onSchedule, onCan
           </div>
         )}
       </div>
+      {/* BCC field with autocomplete — shown when + BCC clicked */}
+      {showBcc && (
+        <div style={{ position: "relative", marginBottom: 8 }}>
+          <input placeholder="Bcc" value={bcc} onChange={e => handleBccChange(e.target.value)}
+            onBlur={() => setTimeout(() => setShowBccSugg(false), 150)}
+            style={inputStyle} />
+          {showBccSugg && (
+            <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 200, boxShadow: "0 6px 24px rgba(0,0,0,0.12)", overflow: "hidden" }}>
+              {bccSuggestions.map((c, i) => (
+                <div key={i} onMouseDown={() => pickBccSuggestion(c)}
+                  style={{ padding: "10px 16px", cursor: "pointer", fontSize: 15, display: "flex", alignItems: "center", gap: 10, borderBottom: i < bccSuggestions.length - 1 ? `1px solid ${T.borderLight}` : "none" }}
+                  onMouseEnter={e => e.currentTarget.style.background = T.bg}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                  <div style={{ width: 30, height: 30, borderRadius: "50%", background: T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: T.accent, flexShrink: 0 }}>
+                    {c.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 600, color: T.text }}>{c.name}</div>
+                    <div style={{ fontSize: 13, color: T.textMuted }}>{c.email}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <input placeholder="Subject" value={subject} onChange={e => setSubject(e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} />
       <textarea placeholder="Write your message..." value={body} onChange={e => setBody(e.target.value)} rows={6} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
       {signature && <div style={{ fontSize: 13, color: T.textMuted, marginTop: 6, padding: "8px 12px", background: T.bg, borderRadius: 6, borderLeft: `3px solid ${T.accent}` }}>Your signature will be appended</div>}
@@ -944,12 +1023,12 @@ function ComposeForm({ mode = "compose", email = null, onSend, onSchedule, onCan
                 { label: "Monday 9am", getTime: () => { const d = new Date(); const days = (8 - d.getDay()) % 7 || 7; d.setDate(d.getDate() + days); d.setHours(9, 0, 0, 0); return d.getTime(); } },
                 { label: "Next Friday 9am", getTime: () => { const d = new Date(); const days = ((5 - d.getDay() + 7) % 7) || 7; d.setDate(d.getDate() + days); d.setHours(9, 0, 0, 0); return d.getTime(); } },
               ].map(opt => (
-                <button key={opt.label} onClick={() => { if (!onSchedule || !to.trim()) return; const payload = { to, cc, subject, body: body + (signature ? `\n--\n${signature.replace(/<[^>]*>/g, "")}` : "") }; if (mode === "reply" && email) { payload.threadId = email.threadId; payload.inReplyTo = email.messageId; payload.references = email.messageId; payload.originalMessageId = email.id; } onSchedule(payload, opt.getTime()); setShowSchedule(false); onCancel(); }} style={{ display: "block", width: "100%", padding: "8px 12px", textAlign: "left", background: "none", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 14, color: T.text, marginBottom: 2 }}>{opt.label}</button>
+                <button key={opt.label} onClick={() => { if (!onSchedule || !to.trim()) return; const payload = { to, cc, bcc: bcc || "", subject, body: body + (signature ? `\n--\n${signature.replace(/<[^>]*>/g, "")}` : "") }; if (mode === "reply" && email) { payload.threadId = email.threadId; payload.inReplyTo = email.messageId; payload.references = email.messageId; payload.originalMessageId = email.id; } onSchedule(payload, opt.getTime()); setShowSchedule(false); onCancel(); }} style={{ display: "block", width: "100%", padding: "8px 12px", textAlign: "left", background: "none", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 14, color: T.text, marginBottom: 2 }}>{opt.label}</button>
               ))}
               <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 6, paddingTop: 6 }}>
                 <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 4 }}>Custom date/time:</div>
                 <input type="datetime-local" value={scheduleCustom} onChange={e => setScheduleCustom(e.target.value)} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, background: T.bg, color: T.text, boxSizing: "border-box" }} />
-                <button onClick={() => { if (!scheduleCustom || !to.trim()) return; const payload = { to, cc, subject, body: body + (signature ? `\n--\n${signature.replace(/<[^>]*>/g, "")}` : "") }; if (mode === "reply" && email) { payload.threadId = email.threadId; payload.inReplyTo = email.messageId; payload.references = email.messageId; payload.originalMessageId = email.id; } onSchedule(payload, new Date(scheduleCustom).getTime()); setShowSchedule(false); onCancel(); }} disabled={!scheduleCustom} style={{ marginTop: 6, width: "100%", padding: "7px", background: T.accent, color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Schedule</button>
+                <button onClick={() => { if (!scheduleCustom || !to.trim()) return; const payload = { to, cc, bcc: bcc || "", subject, body: body + (signature ? `\n--\n${signature.replace(/<[^>]*>/g, "")}` : "") }; if (mode === "reply" && email) { payload.threadId = email.threadId; payload.inReplyTo = email.messageId; payload.references = email.messageId; payload.originalMessageId = email.id; } onSchedule(payload, new Date(scheduleCustom).getTime()); setShowSchedule(false); onCancel(); }} disabled={!scheduleCustom} style={{ marginTop: 6, width: "100%", padding: "7px", background: T.accent, color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Schedule</button>
               </div>
             </div>
           )}

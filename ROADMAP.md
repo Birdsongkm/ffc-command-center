@@ -604,3 +604,63 @@ CRO vote: donor intent signal on email row (5/6), HubSpot auto-lookup on open (4
 **Bug fix:** Dark mode SSR hydration crash — `useState` was reading `localStorage` on the server, causing a server/client mismatch that Next.js surfaced as "Application error: a client-side exception has occurred". Fixed by using `useState(false)` + `useEffect` to restore saved preference after hydration.
 
 **Tests:** 450 total (up from 424). emailSections.test.js adds getBucketLabel, getEmailSection, setBucketLabel, moveEmailToSection, removeEmailSectionOverride.
+
+---
+
+## Sprint 8 — Gmail Compose: BCC Field + Reply/Reply-All Toggle
+*Shipped: 2026-03-23 | 475 tests passing*
+
+### Panel deliberation
+
+**ED Users panel (6/6):**
+> "I need BCC for every email — when I loop in the board, when I BCC legal, when I BCC a development director on a donor reply. The missing BCC field is a daily gap. Also: the reply-all default (#74) sends replies to everyone in the thread. That's a liability. I want to reply to the sender by default and choose reply-all explicitly."
+
+ED vote: BCC field (6/6), reply-only as default with toggle (5/6)
+
+**UX panel (6/6):**
+> "BCC is a standard field — any email client has it. Show it behind a '+ BCC' toggle so it doesn't clutter the form for the 70% of emails that don't need it. The reply/reply-all toggle should be visible in the compose form header — not buried in a dropdown."
+
+UX vote: BCC behind toggle (6/6), toggle button in form header (6/6)
+
+**Unicorn CEO panel (6/6):**
+> "BCC is table stakes. Reply-all by default is a well-known productivity trap. Fix both. Ship them together since they're both compose-form changes."
+
+CEO vote: both features (6/6)
+
+**Data panel (6/6):**
+> "The data shows: most ED replies go to the original sender only. Reply-all is the exception. Invert the default. Make reply-all a one-click upgrade."
+
+Data vote: reply-only default (6/6), reply-all toggle (6/6)
+
+**CFO panel (6/6):**
+> "BCC is essential for financial communications. Board members are BCC'd on grant notifications. Legal is BCC'd on contract emails. This is a compliance need."
+
+CFO vote: BCC (6/6)
+
+**COO panel (6/6):**
+> "Reply-all by default creates operational noise. Staff gets unwanted CCs. Reply-only default is the right ops posture."
+
+COO vote: reply-only default (6/6), BCC (6/6)
+
+**CRO panel (5/6):**
+> "BCC'ing the development director on donor replies is standard stewardship practice. BCC field is required. Reply-all on donor threads is a donor stewardship risk."
+
+CRO vote: BCC (6/6), reply-only default (5/6)
+
+**Product team resolution (Kayla as PM):**
+- Feature 1: BCC field — hidden behind `+ BCC` toggle button in compose header, autocomplete support, passes through to send-email API and MIME headers
+- Feature 2: Reply/Reply-All toggle — reply mode defaults to sender-only (empty CC), toggle button switches to pre-fill CC with all original recipients, toggles back to reply-only
+
+**Files changed:**
+- `src/pages/api/send-email.js` — `buildRawEmail` now accepts `bcc` param, emits `Bcc:` header
+- `src/pages/index.js` — ComposeForm: BCC state + input + autocomplete, reply-all toggle button, reply CC defaults to empty
+
+### What shipped
+
+| Feature | Panel mandate | Status |
+|---|---|---|
+| BCC field in ComposeForm (toggle, autocomplete, passes to API) | CFO + COO + CRO (6/6) | ✅ |
+| Reply-only default (empty CC) with Reply-All toggle button | Data + COO (6/6) | ✅ |
+
+**Tests added:** 25 new tests (gmail-improvements.test.js) — **475 total passing**
+**Pure functions tested:** `buildRawEmail` (BCC variant), `buildComposeInitialCc`, `buildReplyAllCc`, `validateBcc`

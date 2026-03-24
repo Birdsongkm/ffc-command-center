@@ -49,7 +49,7 @@ async function getToken(req, res) {
   return token;
 }
 
-function buildRawEmail({ to, cc, subject, body, inReplyTo, references, signature, forward, originalBody }) {
+function buildRawEmail({ to, cc, bcc, subject, body, inReplyTo, references, signature, forward, originalBody }) {
   let finalBody = body;
 
   // Append signature if provided
@@ -66,6 +66,7 @@ function buildRawEmail({ to, cc, subject, body, inReplyTo, references, signature
     `To: ${to}`,
   ];
   if (cc) lines.push(`Cc: ${cc}`);
+  if (bcc) lines.push(`Bcc: ${bcc}`);
   lines.push(
     `Subject: ${subject}`,
     'Content-Type: text/plain; charset=utf-8',
@@ -87,12 +88,12 @@ export default async function handler(req, res) {
   const token = await getToken(req, res);
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
 
-  const { to, cc, subject, body, threadId, inReplyTo, references, signature, forward, originalBody } = req.body;
+  const { to, cc, bcc, subject, body, threadId, inReplyTo, references, signature, forward, originalBody } = req.body;
 
   if (!to || !body) return res.status(400).json({ error: 'Missing to or body' });
 
   try {
-    const raw = buildRawEmail({ to, cc: cc || '', subject: subject || '(no subject)', body, inReplyTo, references, signature, forward, originalBody });
+    const raw = buildRawEmail({ to, cc: cc || '', bcc: bcc || '', subject: subject || '(no subject)', body, inReplyTo, references, signature, forward, originalBody });
 
     const payload = { raw };
     if (threadId) payload.threadId = threadId;
