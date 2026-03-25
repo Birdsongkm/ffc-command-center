@@ -2676,7 +2676,7 @@ export default function Home() {
                         <div style={{ display: "flex", gap: 5, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                           {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", background: T.calGreen, color: "#fff", borderRadius: 6, textDecoration: "none", fontSize: 13, fontWeight: 600 }}>Join</a>}
                           {linkedTask && <button onClick={() => { setTab("drive"); setDriveSearch(linkedTask.title); fetchDrive("search", linkedTask.title); }} style={{ padding: "6px 12px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Do it →</button>}
-                          {hasOthers && (
+                          {real && (
                             <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "6px 10px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
                               {preppedEvents[ev.id] ? "✓" : "Prep"}
                             </button>
@@ -2695,7 +2695,8 @@ export default function Home() {
                           <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
                             {ev.htmlLink && <a href={ev.htmlLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: T.calGreen, fontWeight: 600, textDecoration: "none" }}>📅 See in Google Calendar →</a>}
                             <span style={{ color: T.textDim }}>{fmtTime(ev.start)} – {fmtTime(ev.end)}</span>
-                            {hasOthers && (
+                            {real && !preppedEvents[ev.id] && (() => { const docUrl = extractDocFromEvent(ev); return docUrl ? <a href={docUrl} target="_blank" rel="noopener noreferrer" style={{ padding: "5px 13px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 6, textDecoration: "none", fontSize: 13, fontWeight: 600 }}>📄 Open Agenda</a> : <button onClick={() => { setTab("drive"); setDriveSearch(ev.title); fetchDrive("search", ev.title); }} style={{ padding: "5px 13px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>📝 Find Agenda</button>; })()}
+                            {real && (
                               <button onClick={() => fetchAiPrep(ev)} style={{ padding: "5px 13px", background: aiPrep[ev.id]?.text ? T.goldBg : T.accentBg, color: aiPrep[ev.id]?.text ? T.gold : T.accent, border: `1px solid ${aiPrep[ev.id]?.text ? T.taskAmberBorder : T.accent}30`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
                                 {aiPrep[ev.id]?.loading ? "✨ Prepping..." : aiPrep[ev.id]?.text ? "✨ View Prep" : "✨ AI Prep"}
                               </button>
