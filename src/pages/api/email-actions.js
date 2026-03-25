@@ -85,6 +85,14 @@ async function doAction(token, messageId, action) {
     const r = await fetch(gmailUrl, { method: 'POST', headers: h, body: JSON.stringify({ removeLabelIds: ['INBOX'] }) });
     return r.json();
   }
+  if (action === 'untrash') {
+    const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/untrash`, { method: 'POST', headers: h });
+    return r.json();
+  }
+  if (action === 'unarchive') {
+    const r = await fetch(gmailUrl, { method: 'POST', headers: h, body: JSON.stringify({ addLabelIds: ['INBOX'] }) });
+    return r.json();
+  }
   if (action === 'forward') {
     // This action requires messageId, forwardTo, and will be handled by calling forward endpoint
     // Note: The actual forwarding is handled via send-email.js with forward mode

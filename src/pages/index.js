@@ -836,14 +836,15 @@ function LightbulbFAB() {
 // ═══════════════════════════════════════════════
 //  SMALL COMPONENTS
 // ═══════════════════════════════════════════════
-function Toast({ message, onDone }) {
-  useEffect(() => { const t = setTimeout(onDone, 2500); return () => clearTimeout(t); }, [onDone]);
+function Toast({ message, onUndo, onDone }) {
+  useEffect(() => { const t = setTimeout(onDone, onUndo ? 5000 : 2500); return () => clearTimeout(t); }, [onDone, onUndo]);
   return (
     <div style={{ position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)",
-      background: T.text, color: "#fff", padding: "14px 30px", borderRadius: 10,
+      background: T.text, color: "#fff", padding: "14px 24px", borderRadius: 10,
       fontSize: 16, fontWeight: 500, zIndex: 9999, boxShadow: "0 4px 20px rgba(0,0,0,0.18)",
-      animation: "slideUp 0.3s ease" }}>
-      {message}
+      animation: "slideUp 0.3s ease", display: "flex", alignItems: "center", gap: 16 }}>
+      <span>{message}</span>
+      {onUndo && <button onClick={() => { onUndo(); onDone(); }} style={{ background: "rgba(255,255,255,0.2)", color: "#fff", border: "1px solid rgba(255,255,255,0.4)", borderRadius: 6, padding: "4px 12px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Undo</button>}
     </div>
   );
 }
@@ -1647,7 +1648,7 @@ export default function Home() {
   useEffect(() => {
     try { localStorage.setItem('ffc_scheduled_emails', JSON.stringify(scheduledEmails)); } catch {}
   }, [scheduledEmails]);
-  const showToast = useCallback((msg) => setToast(msg), []);
+  const showToast = useCallback((msg, onUndo) => setToast({ message: msg, onUndo: onUndo || null }), []);
 
   // Check and send due scheduled emails every 60s
   useEffect(() => {
@@ -1752,13 +1753,14 @@ export default function Home() {
 
   // ── Actions ──
   const emailAction = async (action, messageId, extra = {}) => {
+    const emailToUndo = (action === "trash" || action === "archive") ? emails.find(e => e.id === messageId) : null;
     const r = await fetch("/api/email-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, messageId, ...extra }) });
     const d = await r.json();
     if (d.success) {
       if (["markRead", "archive", "trash", "snooze"].includes(action)) setEmails(prev => prev.filter(e => e.id !== messageId));
       // Record action for learning + show label suggestion on archive/trash
       if (["archive", "trash", "markRead", "snooze"].includes(action)) {
-        const email = emails.find(e => e.id === messageId);
+        const email = emailToUndo || emails.find(e => e.id === messageId);
         if (email) {
           const bucket = emailBucketOverrides[email.id] || classifyEmail(email);
           setEmailActionHistory(prev => {
@@ -1769,7 +1771,18 @@ export default function Home() {
           if (action === "trash" || action === "archive") {
             const label = suggestArchiveLabel(email);
             const labels = { archive: "Archived", markRead: "Marked as read", trash: "Deleted", star: "Starred", unstar: "Unstarred", snooze: "Snoozed" };
-            showToast(label ? `${labels[action] || "Done"} · Label suggestion: ${label}` : (labels[action] || "Done"));
+            const undoAction = action === "trash" ? "untrash" : "unarchive";
+            const onUndo = async () => {
+              const ur = await fetch("/api/email-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: undoAction, messageId }) });
+              const ud = await ur.json();
+              if (ud.success) {
+                if (emailToUndo) setEmails(prev => prev.some(e => e.id === emailToUndo.id) ? prev : [emailToUndo, ...prev]);
+                showToast("Restored");
+              } else {
+                showToast("Restore failed");
+              }
+            };
+            showToast(label ? `${labels[action] || "Done"} · ${label}` : (labels[action] || "Done"), onUndo);
           } else {
             const labels = { markRead: "Marked as read", snooze: "Snoozed" };
             showToast(labels[action] || "Done");
@@ -3640,7 +3653,7 @@ export default function Home() {
 
       </div>
 
-      {toast && <Toast message={toast} onDone={() => setToast(null)} />}
+      {toast && <Toast message={toast.message} onUndo={toast.onUndo} onDone={() => setToast(null)} />}
 
       {/* ═══════════ GOOGLE DOC MODAL ═══════════ */}
       {docModal && (
