@@ -2,7 +2,7 @@
 
 **Owner:** Kayla Birdsong, CEO / PM — Fresh Food Connect
 **Executor:** Claude (autonomous, recursive, continuous until Kayla says pause)
-**Last updated:** 2026-03-25 (issue #86 shipped — PREP buttons on Today's Schedule home tab, 591 tests passing)
+**Last updated:** 2026-03-25 (issue #87 shipped — undo button after delete/archive, 615 tests passing)
 
 ---
 
@@ -602,6 +602,7 @@ CRO vote: donor intent signal on email row (5/6), HubSpot auto-lookup on open (4
 | #84 | Email section rename (✏️ inline, persisted) + "Move to…" dropdown to reclassify emails | 2026-03-23 |
 | #85 | Forward emails with attachments included by default (pre-checked; multipart/mixed MIME) | 2026-03-24 |
 | #86 | Today's Schedule (home tab) now shows full PREP options for all real meetings: AI Prep, Open Agenda doc link, Find Agenda drive search — gated on isRealMeeting instead of hasOthers | 2026-03-25 |
+| #87 | Undo button after deleting/archiving emails — 5-second toast with Undo that calls untrash/unarchive API and restores email to top of list | 2026-03-25 |
 
 **Bug fix:** Dark mode SSR hydration crash — `useState` was reading `localStorage` on the server, causing a server/client mismatch that Next.js surfaced as "Application error: a client-side exception has occurred". Fixed by using `useState(false)` + `useEffect` to restore saved preference after hydration.
 
