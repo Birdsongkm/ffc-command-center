@@ -58,6 +58,35 @@ const TEAM = [
   { name: "Brittany", initials: "BR", email: "brittany@freshfoodconnect.org", meetingStyle: "notes" },
 ];
 
+// ── Email action button configuration (#90) ────────────────────────────────────
+const EMAIL_ACTION_BUTTONS = [
+  { id: "reply",     label: "↩ Reply",       defaultOn: true },
+  { id: "aiDraft",   label: "✨ Draft Reply", defaultOn: true },
+  { id: "trash",     label: "🗑 Delete",      defaultOn: true },
+  { id: "markRead",  label: "✓ Mark Read",   defaultOn: true },
+  { id: "star",      label: "⭐ Star",        defaultOn: true },
+  { id: "makeTask",  label: "📋 Make Task",   defaultOn: true },
+  { id: "toDo",      label: "📌 To Do",       defaultOn: true },
+  { id: "moveTo",    label: "📂 Move to…",    defaultOn: true },
+  { id: "forward",   label: "↗ Forward",      defaultOn: true },
+  { id: "snooze",    label: "⏰ Snooze",       defaultOn: true },
+  { id: "makeEvent", label: "📅 Make Event",  defaultOn: true },
+];
+
+function isEmailActionVisible(id, config) {
+  if (!config || !(id in config)) {
+    const btn = EMAIL_ACTION_BUTTONS.find(b => b.id === id);
+    return btn ? btn.defaultOn : false;
+  }
+  return !!config[id];
+}
+
+function getEmailActionConfig(stored) {
+  const defaults = {};
+  EMAIL_ACTION_BUTTONS.forEach(b => { defaults[b.id] = b.defaultOn; });
+  return { ...defaults, ...(stored || {}) };
+}
+
 // ── Chat providers — add Slack / Teams entries here to enable future integrations ──
 const CHAT_PROVIDERS = [
   { id: "google-chat", name: "Google Chat", apiPath: "/api/chat-messages", icon: "💬" },
@@ -1665,6 +1694,9 @@ export default function Home() {
   const [searchIdx, setSearchIdx] = useState(0); // keyboard nav index
   const [chatNotifs, setChatNotifs] = useState([]); // array of { id, sender, preview, spaceName, timestamp }
   const lastChatPollRef = useRef(Date.now()); // only show messages that arrive after page load
+  const [emailActionConfig, setEmailActionConfig] = useState(() => {
+    try { return getEmailActionConfig(JSON.parse(localStorage.getItem("ffc_email_action_config") || "null")); } catch { return getEmailActionConfig(null); }
+  });
 
   // ── Persist ──
   useEffect(() => {
@@ -1706,6 +1738,9 @@ export default function Home() {
   useEffect(() => {
     try { localStorage.setItem('ffc_scheduled_emails', JSON.stringify(scheduledEmails)); } catch {}
   }, [scheduledEmails]);
+  useEffect(() => {
+    try { localStorage.setItem('ffc_email_action_config', JSON.stringify(emailActionConfig)); } catch {}
+  }, [emailActionConfig]);
   const showToast = useCallback((msg, onUndo) => setToast({ message: msg, onUndo: onUndo || null }), []);
 
   // Check and send due scheduled emails every 60s
@@ -2317,36 +2352,38 @@ export default function Home() {
                     ✨ {suggestion.action === "archive" ? "Archive" : suggestion.action === "trash" ? "Delete" : suggestion.action === "markRead" ? "Mark Read" : suggestion.action === "snooze" ? "Snooze" : suggestion.action}
                   </button>
                 )}
-                <button onClick={() => { setExpandedEmail(email.id); fetchEmailBody(email.id); fetchContactHistory(email.from); setComposing({ mode: "reply", email }); }} style={abtn(T.emailBlue, T.emailBlueBg)}>↩ Reply</button>
-                <button onClick={() => { setExpandedEmail(email.id); fetchEmailBody(email.id); fetchContactHistory(email.from); fetchAiDraft(email); }} style={{ ...abtn(T.accent, T.accentBg), fontWeight: 700 }} disabled={aiDraftLoading === email.id} title="AI writes a first draft for you to review">{aiDraftLoading === email.id ? "✨ Drafting..." : "✨ Draft Reply"}</button>
-                <button onClick={() => emailAction("trash", email.id)} style={abtn(T.danger, T.dangerBg)}>🗑 Delete</button>
-                <button onClick={() => emailAction("markRead", email.id)} style={abtn(T.textMuted, T.bg)}>✓ Read</button>
-                <button onClick={() => emailAction("star", email.id)} style={abtn(T.gold, T.goldBg)}>⭐ Star</button>
-                <button onClick={() => setShowTaskForm({ prefillFromEmail: email })} style={abtn(T.taskAmber, T.taskAmberBg)}>📋 Make Task</button>
-                {effectiveBucket === "to-do"
+                {isEmailActionVisible("reply", emailActionConfig) && <button onClick={() => { setExpandedEmail(email.id); fetchEmailBody(email.id); fetchContactHistory(email.from); setComposing({ mode: "reply", email }); }} style={abtn(T.emailBlue, T.emailBlueBg)}>↩ Reply</button>}
+                {isEmailActionVisible("aiDraft", emailActionConfig) && <button onClick={() => { setExpandedEmail(email.id); fetchEmailBody(email.id); fetchContactHistory(email.from); fetchAiDraft(email); }} style={{ ...abtn(T.accent, T.accentBg), fontWeight: 700 }} disabled={aiDraftLoading === email.id} title="AI writes a first draft for you to review">{aiDraftLoading === email.id ? "✨ Drafting..." : "✨ Draft Reply"}</button>}
+                {isEmailActionVisible("trash", emailActionConfig) && <button onClick={() => emailAction("trash", email.id)} style={abtn(T.danger, T.dangerBg)}>🗑 Delete</button>}
+                {isEmailActionVisible("markRead", emailActionConfig) && <button onClick={() => emailAction("markRead", email.id)} style={abtn(T.textMuted, T.bg)}>✓ Read</button>}
+                {isEmailActionVisible("star", emailActionConfig) && <button onClick={() => emailAction("star", email.id)} style={abtn(T.gold, T.goldBg)}>⭐ Star</button>}
+                {isEmailActionVisible("makeTask", emailActionConfig) && <button onClick={() => setShowTaskForm({ prefillFromEmail: email })} style={abtn(T.taskAmber, T.taskAmberBg)}>📋 Make Task</button>}
+                {isEmailActionVisible("toDo", emailActionConfig) && (effectiveBucket === "to-do"
                   ? <button onClick={() => setToDoEmailIds(prev => { const n = new Set(prev); n.delete(email.id); return n; })} style={abtn(T.calGreen, T.calGreenBg)}>✓ Done</button>
                   : <button onClick={() => setToDoEmailIds(prev => new Set([...prev, email.id]))} style={abtn(T.accent, T.accentBg)}>📌 To Do</button>
-                }
+                )}
                 {isDebbieFinance && <button onClick={() => setFinancePanel(email)} style={abtn(T.taskAmber, T.taskAmberBg)}>📊 Finance Review</button>}
-                <div style={{ position: "relative" }}>
-                  <button onClick={() => setMovingEmailId(movingEmailId === email.id ? null : email.id)} style={abtn(T.driveViolet, T.driveVioletBg)}>📂 Move to…</button>
-                  {movingEmailId === email.id && (
-                    <div style={{ position: "absolute", top: "110%", left: 0, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: 8, zIndex: 100, minWidth: 220, boxShadow: "0 4px 16px rgba(0,0,0,0.13)" }}>
-                      {Object.entries(BUCKETS).map(([key, bInfo]) => (
-                        <button key={key} onClick={() => { setEmailBucketOverrides(prev => ({ ...prev, [email.id]: key })); setMovingEmailId(null); }}
-                          style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 12px", background: effectiveBucket === key ? bInfo.bg : "transparent", color: effectiveBucket === key ? bInfo.color : T.text, border: "none", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: effectiveBucket === key ? 700 : 400 }}>
-                          {bInfo.icon} {bucketLabels[key] || bInfo.label}
-                        </button>
-                      ))}
-                      {emailBucketOverrides[email.id] && (
-                        <button onClick={() => { setEmailBucketOverrides(prev => { const u = { ...prev }; delete u[email.id]; return u; }); setMovingEmailId(null); }}
-                          style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 12px", background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 12, marginTop: 6 }}>
-                          ↺ Reset to auto-classified
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
+                {isEmailActionVisible("moveTo", emailActionConfig) && (
+                  <div style={{ position: "relative" }}>
+                    <button onClick={() => setMovingEmailId(movingEmailId === email.id ? null : email.id)} style={abtn(T.driveViolet, T.driveVioletBg)}>📂 Move to…</button>
+                    {movingEmailId === email.id && (
+                      <div style={{ position: "absolute", top: "110%", left: 0, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: 8, zIndex: 100, minWidth: 220, boxShadow: "0 4px 16px rgba(0,0,0,0.13)" }}>
+                        {Object.entries(BUCKETS).map(([key, bInfo]) => (
+                          <button key={key} onClick={() => { setEmailBucketOverrides(prev => ({ ...prev, [email.id]: key })); setMovingEmailId(null); }}
+                            style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 12px", background: effectiveBucket === key ? bInfo.bg : "transparent", color: effectiveBucket === key ? bInfo.color : T.text, border: "none", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: effectiveBucket === key ? 700 : 400 }}>
+                            {bInfo.icon} {bucketLabels[key] || bInfo.label}
+                          </button>
+                        ))}
+                        {emailBucketOverrides[email.id] && (
+                          <button onClick={() => { setEmailBucketOverrides(prev => { const u = { ...prev }; delete u[email.id]; return u; }); setMovingEmailId(null); }}
+                            style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 12px", background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 12, marginTop: 6 }}>
+                            ↺ Reset to auto-classified
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -2399,18 +2436,20 @@ export default function Home() {
             {/* Full action buttons */}
             {showActions && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14, paddingTop: 14, borderTop: `1px solid ${T.borderLight}` }}>
-                <button onClick={() => setComposing({ mode: "reply", email })} style={abtn(T.emailBlue, T.emailBlueBg)}>↩ Reply</button>
-                <button onClick={() => fetchAiDraft(email)} style={{ ...abtn(T.accent, T.accentBg), fontWeight: 700 }} disabled={aiDraftLoading === email.id} title="AI writes a first draft for you to review">{aiDraftLoading === email.id ? "✨ Drafting..." : "✨ Draft Reply"}</button>
-                <button onClick={() => { fetchEmailBody(email.id); setComposing({ mode: "forward", email }); }} style={abtn(T.driveViolet, T.driveVioletBg)}>↗ Forward</button>
-                <button onClick={() => emailAction("markRead", email.id)} style={abtn(T.textMuted, T.bg)}>✓ Mark Read</button>
-                <button onClick={() => emailAction("trash", email.id)} style={abtn(T.danger, T.dangerBg)}>🗑 Delete</button>
-                <button onClick={() => emailAction("star", email.id)} style={abtn(T.gold, T.goldBg)}>⭐ Star</button>
-                <div style={{ position: "relative" }}>
-                  <button onClick={() => setShowSnooze(showSnooze === email.id ? null : email.id)} style={abtn(T.info, T.infoBg)}>⏰ Snooze</button>
-                  {showSnooze === email.id && <SnoozePicker onSnooze={(until) => { emailAction("snooze", email.id, { snoozeUntil: until }); setShowSnooze(null); }} onCancel={() => setShowSnooze(null)} />}
-                </div>
-                <button onClick={() => setShowTaskForm({ prefillFromEmail: email })} style={abtn(T.taskAmber, T.taskAmberBg)}>📋 Make Task</button>
-                <button onClick={() => setShowEventForm({ prefillFromEmail: email })} style={abtn(T.calGreen, T.calGreenBg)}>📅 Make Event</button>
+                {isEmailActionVisible("reply", emailActionConfig) && <button onClick={() => setComposing({ mode: "reply", email })} style={abtn(T.emailBlue, T.emailBlueBg)}>↩ Reply</button>}
+                {isEmailActionVisible("aiDraft", emailActionConfig) && <button onClick={() => fetchAiDraft(email)} style={{ ...abtn(T.accent, T.accentBg), fontWeight: 700 }} disabled={aiDraftLoading === email.id} title="AI writes a first draft for you to review">{aiDraftLoading === email.id ? "✨ Drafting..." : "✨ Draft Reply"}</button>}
+                {isEmailActionVisible("forward", emailActionConfig) && <button onClick={() => { fetchEmailBody(email.id); setComposing({ mode: "forward", email }); }} style={abtn(T.driveViolet, T.driveVioletBg)}>↗ Forward</button>}
+                {isEmailActionVisible("markRead", emailActionConfig) && <button onClick={() => emailAction("markRead", email.id)} style={abtn(T.textMuted, T.bg)}>✓ Mark Read</button>}
+                {isEmailActionVisible("trash", emailActionConfig) && <button onClick={() => emailAction("trash", email.id)} style={abtn(T.danger, T.dangerBg)}>🗑 Delete</button>}
+                {isEmailActionVisible("star", emailActionConfig) && <button onClick={() => emailAction("star", email.id)} style={abtn(T.gold, T.goldBg)}>⭐ Star</button>}
+                {isEmailActionVisible("snooze", emailActionConfig) && (
+                  <div style={{ position: "relative" }}>
+                    <button onClick={() => setShowSnooze(showSnooze === email.id ? null : email.id)} style={abtn(T.info, T.infoBg)}>⏰ Snooze</button>
+                    {showSnooze === email.id && <SnoozePicker onSnooze={(until) => { emailAction("snooze", email.id, { snoozeUntil: until }); setShowSnooze(null); }} onCancel={() => setShowSnooze(null)} />}
+                  </div>
+                )}
+                {isEmailActionVisible("makeTask", emailActionConfig) && <button onClick={() => setShowTaskForm({ prefillFromEmail: email })} style={abtn(T.taskAmber, T.taskAmberBg)}>📋 Make Task</button>}
+                {isEmailActionVisible("makeEvent", emailActionConfig) && <button onClick={() => setShowEventForm({ prefillFromEmail: email })} style={abtn(T.calGreen, T.calGreenBg)}>📅 Make Event</button>}
                 {isDebbieFinance && <button onClick={() => setFinancePanel(email)} style={abtn(T.taskAmber, T.taskAmberBg)}>📊 Finance Review</button>}
                 {email.listUnsubscribe && <button onClick={() => { window.open(email.listUnsubscribe.replace(/[<>]/g, ""), "_blank"); showToast("Opening unsubscribe link..."); }} style={abtn(T.danger, T.dangerBg)}>🚫 Unsubscribe</button>}
               </div>
@@ -3673,6 +3712,30 @@ export default function Home() {
                     placeholder="Organization name" style={{ width: "100%", padding: "11px 14px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 15, background: T.bg, color: T.text, outline: "none", boxSizing: "border-box" }} />
                   <div style={{ fontSize: 12, color: T.textMuted, marginTop: 5 }}>Your nonprofit or company name</div>
                 </div>
+              </div>
+
+              {/* Email Action Buttons */}
+              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "24px 28px", marginBottom: 20 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 6 }}>📧 Email Action Buttons</div>
+                <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 18 }}>Choose which buttons appear on email cards. Changes apply instantly.</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {EMAIL_ACTION_BUTTONS.map(btn => (
+                    <label key={btn.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", padding: "10px 14px", background: T.bg, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                      <span style={{ fontSize: 14, color: T.text, fontWeight: 500 }}>{btn.label}</span>
+                      <input
+                        type="checkbox"
+                        checked={isEmailActionVisible(btn.id, emailActionConfig)}
+                        onChange={e => setEmailActionConfig(prev => ({ ...prev, [btn.id]: e.target.checked }))}
+                        style={{ width: 18, height: 18, accentColor: T.accent, cursor: "pointer" }}
+                      />
+                    </label>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setEmailActionConfig(getEmailActionConfig(null))}
+                  style={{ marginTop: 14, padding: "8px 16px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
+                  ↺ Reset to defaults
+                </button>
               </div>
 
               {/* Data */}
