@@ -5,7 +5,7 @@ import Head from "next/head";
 //  THEME
 // ═══════════════════════════════════════════════
 const LIGHT_T = {
-  bg: "#E0E0E0", surface: "#FFFFFF", card: "#FFFFFF", cardHover: "#D4D4D4",
+  bg: "#DDEAF5", surface: "#FFFFFF", card: "#FFFFFF", cardHover: "#D4D4D4",
   border: "#D8E4D2", borderLight: "#E8F0E4", text: "#2C3E2C", textMuted: "#6B8068",
   textDim: "#94AC8E", accent: "#4A9B4A", accentDark: "#357A35", accentBg: "#E8F5E8",
   gold: "#C4942A", goldBg: "#FFF8E8", danger: "#D45555", dangerBg: "#FFF0F0",
@@ -20,7 +20,7 @@ const LIGHT_T = {
 };
 
 const DARK_T = {
-  bg: "#111827", surface: "#1F2937", card: "#1F2937", cardHover: "#2D3748",
+  bg: "#0D1628", surface: "#1F2937", card: "#1F2937", cardHover: "#2D3748",
   border: "#2A4A2A", borderLight: "#1A3020", text: "#E8F0E8", textMuted: "#9CAE98",
   textDim: "#7A9278", accent: "#5AAD5A", accentDark: "#4A9B4A", accentBg: "#0F2010",
   gold: "#D4A840", goldBg: "#1F1A00", danger: "#E06868", dangerBg: "#200808",
