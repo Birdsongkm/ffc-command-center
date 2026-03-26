@@ -2,7 +2,7 @@
 
 **Owner:** Kayla Birdsong, CEO / PM — Fresh Food Connect
 **Executor:** Claude (autonomous, recursive, continuous until Kayla says pause)
-**Last updated:** 2026-03-26 (issue #89 shipped — Google Chat notifications with extensible provider architecture, 672 tests passing)
+**Last updated:** 2026-03-26 (issue #90 shipped — configurable email action buttons, 700 tests passing)
 
 ---
 
@@ -605,6 +605,7 @@ CRO vote: donor intent signal on email row (5/6), HubSpot auto-lookup on open (4
 | #87 | Undo button after deleting/archiving emails — 5-second toast with Undo that calls untrash/unarchive API and restores email to top of list | 2026-03-25 |
 | #88 | Page background changed to blue: light mode #E0E0E0 → #DDEAF5, dark mode #111827 → #0D1628 | 2026-03-26 |
 | #89 | Google Chat notifications: bottom-right popup on new messages, 30s polling, extensible CHAT_PROVIDERS config (Slack/Teams stubs ready) | 2026-03-26 |
+| #90 | Configurable email action buttons: Settings tab shows all 11 buttons with checkboxes, changes apply instantly, resets to defaults, persisted to localStorage | 2026-03-26 |
 
 **Bug fix:** Dark mode SSR hydration crash — `useState` was reading `localStorage` on the server, causing a server/client mismatch that Next.js surfaced as "Application error: a client-side exception has occurred". Fixed by using `useState(false)` + `useEffect` to restore saved preference after hydration.
 
