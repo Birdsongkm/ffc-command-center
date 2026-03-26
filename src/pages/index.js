@@ -58,6 +58,43 @@ const TEAM = [
   { name: "Brittany", initials: "BR", email: "brittany@freshfoodconnect.org", meetingStyle: "notes" },
 ];
 
+// ── Chat providers — add Slack / Teams entries here to enable future integrations ──
+const CHAT_PROVIDERS = [
+  { id: "google-chat", name: "Google Chat", apiPath: "/api/chat-messages", icon: "💬" },
+  // { id: "slack", name: "Slack", apiPath: "/api/slack-messages", icon: "💬" },
+  // { id: "teams", name: "Microsoft Teams", apiPath: "/api/teams-messages", icon: "💬" },
+];
+
+function chatProviderFor(id, providers) {
+  return (providers || CHAT_PROVIDERS).find(p => p.id === id) || null;
+}
+
+function isNewChatMessage(msg, lastPollMs) {
+  if (!msg || !msg.createTime) return false;
+  return new Date(msg.createTime).getTime() > lastPollMs;
+}
+
+function formatChatSender(msg) {
+  return msg?.sender?.displayName || msg?.sender?.name || "Unknown";
+}
+
+function formatChatPreview(msg, maxLen = 80) {
+  const text = msg?.text || "[attachment]";
+  return text.length > maxLen ? text.slice(0, maxLen) + "\u2026" : text;
+}
+
+function buildChatNotifications(messages, lastPollMs) {
+  return messages
+    .filter(m => isNewChatMessage(m, lastPollMs))
+    .map(m => ({
+      id: m.name || String(Date.now()),
+      sender: formatChatSender(m),
+      preview: formatChatPreview(m),
+      spaceName: m.spaceName || "",
+      timestamp: new Date(m.createTime).getTime(),
+    }));
+}
+
 const URGENCY = [
   { id: "critical", label: "Critical", color: "#D45555", bg: "#FFF0F0", dot: "#FF4444" },
   { id: "high", label: "High", color: "#C4942A", bg: "#FFF8E8", dot: "#FFAA33" },
@@ -849,6 +886,25 @@ function Toast({ message, onUndo, onDone }) {
   );
 }
 
+function ChatPopup({ notif, offsetBottom, onDismiss }) {
+  useEffect(() => { const t = setTimeout(onDismiss, 8000); return () => clearTimeout(t); }, [onDismiss]);
+  return (
+    <div onClick={onDismiss} style={{
+      position: "fixed", bottom: offsetBottom, right: 24, maxWidth: 320, minWidth: 240,
+      cursor: "pointer", background: T.card, border: `1px solid ${T.emailBlueBorder}`,
+      borderRadius: 12, padding: "14px 16px", zIndex: 9998,
+      boxShadow: "0 4px 20px rgba(0,0,0,0.15)", animation: "slideUp 0.3s ease",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+        <span style={{ fontSize: 15 }}>💬</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: T.text, flex: 1 }}>{notif.sender}</span>
+        <span style={{ fontSize: 11, color: T.textMuted, maxWidth: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{notif.spaceName}</span>
+      </div>
+      <div style={{ fontSize: 13, color: T.textMuted, lineHeight: 1.4 }}>{notif.preview}</div>
+    </div>
+  );
+}
+
 function LeafIcon({ size = 18, color = T.leafDecor, style = {} }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={style}>
@@ -1607,6 +1663,8 @@ export default function Home() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchIdx, setSearchIdx] = useState(0); // keyboard nav index
+  const [chatNotifs, setChatNotifs] = useState([]); // array of { id, sender, preview, spaceName, timestamp }
+  const lastChatPollRef = useRef(Date.now()); // only show messages that arrive after page load
 
   // ── Persist ──
   useEffect(() => {
@@ -1726,6 +1784,27 @@ export default function Home() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { if (auth) fetch("/api/signature").then(r => r.json()).then(d => { if (d.signature) setSignature(d.signature); }).catch(() => {}); }, [auth]);
+
+  // Google Chat notifications — poll every 30s, show popup for new messages
+  useEffect(() => {
+    if (!auth) return;
+    const provider = chatProviderFor("google-chat");
+    if (!provider) return;
+    const poll = async () => {
+      try {
+        const r = await fetch(provider.apiPath, { credentials: "include" });
+        if (!r.ok) return;
+        const { messages } = await r.json();
+        const now = Date.now();
+        const newNotifs = buildChatNotifications(messages || [], lastChatPollRef.current);
+        if (newNotifs.length > 0) setChatNotifs(prev => [...prev, ...newNotifs]);
+        lastChatPollRef.current = now;
+      } catch { /* silently ignore network errors */ }
+    };
+    const id = setInterval(poll, 30000);
+    poll();
+    return () => clearInterval(id);
+  }, [auth]);
 
   // Monday digest
   useEffect(() => {
@@ -3654,6 +3733,16 @@ export default function Home() {
       </div>
 
       {toast && <Toast message={toast.message} onUndo={toast.onUndo} onDone={() => setToast(null)} />}
+
+      {/* ═══════════ CHAT NOTIFICATIONS ═══════════ */}
+      {chatNotifs.slice(-3).map((notif, i) => (
+        <ChatPopup
+          key={notif.id}
+          notif={notif}
+          offsetBottom={28 + i * 96}
+          onDismiss={() => setChatNotifs(prev => prev.filter(n => n.id !== notif.id))}
+        />
+      ))}
 
       {/* ═══════════ GOOGLE DOC MODAL ═══════════ */}
       {docModal && (
