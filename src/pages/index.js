@@ -3506,7 +3506,7 @@ export default function Home() {
                         <div key={task.id} draggable onDragStart={e => handleTaskDragStart(e, task)} onDragOver={(e) => handleTaskDragOver(e, task, cat.id)} onDrop={(e) => handleTaskDrop(e, task, cat.id)}
                           style={{ background: dragOverTask === task.id ? T.cardHover : T.surface, border: `1px solid ${dragOverTask === task.id ? cat.color : T.border}`, borderRadius: 8, padding: "16px 18px", marginBottom: 10, cursor: "grab", borderLeft: `4px solid ${urg?.dot || T.border}`, transition: "all 0.1s" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-                            <input type="checkbox" checked={task.done} onChange={() => { setTasks(prev => prev.map(t => t.id === task.id ? { ...t, done: !t.done } : t)); showToast(task.done ? "Task reopened" : "Task completed!"); }} style={{ cursor: "pointer", width: 20, height: 20, accentColor: cat.color }} />
+                            <input type="checkbox" checked={task.done} onChange={() => { const wasDone = task.done; setTasks(prev => prev.map(t => t.id === task.id ? { ...t, done: !t.done } : t)); if (wasDone) { showToast("Task reopened"); } else { showToast("Task completed!", () => setTasks(prev => prev.map(t => t.id === task.id ? { ...t, done: false } : t))); } }} style={{ cursor: "pointer", width: 20, height: 20, accentColor: cat.color }} />
                             <span style={{ flex: 1, fontWeight: 600, fontSize: 16, color: T.text }}>{task.title}</span>
                           </div>
                           <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
