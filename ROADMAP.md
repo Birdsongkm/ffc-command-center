@@ -2,7 +2,7 @@
 
 **Owner:** Kayla Birdsong, CEO / PM — Fresh Food Connect
 **Executor:** Claude (autonomous, recursive, continuous until Kayla says pause)
-**Last updated:** 2026-03-28 (issue #91 shipped — email classifier fixes: external recipient guard, calendar RSVP routing, thread dedup, 721 tests passing)
+**Last updated:** 2026-03-28 (issue #92 shipped — + button on task category cards to open new task pre-filled with that category, 733 tests passing)
 
 ---
 
@@ -607,6 +607,7 @@ CRO vote: donor intent signal on email row (5/6), HubSpot auto-lookup on open (4
 | #89 | Google Chat notifications: bottom-right popup on new messages, 30s polling, extensible CHAT_PROVIDERS config (Slack/Teams stubs ready) | 2026-03-26 |
 | #90 | Configurable email action buttons: Settings tab shows all 11 buttons with checkboxes, changes apply instantly, resets to defaults, persisted to localStorage | 2026-03-26 |
 | #91 | Email classifier fixes: (1) FFC-sender emails with external recipients no longer classified as team/internal, (2) calendar RSVP replies (Accepted:/Declined:/Tentative: subject) route to calendar-notif even from personal email addresses, (3) thread deduplication in data.js prevents same thread appearing multiple times | 2026-03-28 |
+| #92 | Task category + button: each category card on the task board now has a + button in its header that opens the TaskForm with that category pre-selected | 2026-03-28 |
 
 **Bug fix:** Dark mode SSR hydration crash — `useState` was reading `localStorage` on the server, causing a server/client mismatch that Next.js surfaced as "Application error: a client-side exception has occurred". Fixed by using `useState(false)` + `useEffect` to restore saved preference after hydration.
 
