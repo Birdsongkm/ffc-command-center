@@ -112,6 +112,13 @@ export default async function handler(req, res) {
           recipientCount,
         };
       });
+      // Deduplicate by threadId — keep only the first (most-recent) message per thread (#91)
+      const seenThreads = new Set();
+      emails = emails.filter(e => {
+        if (!e.threadId || seenThreads.has(e.threadId)) return false;
+        seenThreads.add(e.threadId);
+        return true;
+      });
     }
 
     const events = (cData.items || []).map(e => ({

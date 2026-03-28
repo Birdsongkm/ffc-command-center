@@ -163,6 +163,16 @@ const QUOTES = [
 // ═══════════════════════════════════════════════
 //  EMAIL CLASSIFICATION
 // ═══════════════════════════════════════════════
+// Returns true if any address in to/cc is outside @freshfoodconnect.org / @ffc (#91)
+function hasExternalRecipient(toStr, ccStr) {
+  const addrs = [(toStr || ''), (ccStr || '')]
+    .join(',')
+    .split(',')
+    .map(a => a.trim().toLowerCase())
+    .filter(Boolean);
+  return addrs.some(a => !a.includes('freshfoodconnect') && !a.includes('@ffc'));
+}
+
 function classifyEmail(e) {
   const from = (e.from || "").toLowerCase();
   const subj = (e.subject || "").toLowerCase();
@@ -196,12 +206,15 @@ function classifyEmail(e) {
     return "newsletter";
   }
   if (from.includes("calendar-notification") || from.includes("calendar.google.com")) return "calendar-notif";
+  // Calendar RSVP replies arrive from the attendee's own email, not calendar.google.com (#91)
+  if (/^(accepted|declined|tentative):/.test(subj)) return "calendar-notif";
   if (from.includes("drive-shares-dm") || from.includes("comments-noreply") || from.includes("docs.google.com") || from.includes("drive.google.com")) return "docs-activity";
   // Classy checks must come before the generic noreply check — Classy sends from noreply addresses
   if ((from.includes("classy") || subj.includes("classy")) && (subj.includes("donation") || subj.includes("gift") || subj.includes("contribut"))) return "classy-onetime";
   if (from.includes("classy")) return "classy-recurring";
   if (from.includes("noreply") || from.includes("no-reply") || from.includes("notifications@") || from.includes("mailer-daemon") || from.includes("postmaster")) return "automated";
-  if (from.includes("freshfoodconnect") || from.includes("@ffc")) return "team";
+  // Only classify as team if all recipients are internal — external recipient means it's not purely internal (#91)
+  if ((from.includes("freshfoodconnect") || from.includes("@ffc")) && !hasExternalRecipient(e.to, e.cc)) return "team";
   // Sales/spam: subject/snippet keyword deep scan
   const salesSignals = [
     "quick call", "15 minutes", "30 minutes", "45 minutes", "hop on a call", "schedule a demo",

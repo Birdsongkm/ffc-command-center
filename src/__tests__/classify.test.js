@@ -68,6 +68,22 @@ describe('classifyEmail', () => {
     test('calendar.google.com in from → calendar-notif', () => {
       expect(classifyEmail({ from: 'no-reply@calendar.google.com' })).toBe('calendar-notif');
     });
+    // RSVP reply subjects — Google Calendar sends these from the attendee's own email (#91)
+    test('"Accepted: Meeting" subject → calendar-notif', () => {
+      expect(classifyEmail({ from: 'partner@company.com', subject: 'Accepted: Budget Review Q2' })).toBe('calendar-notif');
+    });
+    test('"Declined: Meeting" subject → calendar-notif', () => {
+      expect(classifyEmail({ from: 'board@nonprofit.org', subject: 'Declined: Board Meeting' })).toBe('calendar-notif');
+    });
+    test('"Tentative: Meeting" subject → calendar-notif', () => {
+      expect(classifyEmail({ from: 'partner@org.com', subject: 'Tentative: Staff All-Hands' })).toBe('calendar-notif');
+    });
+    test('FFC member RSVP reply → calendar-notif, not team (#91)', () => {
+      expect(classifyEmail({ from: 'gretchen@freshfoodconnect.org', subject: 'Accepted: Weekly Sync' })).toBe('calendar-notif');
+    });
+    test('lowercase "accepted:" → calendar-notif', () => {
+      expect(classifyEmail({ from: 'person@company.com', subject: 'accepted: morning standup' })).toBe('calendar-notif');
+    });
   });
 
   // Docs / Drive activity
@@ -138,6 +154,22 @@ describe('classifyEmail', () => {
     });
     test('@ffc in from → team', () => {
       expect(classifyEmail({ from: 'gretchen@ffc.org' })).toBe('team');
+    });
+    // External recipient guard (#91): if any recipient is outside FFC, don't classify as team
+    test('FFC sender + external recipient in to → needs-response, not team (#91)', () => {
+      expect(classifyEmail({ from: 'laura@freshfoodconnect.org', to: 'vendor@company.com' })).toBe('needs-response');
+    });
+    test('FFC sender + all FFC recipients → team', () => {
+      expect(classifyEmail({ from: 'laura@freshfoodconnect.org', to: 'kayla@freshfoodconnect.org', cc: '' })).toBe('team');
+    });
+    test('FFC sender + mixed to (FFC + external) → needs-response (#91)', () => {
+      expect(classifyEmail({ from: 'carmen@freshfoodconnect.org', to: 'kayla@freshfoodconnect.org, partner@company.com' })).toBe('needs-response');
+    });
+    test('FFC sender + external CC → needs-response (#91)', () => {
+      expect(classifyEmail({ from: 'adjoa@freshfoodconnect.org', to: 'kayla@freshfoodconnect.org', cc: 'donor@partner.org' })).toBe('needs-response');
+    });
+    test('FFC sender + no to/cc fields → team (safe default)', () => {
+      expect(classifyEmail({ from: 'brittany@freshfoodconnect.org' })).toBe('team');
     });
   });
 
