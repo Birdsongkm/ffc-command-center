@@ -1343,9 +1343,9 @@ function EventForm({ event = null, onSave, onCancel, prefillFromEmail = null, co
 // ═══════════════════════════════════════════════
 //  TASK FORM
 // ═══════════════════════════════════════════════
-function TaskForm({ task = null, onSave, onCancel, prefillFromEmail = null, categories = CATEGORIES }) {
+function TaskForm({ task = null, onSave, onCancel, prefillFromEmail = null, categories = CATEGORIES, initialCategory = "admin" }) {
   const [title, setTitle] = useState(task?.title || (prefillFromEmail?.subject || ""));
-  const [category, setCategory] = useState(task?.category || "admin");
+  const [category, setCategory] = useState(task?.category || initialCategory);
   const [urgency, setUrgency] = useState(task?.urgency || "medium");
   const [due, setDue] = useState(task?.due || "");
   const [notes, setNotes] = useState(task?.notes || "");
@@ -2600,7 +2600,7 @@ export default function Home() {
         {showTaskForm && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={() => setShowTaskForm(null)}>
             <div style={{ width: "100%", maxWidth: 500 }} onClick={e => e.stopPropagation()}>
-              <TaskForm prefillFromEmail={showTaskForm.prefillFromEmail} categories={allCategories} onSave={(task) => { setTasks(prev => [...prev, task]); setShowTaskForm(null); showToast("Task created!"); }} onCancel={() => setShowTaskForm(null)} />
+              <TaskForm prefillFromEmail={showTaskForm.prefillFromEmail} initialCategory={showTaskForm.category || "admin"} categories={allCategories} onSave={(task) => { setTasks(prev => [...prev, task]); setShowTaskForm(null); showToast("Task created!"); }} onCancel={() => setShowTaskForm(null)} />
             </div>
           </div>
         )}
@@ -3495,7 +3495,10 @@ export default function Home() {
                     style={{ background: dragOverCategory === cat.id ? cat.bg : T.card, border: `2px solid ${dragOverCategory === cat.id ? cat.color : T.border}`, borderRadius: 14, padding: 22, minHeight: 130, borderTop: `4px solid ${cat.color}`, transition: "all 0.15s" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
                       <span style={{ fontWeight: 700, fontSize: 17, color: cat.color }}>{cat.label}</span>
-                      <span style={{ fontSize: 13, color: T.textMuted, background: cat.bg, padding: "4px 12px", borderRadius: 6, fontWeight: 600 }}>{catTasks.length}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 13, color: T.textMuted, background: cat.bg, padding: "4px 12px", borderRadius: 6, fontWeight: 600 }}>{catTasks.length}</span>
+                        <button onClick={() => setShowTaskForm({ category: cat.id })} title={`Add task to ${cat.label}`} style={{ background: "none", border: `1px solid ${cat.color}`, color: cat.color, borderRadius: 6, width: 26, height: 26, cursor: "pointer", fontSize: 16, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, padding: 0 }}>+</button>
+                      </div>
                     </div>
                     {catTasks.map(task => {
                       const urg = URGENCY.find(u => u.id === task.urgency);
