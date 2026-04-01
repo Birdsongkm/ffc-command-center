@@ -1528,7 +1528,7 @@ function PayrollReviewPanel({ email, cache, onCacheUpdate, onClose, showToast })
           )}
           {approveStep === "confirm" && (
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <button onClick={() => setApproveStep("idle")} style={{ ...abtn(T.textMuted, T.bg) }}>Cancel</button>
+              <button onClick={() => setApproveStep("idle")} style={{ padding: "9px 18px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 14 }}>Cancel</button>
               <button onClick={approve} disabled={approving} style={{ padding: "9px 22px", background: "#28a745", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: approving ? "default" : "pointer", opacity: approving ? 0.7 : 1 }}>
                 {approving ? "Creating..." : "Yes, approve →"}
               </button>
@@ -1539,6 +1539,180 @@ function PayrollReviewPanel({ email, cache, onCacheUpdate, onClose, showToast })
             <div style={{ fontSize: 14, color: "#155724", fontWeight: 600 }}>Draft reply created. ✓</div>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════
+//  BOARD PREP PANEL
+// ═══════════════════════════════════════════════
+const BOARD_PREP_DEFAULTS = {
+  meetingLabel: 'March',
+  year: 2026,
+  boardMeetingDate: '2026-04-06',
+  financialsQuery: 'Feb 2026 Financials',
+};
+
+function BoardPrepPanel({ meeting, latestBoardReport, onClose, showToast }) {
+  const [step, setStep] = useState('confirm'); // confirm | running | done | error
+  const [results, setResults] = useState(null);
+  const [errorMsg, setErrorMsg] = useState(null);
+  const [meetingLabel, setMeetingLabel] = useState(BOARD_PREP_DEFAULTS.meetingLabel);
+  const [year] = useState(BOARD_PREP_DEFAULTS.year);
+  const [boardMeetingDate] = useState(BOARD_PREP_DEFAULTS.boardMeetingDate);
+  const [financialsQuery] = useState(BOARD_PREP_DEFAULTS.financialsQuery);
+
+  // If meeting from API, derive defaults
+  const meetingTitle = meeting ? (meeting.summary || 'FFC Board Meeting') : 'FFC Board Meeting';
+  const meetingStart = meeting ? (meeting.start?.dateTime || meeting.start?.date || boardMeetingDate) : boardMeetingDate;
+
+  async function runPrep() {
+    setStep('running');
+    try {
+      const r = await fetch('/api/board-prep', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meetingLabel, year, boardMeetingDate: meetingStart, financialsQuery }),
+      });
+      const data = await r.json();
+      if (!r.ok) { setErrorMsg(data.error || 'Board prep failed'); setStep('error'); return; }
+      setResults(data);
+      setStep('done');
+      if (data.errors?.length) showToast(`Prep ran with ${data.errors.length} warning(s)`, true);
+      else showToast('Board prep complete!');
+    } catch (e) {
+      console.error('BoardPrepPanel:runPrep', { message: e.message });
+      setErrorMsg(e.message);
+      setStep('error');
+    }
+  }
+
+  return (
+    <div style={{ background: T.surface, border: `2px solid ${T.emailBlue}`, borderRadius: 16, padding: 28, marginBottom: 24, boxShadow: "0 4px 24px rgba(59,130,196,0.15)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 26 }}>📋</span>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>Board Meeting Prep</div>
+            <div style={{ fontSize: 13, color: T.textMuted }}>{meetingTitle} · April 6, 2026</div>
+          </div>
+        </div>
+        <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: T.textMuted }}>✕</button>
+      </div>
+
+      {step === 'confirm' && (
+        <>
+          <div style={{ fontSize: 14, color: T.text, marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>This will:</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {[
+                `📄 Copy "${latestBoardReport?.name || 'latest Board Report'}" → rename to "${meetingLabel} ${year}- Board Report- FFC" → highlight all text grey`,
+                "📨 Create staff draft email to Laura, Carmen, Gretchen, Adjoa with doc link and deadline",
+                "📋 Read Jack & Kayla 1:1 notes (most recent) for agenda items",
+                "📖 Read board agenda doc → surface rotation info",
+                "💰 Search Drive for Feb 2026 Financials",
+                "✉️ Create draft board email with all links",
+              ].map((item, i) => (
+                <div key={i} style={{ display: "flex", gap: 8, fontSize: 13, color: T.textMuted }}>
+                  <span style={{ minWidth: 16 }}>•</span>
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: T.textMuted, display: "block", marginBottom: 4 }}>Meeting label (used in doc name and email subject)</label>
+            <input
+              value={meetingLabel}
+              onChange={e => setMeetingLabel(e.target.value)}
+              style={{ padding: "7px 12px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 14, width: 200, color: T.text, background: T.bg }}
+            />
+          </div>
+          <button onClick={runPrep} style={{ padding: "11px 32px", background: T.emailBlue, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 15, cursor: "pointer" }}>
+            🚀 Run Board Prep
+          </button>
+        </>
+      )}
+
+      {step === 'running' && (
+        <div style={{ textAlign: "center", padding: "32px 0" }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>⚙️</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginBottom: 6 }}>Running board prep…</div>
+          <div style={{ fontSize: 13, color: T.textMuted }}>Copying doc, reading 1:1 notes, creating drafts. This takes about 15 seconds.</div>
+        </div>
+      )}
+
+      {step === 'error' && (
+        <div>
+          <div style={{ color: T.danger, fontWeight: 700, marginBottom: 12 }}>Board prep failed: {errorMsg}</div>
+          <button onClick={() => setStep('confirm')} style={{ padding: "8px 20px", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", color: T.text }}>Try Again</button>
+        </div>
+      )}
+
+      {step === 'done' && results && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* Board Report */}
+          <div style={{ background: T.bg, borderRadius: 10, padding: 14 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: T.text, marginBottom: 6 }}>📄 Board Report Copied</div>
+            {results.boardReportUrl
+              ? <a href={results.boardReportUrl} target="_blank" rel="noreferrer" style={{ color: T.emailBlue, fontSize: 13 }}>{meetingLabel} {year}- Board Report- FFC →</a>
+              : <div style={{ color: T.danger, fontSize: 13 }}>{results.errors?.find(e => e.includes('report')) || 'Failed'}</div>}
+          </div>
+
+          {/* Staff Draft */}
+          <div style={{ background: T.bg, borderRadius: 10, padding: 14 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: T.text, marginBottom: 6 }}>📨 Staff Email Draft Created</div>
+            {results.staffDraftId
+              ? <a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noreferrer" style={{ color: T.emailBlue, fontSize: 13 }}>View in Gmail Drafts →</a>
+              : <div style={{ color: T.danger, fontSize: 13 }}>Draft not created — check errors below</div>}
+          </div>
+
+          {/* Jack 1:1 notes */}
+          <div style={{ background: T.bg, borderRadius: 10, padding: 14 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: T.text, marginBottom: 6 }}>📋 Recent Jack 1:1 Notes (review for agenda items)</div>
+            {results.jack1on1Text
+              ? <pre style={{ fontSize: 12, color: T.textMuted, whiteSpace: "pre-wrap", maxHeight: 200, overflow: "auto", margin: 0, fontFamily: "inherit" }}>{results.jack1on1Text}</pre>
+              : <div style={{ fontSize: 13, color: T.textMuted }}>Could not read 1:1 doc</div>}
+          </div>
+
+          {/* Agenda rotation */}
+          <div style={{ background: T.bg, borderRadius: 10, padding: 14 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: T.text, marginBottom: 4 }}>📖 Agenda Doc — Rotation Info</div>
+            {results.agendaDocUrl && <a href={results.agendaDocUrl} target="_blank" rel="noreferrer" style={{ color: T.emailBlue, fontSize: 12, display: "block", marginBottom: 6 }}>Open Agenda Doc →</a>}
+            {results.agendaRotationText
+              ? <pre style={{ fontSize: 12, color: T.textMuted, whiteSpace: "pre-wrap", maxHeight: 160, overflow: "auto", margin: 0, fontFamily: "inherit" }}>{results.agendaRotationText}</pre>
+              : <div style={{ fontSize: 13, color: T.textMuted }}>Could not read agenda doc</div>}
+          </div>
+
+          {/* Financials */}
+          <div style={{ background: T.bg, borderRadius: 10, padding: 14 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: T.text, marginBottom: 6 }}>💰 Financial Statements</div>
+            {results.financialsUrl
+              ? <a href={results.financialsUrl} target="_blank" rel="noreferrer" style={{ color: T.emailBlue, fontSize: 13 }}>Feb 2026 Financials →</a>
+              : <div style={{ fontSize: 13, color: T.textMuted }}>Not found — search Drive manually for "Feb 2026 Financials"</div>}
+          </div>
+
+          {/* Board Draft */}
+          <div style={{ background: T.bg, borderRadius: 10, padding: 14 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: T.text, marginBottom: 6 }}>✉️ Board Email Draft Created</div>
+            <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 6 }}>Review and update links before sending.</div>
+            {results.boardDraftId
+              ? <a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noreferrer" style={{ color: T.emailBlue, fontSize: 13 }}>View in Gmail Drafts →</a>
+              : <div style={{ color: T.danger, fontSize: 13 }}>Draft not created</div>}
+          </div>
+
+          {/* Errors */}
+          {results.errors?.length > 0 && (
+            <div style={{ background: T.dangerBg, border: `1px solid ${T.danger}`, borderRadius: 10, padding: 12 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: T.danger, marginBottom: 6 }}>Warnings</div>
+              {results.errors.map((e, i) => <div key={i} style={{ fontSize: 12, color: T.danger }}>{e}</div>)}
+            </div>
+          )}
+
+          <button onClick={onClose} style={{ alignSelf: "flex-start", padding: "8px 20px", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", color: T.text, fontWeight: 600 }}>Done</button>
+        </div>
       )}
     </div>
   );
@@ -1659,8 +1833,8 @@ function MagicLoginScreen() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: email.trim() }),
     });
-    if (r.redirected) { window.location.href = r.url; return; }
     const d = await r.json().catch(() => ({}));
+    if (d.redirectUrl) { window.location.href = d.redirectUrl; return; }
     setErrorMsg(d.error || "Access restricted.");
     setStatus("error");
   }
@@ -1790,6 +1964,7 @@ export default function Home() {
   const [driveLayout, setDriveLayout] = useState(() => { try { return localStorage.getItem('ffc_drive_layout') || 'list'; } catch { return 'list'; } });
   const [driveFolderPath, setDriveFolderPath] = useState([]); // [{id, name}] breadcrumb stack
   const [emailDensity, setEmailDensity] = useState(() => { try { return localStorage.getItem('ffc_email_density') || 'comfortable'; } catch { return 'comfortable'; } });
+  const [emailFilter, setEmailFilter] = useState("");
   const [drafts, setDrafts] = useState([]);
   const [draftsTotal, setDraftsTotal] = useState(0);
 
@@ -1804,6 +1979,8 @@ export default function Home() {
   const [financePanel, setFinancePanel] = useState(null); // null or email object
   const [payrollPanel, setPayrollPanel] = useState(null); // null or email object
   const [payrollCache, setPayrollCache] = useState({}); // keyed by email.id — avoids re-fetch
+  const [boardPrepInfo, setBoardPrepInfo] = useState(null); // { meeting, latestBoardReport, ... }
+  const [boardPrepPanel, setBoardPrepPanel] = useState(false);
   const [aiPrep, setAiPrep] = useState({}); // eventId → { loading, text, error }
   const [editingDraft, setEditingDraft] = useState(null); // { id, to, subject, body } or null
   const [draftSaving, setDraftSaving] = useState(false);
@@ -2004,6 +2181,7 @@ export default function Home() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { if (auth) fetch("/api/signature").then(r => r.json()).then(d => { if (d.signature) setSignature(d.signature); }).catch(() => {}); }, [auth]);
+  useEffect(() => { if (auth) fetch("/api/board-prep", { credentials: "include" }).then(r => r.json()).then(d => { if (d.meeting) setBoardPrepInfo(d); }).catch(() => {}); }, [auth]);
 
   // Google Chat notifications — poll every 30s, show popup for new messages
   useEffect(() => {
@@ -2459,7 +2637,7 @@ export default function Home() {
     const isCalInvite = bucket === "calendar-notif" || (email.from || "").toLowerCase().includes("calendar-notification");
     const isDropboxSign = (email.from || "").toLowerCase().includes("dropboxsign") || (email.from || "").toLowerCase().includes("hellosign");
     const isDebbieFinance = (email.from || "").toLowerCase().includes("debbie") || (email.from || "").toLowerCase().includes("nash");
-    const isPayrollApproval = bucket === "payroll-approval";
+    const isPayrollApproval = (email.from || "").toLowerCase().includes("@dnatsi.com") && (email.subject || "").toLowerCase().includes("payroll approval");
     const fromName = email.from?.replace(/<.*>/, "").trim() || email.from || "";
     const fromAddr = email.from?.match(/<(.+)>/)?.[1] || email.from || "";
     const cInfo = contactHistory[fromAddr];
@@ -2549,6 +2727,7 @@ export default function Home() {
                   : <button onClick={() => setToDoEmailIds(prev => new Set([...prev, email.id]))} style={abtn(T.accent, T.accentBg)}>📌 To Do</button>
                 )}
                 {isDebbieFinance && <button onClick={() => setFinancePanel(email)} style={abtn(T.taskAmber, T.taskAmberBg)}>📊 Finance Review</button>}
+                {isPayrollApproval && <button onClick={() => setPayrollPanel(email)} style={{ padding: "4px 9px", background: T.taskAmber, color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>💰 Payroll Review</button>}
                 {isEmailActionVisible("moveTo", emailActionConfig) && (
                   <div style={{ position: "relative" }}>
                     <button onClick={() => setMovingEmailId(movingEmailId === email.id ? null : email.id)} style={abtn(T.driveViolet, T.driveVioletBg)}>📂 Move to…</button>
@@ -2708,6 +2887,39 @@ export default function Home() {
             <button onClick={() => setComposing("compose")} style={{ padding: "10px 22px", background: T.accent, color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 16, cursor: "pointer" }}>+ Compose</button>
           </div>
         </div>
+
+        {/* Payroll approval — sticky global alert, always visible regardless of tab (#94) */}
+{!payrollPanel && emails.filter(e => (e.from || "").toLowerCase().includes("@dnatsi.com") && (e.subject || "").toLowerCase().includes("payroll approval")).map(e => (
+          <div key={e.id} onClick={() => setPayrollPanel(e)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "14px 22px", background: "#D45555", borderRadius: 12, marginBottom: 20, cursor: "pointer", boxShadow: "0 4px 20px rgba(212,85,85,0.4)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: 26 }}>💰</span>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>Payroll Approval Needed — Respond Today</div>
+                <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", marginTop: 1 }}>{e.from?.replace(/<.*>/, "").trim()} · {e.subject}</div>
+              </div>
+            </div>
+            <div style={{ padding: "10px 24px", background: "#fff", color: "#D45555", borderRadius: 8, fontWeight: 800, fontSize: 15, whiteSpace: "nowrap" }}>Run Payroll Review →</div>
+          </div>
+        ))}
+
+        {/* Board prep — sticky alert when board meeting is within 21 days */}
+        {boardPrepInfo?.meeting && !boardPrepPanel && (
+          <div onClick={() => setBoardPrepPanel(true)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "14px 22px", background: T.emailBlue, borderRadius: 12, marginBottom: 12, cursor: "pointer", boxShadow: "0 4px 20px rgba(59,130,196,0.35)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: 26 }}>📋</span>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>Board Meeting Prep Due — April 6 is 5 days away</div>
+                <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", marginTop: 1 }}>Copy board report, draft staff email, draft board email, pull 1:1 agenda items</div>
+              </div>
+            </div>
+            <div style={{ padding: "10px 24px", background: "#fff", color: T.emailBlue, borderRadius: 8, fontWeight: 800, fontSize: 15, whiteSpace: "nowrap" }}>Start Prep →</div>
+          </div>
+        )}
+
+        {/* Board Prep Panel */}
+        {boardPrepPanel && (
+          <BoardPrepPanel meeting={boardPrepInfo?.meeting} latestBoardReport={boardPrepInfo?.latestBoardReport} onClose={() => setBoardPrepPanel(false)} showToast={showToast} />
+        )}
 
         {/* Finance Review Panel (modal-style overlay) */}
         {financePanel && (
@@ -3317,8 +3529,24 @@ export default function Home() {
         {/* ═══════════ EMAILS TAB ═══════════ */}
         {tab === "emails" && (
           <div className="tab-content">
+            {/* Email search bar */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
+              <div style={{ position: "relative", flex: 1 }}>
+                <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 15, color: T.textMuted, pointerEvents: "none" }}>🔍</span>
+                <input
+                  value={emailFilter}
+                  onChange={e => setEmailFilter(e.target.value)}
+                  placeholder="Filter emails by sender, subject, or content..."
+                  style={{ width: "100%", padding: "10px 12px 10px 36px", background: T.card, color: T.text, border: `1px solid ${emailFilter ? T.emailBlue : T.border}`, borderRadius: 9, fontSize: 14, outline: "none", boxSizing: "border-box" }}
+                />
+                {emailFilter && (
+                  <button onClick={() => setEmailFilter("")} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 16, color: T.textMuted, padding: 0, lineHeight: 1 }}>×</button>
+                )}
+              </div>
+              <button onClick={() => { const q = emailFilter.trim(); if (q) window.open(`https://mail.google.com/mail/u/0/#search/${encodeURIComponent(q)}`, "_blank"); }} disabled={!emailFilter.trim()} style={{ padding: "10px 16px", background: emailFilter.trim() ? T.emailBlueBg : T.bg, color: emailFilter.trim() ? T.emailBlue : T.textMuted, border: `1px solid ${emailFilter.trim() ? T.emailBlueBorder : T.border}`, borderRadius: 9, cursor: emailFilter.trim() ? "pointer" : "default", fontSize: 14, fontWeight: 600, whiteSpace: "nowrap" }}>Search Gmail →</button>
+            </div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-              <div style={{ fontSize: 15, color: T.textMuted }}>{emails.length} unread · sorted by most recent · drag to reclassify</div>
+              <div style={{ fontSize: 15, color: T.textMuted }}>{emailFilter ? `${searchEmails(emails, emailFilter).length} matching · ` : ""}{emails.length} unread · sorted by most recent · drag to reclassify</div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 {/* Density toggle */}
                 {[{ id: "comfortable", icon: "≡", title: "Comfortable" }, { id: "compact", icon: "⊟", title: "Compact" }].map(d => (
@@ -3327,6 +3555,22 @@ export default function Home() {
                 {nextPage && <button onClick={() => fetchData(nextPage)} style={{ padding: "6px 16px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>Load More</button>}
               </div>
             </div>
+            {/* Payroll approval urgent banner (#94) */}
+            {emails.filter(e => (e.from || "").toLowerCase().includes("@dnatsi.com") && (e.subject || "").toLowerCase().includes("payroll approval")).map(e => (
+              <div key={e.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "16px 22px", background: "#D45555", borderRadius: 12, marginBottom: 16, boxShadow: "0 4px 16px rgba(212,85,85,0.35)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 28 }}>💰</span>
+                  <div>
+                    <div style={{ fontSize: 17, fontWeight: 800, color: "#fff" }}>Payroll Approval Needed</div>
+                    <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", marginTop: 2 }}>{e.from?.replace(/<.*>/, "").trim()} · {e.subject} · Must respond within hours</div>
+                  </div>
+                </div>
+                <button onClick={() => setPayrollPanel(e)} style={{ padding: "12px 28px", background: "#fff", color: "#D45555", border: "none", borderRadius: 9, fontWeight: 800, fontSize: 16, cursor: "pointer", whiteSpace: "nowrap", boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
+                  💰 Run Payroll Review
+                </button>
+              </div>
+            ))}
+
             {/* Selection action toolbar */}
             {selectedEmailIds.size > 0 && (
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", background: T.emailBlueBg, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 10, marginBottom: 16 }}>
@@ -3341,9 +3585,10 @@ export default function Home() {
                 const info = BUCKETS[bucket] || { label: bucket, icon: "📧", color: T.textMuted, bg: T.bg, border: T.border };
                 const isOver = dragOverEmailBucket === bucket;
                 const canBatchDelete = ["automated", "calendar-notif", "docs-activity", "classy-recurring", "newsletter", "sales", "fyi-mass"].includes(bucket);
+                const filteredBucketEmails = emailFilter.trim() ? searchEmails(bucketEmails, emailFilter) : bucketEmails;
                 const page = bucketPages[bucket] || 0;
-                const totalPages = Math.ceil(bucketEmails.length / PAGE_SIZE);
-                const visibleEmails = bucketEmails.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+                const totalPages = Math.ceil(filteredBucketEmails.length / PAGE_SIZE);
+                const visibleEmails = filteredBucketEmails.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
                 return (
                   <div key={bucket}
                     onDragOver={e => { e.preventDefault(); setDragOverEmailBucket(bucket); }}

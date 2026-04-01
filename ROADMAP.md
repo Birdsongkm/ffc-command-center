@@ -2,7 +2,7 @@
 
 **Owner:** Kayla Birdsong, CEO / PM — Fresh Food Connect
 **Executor:** Claude (autonomous, recursive, continuous until Kayla says pause)
-**Last updated:** 2026-03-28 (issue #93 shipped — undo button in "Task completed!" toast, 742 tests passing)
+**Last updated:** 2026-04-01 (issue #101 shipped — payroll approval review flow with PDF diff + approve button, 763 tests passing)
 
 ---
 

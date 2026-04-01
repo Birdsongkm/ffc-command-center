@@ -25,5 +25,7 @@ export default function handler(req, res) {
     login_hint: email.trim(),
   });
 
-  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+  // Return JSON so the client can navigate — res.redirect() causes a cross-origin
+  // fetch CORS failure when the browser tries to follow the redirect to Google.
+  return res.status(200).json({ redirectUrl: `https://accounts.google.com/o/oauth2/v2/auth?${params}` });
 }

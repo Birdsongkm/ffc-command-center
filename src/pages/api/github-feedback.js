@@ -139,8 +139,6 @@ After all 7 panels, output:
 
 **If shipping — suggested implementation approach:** [3–5 bullet points]
 
-**Open questions for Kayla:** [1–3 specific questions that only the ED can answer]
-
 Be direct. Panels can disagree. The COO panel breaks 3-3 ties across panels. Aim for 600–800 words total.`;
 }
 
