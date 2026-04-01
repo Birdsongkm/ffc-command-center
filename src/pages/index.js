@@ -213,6 +213,8 @@ function classifyEmail(e) {
   if ((from.includes("classy") || subj.includes("classy")) && (subj.includes("donation") || subj.includes("gift") || subj.includes("contribut"))) return "classy-onetime";
   if (from.includes("classy")) return "classy-recurring";
   if (from.includes("noreply") || from.includes("no-reply") || from.includes("notifications@") || from.includes("mailer-daemon") || from.includes("postmaster")) return "automated";
+  // Payroll approval emails from DNash Accounting (#94)
+  if (from.includes("@dnatsi.com") && subj.includes("payroll approval")) return "payroll-approval";
   // Only classify as team if all recipients are internal — external recipient means it's not purely internal (#91)
   if ((from.includes("freshfoodconnect") || from.includes("@ffc")) && !hasExternalRecipient(e.to, e.cc)) return "team";
   // Sales/spam: subject/snippet keyword deep scan
@@ -1375,6 +1377,173 @@ function TaskForm({ task = null, onSave, onCancel, prefillFromEmail = null, cate
 // ═══════════════════════════════════════════════
 //  FINANCE REVIEW PANEL
 // ═══════════════════════════════════════════════
+// ── getPayrollChanges — pure diff helper (mirrored in __tests__/payrollReview.test.js) ──
+function getPayrollChanges(currentLines, prevLines) {
+  const currentSet = new Set((currentLines || []).filter(l => l.trim()));
+  const prevSet = new Set((prevLines || []).filter(l => l.trim()));
+  const added = [], removed = [], unchanged = [];
+  currentSet.forEach(l => { if (prevSet.has(l)) unchanged.push(l); else added.push(l); });
+  prevSet.forEach(l => { if (!currentSet.has(l)) removed.push(l); });
+  return { added, removed, unchanged };
+}
+
+function PayrollReviewPanel({ email, cache, onCacheUpdate, onClose, showToast }) {
+  const [loading, setLoading] = useState(!cache[email.id]);
+  const [loadProgress, setLoadProgress] = useState(0);
+  const [error, setError] = useState(null);
+  const [data, setData] = useState(cache[email.id] || null);
+  const [approving, setApproving] = useState(false);
+  const [approveStep, setApproveStep] = useState("idle"); // idle | confirm | done
+  const [draftStatus, setDraftStatus] = useState(null);
+
+  useEffect(() => {
+    if (cache[email.id]) { setData(cache[email.id]); setLoading(false); return; }
+    let cancelled = false;
+    const tick = setInterval(() => setLoadProgress(p => Math.min(p + 8, 88)), 300);
+    fetch(`/api/payroll-review?messageId=${email.id}`, { credentials: "include" })
+      .then(r => r.json())
+      .then(d => {
+        if (cancelled) return;
+        clearInterval(tick);
+        setLoadProgress(100);
+        if (d.error) { setError(d.error); setLoading(false); return; }
+        setData(d);
+        onCacheUpdate(email.id, d);
+        setTimeout(() => setLoading(false), 300);
+      })
+      .catch(e => { if (!cancelled) { clearInterval(tick); setError(e.message); setLoading(false); } });
+    return () => { cancelled = true; clearInterval(tick); };
+  }, [email.id]);
+
+  const approve = async () => {
+    setApproving(true);
+    setDraftStatus("Creating draft...");
+    try {
+      const r = await fetch("/api/payroll-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          messageId: email.id,
+          threadId: email.threadId,
+          to: email.from,
+          subject: email.subject || "Payroll Approval",
+        }),
+      });
+      const d = await r.json();
+      if (d.success) {
+        setDraftStatus("Draft reply created. ✓");
+        setApproveStep("done");
+        showToast("Approval draft created — check Drafts tab");
+      } else {
+        setDraftStatus(d.error || "Could not create draft.");
+      }
+    } catch (e) { setDraftStatus("Error: " + e.message); }
+    setApproving(false);
+  };
+
+  const diff = data ? getPayrollChanges(
+    (data.current.text || "").split("\n"),
+    (data.previous[0]?.text || "").split("\n")
+  ) : null;
+
+  const prevDate = data?.previous[0]?.date
+    ? new Date(data.previous[0].date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : null;
+
+  return (
+    <div style={{ background: T.card, border: `2px solid ${T.taskAmberBorder}`, borderRadius: 16, padding: 24, marginBottom: 26 }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 22 }}>💰</span>
+          <span style={{ fontSize: 19, fontWeight: 700, color: T.taskAmber }}>Payroll Review</span>
+        </div>
+        <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: T.textMuted }}>×</button>
+      </div>
+
+      {/* Loading state */}
+      {loading && (
+        <div style={{ padding: "20px 0" }}>
+          <div style={{ fontSize: 14, color: T.textMuted, marginBottom: 10 }}>Fetching and parsing payroll documents...</div>
+          <div style={{ height: 8, background: T.border, borderRadius: 4, overflow: "hidden" }}>
+            <div style={{ height: "100%", background: T.taskAmber, borderRadius: 4, width: `${loadProgress}%`, transition: "width 0.3s ease" }} />
+          </div>
+        </div>
+      )}
+
+      {/* Error state */}
+      {!loading && error && (
+        <div style={{ padding: "14px 16px", background: T.dangerBg, color: T.danger, borderRadius: 8, fontSize: 14 }}>
+          ⚠️ {error}
+        </div>
+      )}
+
+      {/* Diff view */}
+      {!loading && data && diff && (
+        <>
+          {/* Summary bar */}
+          <div style={{ display: "flex", gap: 16, alignItems: "center", padding: "10px 0", marginBottom: 12, borderBottom: `1px solid ${T.borderLight}` }}>
+            {diff.added.length > 0 && <span style={{ fontSize: 13, color: "#155724", fontWeight: 600 }}>+{diff.added.length} added</span>}
+            {diff.removed.length > 0 && <span style={{ fontSize: 13, color: "#721C24", fontWeight: 600 }}>−{diff.removed.length} removed</span>}
+            {diff.added.length === 0 && diff.removed.length === 0 && <span style={{ fontSize: 13, color: T.calGreen, fontWeight: 600 }}>✓ No changes from last payroll</span>}
+            {prevDate && <span style={{ fontSize: 12, color: T.textMuted, marginLeft: "auto" }}>vs. {prevDate}</span>}
+          </div>
+
+          {/* Diff lines */}
+          <div style={{ maxHeight: 240, overflowY: "auto", fontFamily: "monospace", fontSize: 12, border: `1px solid ${T.border}`, borderRadius: 8, marginBottom: 16 }}>
+            {diff.added.map((line, i) => (
+              <div key={`a${i}`} style={{ background: "#D4EDDA", color: "#155724", padding: "2px 10px", whiteSpace: "pre-wrap" }}>+ {line}</div>
+            ))}
+            {diff.removed.map((line, i) => (
+              <div key={`r${i}`} style={{ background: "#F8D7DA", color: "#721C24", padding: "2px 10px", whiteSpace: "pre-wrap" }}>− {line}</div>
+            ))}
+            {diff.unchanged.length > 0 && (
+              <div style={{ padding: "4px 10px", color: "#888", fontSize: 11, borderTop: diff.added.length + diff.removed.length > 0 ? `1px solid ${T.border}` : "none" }}>
+                ── {diff.unchanged.length} unchanged lines ──
+              </div>
+            )}
+            {diff.added.length === 0 && diff.removed.length === 0 && diff.unchanged.length === 0 && (
+              <div style={{ padding: "12px 10px", color: T.textMuted, fontSize: 13, textAlign: "center" }}>No parseable content found in PDFs.</div>
+            )}
+          </div>
+
+          {/* Previous payrolls context */}
+          {data.previous.length > 1 && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+              <span style={{ fontSize: 12, color: T.textMuted, alignSelf: "center" }}>History:</span>
+              {data.previous.map((p, i) => (
+                <span key={i} style={{ fontSize: 12, padding: "3px 10px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 12 }}>
+                  {new Date(p.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Approve flow */}
+          {approveStep === "idle" && (
+            <button onClick={() => setApproveStep("confirm")} style={{ padding: "10px 24px", background: T.taskAmber, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
+              Approve?
+            </button>
+          )}
+          {approveStep === "confirm" && (
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <button onClick={() => setApproveStep("idle")} style={{ ...abtn(T.textMuted, T.bg) }}>Cancel</button>
+              <button onClick={approve} disabled={approving} style={{ padding: "9px 22px", background: "#28a745", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: approving ? "default" : "pointer", opacity: approving ? 0.7 : 1 }}>
+                {approving ? "Creating..." : "Yes, approve →"}
+              </button>
+              {draftStatus && <span style={{ fontSize: 13, color: T.textMuted }}>{draftStatus}</span>}
+            </div>
+          )}
+          {approveStep === "done" && (
+            <div style={{ fontSize: 14, color: "#155724", fontWeight: 600 }}>Draft reply created. ✓</div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function FinanceReviewPanel({ email, onClose, showToast }) {
   const [steps, setSteps] = useState([
     { id: "email", label: "Debbie's details email received", done: true, icon: "📧",
@@ -1551,6 +1720,7 @@ export default function Home() {
     "automated": { label: "Automated / System", icon: "⚙️", color: T.textMuted, bg: darkMode ? "#1A1A1A" : "#F5F5F5", border: T.border, priority: 10 },
     "newsletter": { label: "Newsletters & Lists", icon: "📰", color: T.textMuted, bg: darkMode ? "#1A1A1A" : "#F5F5F5", border: T.border, priority: 11 },
     "sales": { label: "Likely Sales / Spam", icon: "🚫", color: T.danger, bg: T.dangerBg, border: `${T.danger}30`, priority: 12 },
+    "payroll-approval": { label: "Payroll Approval", icon: "💰", color: T.taskAmber, bg: T.taskAmberBg, border: T.taskAmberBorder, priority: 2 },
   };
 
   const [auth, setAuth] = useState(null);
@@ -1632,6 +1802,8 @@ export default function Home() {
   const [weekPrepEvents, setWeekPrepEvents] = useState([]);
   const [digest, setDigest] = useState(null);
   const [financePanel, setFinancePanel] = useState(null); // null or email object
+  const [payrollPanel, setPayrollPanel] = useState(null); // null or email object
+  const [payrollCache, setPayrollCache] = useState({}); // keyed by email.id — avoids re-fetch
   const [aiPrep, setAiPrep] = useState({}); // eventId → { loading, text, error }
   const [editingDraft, setEditingDraft] = useState(null); // { id, to, subject, body } or null
   const [draftSaving, setDraftSaving] = useState(false);
@@ -2287,6 +2459,7 @@ export default function Home() {
     const isCalInvite = bucket === "calendar-notif" || (email.from || "").toLowerCase().includes("calendar-notification");
     const isDropboxSign = (email.from || "").toLowerCase().includes("dropboxsign") || (email.from || "").toLowerCase().includes("hellosign");
     const isDebbieFinance = (email.from || "").toLowerCase().includes("debbie") || (email.from || "").toLowerCase().includes("nash");
+    const isPayrollApproval = bucket === "payroll-approval";
     const fromName = email.from?.replace(/<.*>/, "").trim() || email.from || "";
     const fromAddr = email.from?.match(/<(.+)>/)?.[1] || email.from || "";
     const cInfo = contactHistory[fromAddr];
@@ -2464,6 +2637,7 @@ export default function Home() {
                 {isEmailActionVisible("makeTask", emailActionConfig) && <button onClick={() => setShowTaskForm({ prefillFromEmail: email })} style={abtn(T.taskAmber, T.taskAmberBg)}>📋 Make Task</button>}
                 {isEmailActionVisible("makeEvent", emailActionConfig) && <button onClick={() => setShowEventForm({ prefillFromEmail: email })} style={abtn(T.calGreen, T.calGreenBg)}>📅 Make Event</button>}
                 {isDebbieFinance && <button onClick={() => setFinancePanel(email)} style={abtn(T.taskAmber, T.taskAmberBg)}>📊 Finance Review</button>}
+                {isPayrollApproval && <button onClick={() => setPayrollPanel(email)} style={{ ...abtn(T.taskAmber, "#fff"), background: T.taskAmber, color: "#fff" }}>💰 Run Payroll Review</button>}
                 {email.listUnsubscribe && <button onClick={() => { window.open(email.listUnsubscribe.replace(/[<>]/g, ""), "_blank"); showToast("Opening unsubscribe link..."); }} style={abtn(T.danger, T.dangerBg)}>🚫 Unsubscribe</button>}
               </div>
             )}
@@ -2538,6 +2712,11 @@ export default function Home() {
         {/* Finance Review Panel (modal-style overlay) */}
         {financePanel && (
           <FinanceReviewPanel email={financePanel} onClose={() => setFinancePanel(null)} showToast={showToast} />
+        )}
+
+        {/* Payroll Review Panel (#94) */}
+        {payrollPanel && (
+          <PayrollReviewPanel email={payrollPanel} cache={payrollCache} onCacheUpdate={(id, data) => setPayrollCache(prev => ({ ...prev, [id]: data }))} onClose={() => setPayrollPanel(null)} showToast={showToast} />
         )}
 
         {/* TABS */}

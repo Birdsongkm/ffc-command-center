@@ -53,6 +53,8 @@ function classifyEmail(e) {
   if ((from.includes("classy") || subj.includes("classy")) && (subj.includes("donation") || subj.includes("gift") || subj.includes("contribut"))) return "classy-onetime";
   if (from.includes("classy")) return "classy-recurring";
   if (from.includes("noreply") || from.includes("no-reply") || from.includes("notifications@") || from.includes("mailer-daemon") || from.includes("postmaster")) return "automated";
+  // Payroll approval emails from DNash Accounting (#94)
+  if (from.includes("@dnatsi.com") && subj.includes("payroll approval")) return "payroll-approval";
   // Only classify as team if all recipients are internal — external recipient means it's not purely internal (#91)
   if ((from.includes("freshfoodconnect") || from.includes("@ffc")) && !hasExternalRecipient(e.to, e.cc)) return "team";
   // Sales/spam: subject/snippet keyword deep scan
