@@ -190,20 +190,20 @@ async function handlePost(token, { messageId, threadId, to, subject }) {
   });
 
   const res = await fetch(
-    'https://gmail.googleapis.com/gmail/v1/users/me/drafts',
+    'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
     {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: { raw, threadId } }),
+      body: JSON.stringify({ raw, threadId }),
     }
   );
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    console.error('payroll-review:createDraft', { messageId, status: res.status, message: err.error?.message });
-    throw new Error(err.error?.message || 'Failed to create approval draft');
+    console.error('payroll-review:send', { messageId, status: res.status, message: err.error?.message });
+    throw new Error(err.error?.message || 'Failed to send approval');
   }
   const data = await res.json();
-  return { success: true, draftId: data.id };
+  return { success: true, messageId: data.id };
 }
 
 export default async function handler(req, res) {

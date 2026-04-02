@@ -1417,7 +1417,7 @@ function PayrollReviewPanel({ email, cache, onCacheUpdate, onClose, showToast })
 
   const approve = async () => {
     setApproving(true);
-    setDraftStatus("Creating draft...");
+    setDraftStatus("Sending...");
     try {
       const r = await fetch("/api/payroll-review", {
         method: "POST",
@@ -1432,11 +1432,10 @@ function PayrollReviewPanel({ email, cache, onCacheUpdate, onClose, showToast })
       });
       const d = await r.json();
       if (d.success) {
-        setDraftStatus("Draft reply created. ✓");
         setApproveStep("done");
-        showToast("Approval draft created — check Drafts tab");
+        showToast("Approval sent ✓");
       } else {
-        setDraftStatus(d.error || "Could not create draft.");
+        setDraftStatus(d.error || "Could not send.");
       }
     } catch (e) { setDraftStatus("Error: " + e.message); }
     setApproving(false);
@@ -1527,16 +1526,23 @@ function PayrollReviewPanel({ email, cache, onCacheUpdate, onClose, showToast })
             </button>
           )}
           {approveStep === "confirm" && (
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <button onClick={() => setApproveStep("idle")} style={{ padding: "9px 18px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 14 }}>Cancel</button>
-              <button onClick={approve} disabled={approving} style={{ padding: "9px 22px", background: "#28a745", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: approving ? "default" : "pointer", opacity: approving ? 0.7 : 1 }}>
-                {approving ? "Creating..." : "Yes, approve →"}
-              </button>
-              {draftStatus && <span style={{ fontSize: 13, color: T.textMuted }}>{draftStatus}</span>}
+            <div style={{ border: `1px solid ${T.border}`, borderRadius: 10, overflow: "hidden", marginTop: 4 }}>
+              <div style={{ background: T.bg, padding: "10px 14px", fontSize: 13, color: T.textMuted, borderBottom: `1px solid ${T.borderLight}` }}>
+                <div><strong>To:</strong> {email.from}</div>
+                <div><strong>Subject:</strong> {(email.subject || "Payroll Approval").startsWith("Re: ") ? email.subject : `Re: ${email.subject || "Payroll Approval"}`}</div>
+              </div>
+              <div style={{ padding: "12px 14px", fontSize: 14, color: T.text }}>I approve, thank you</div>
+              <div style={{ display: "flex", gap: 10, padding: "10px 14px", borderTop: `1px solid ${T.borderLight}` }}>
+                <button onClick={() => setApproveStep("idle")} style={{ padding: "7px 16px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 13 }}>Cancel</button>
+                <button onClick={approve} disabled={approving} style={{ padding: "7px 20px", background: "#28a745", color: "#fff", border: "none", borderRadius: 7, fontWeight: 700, fontSize: 13, cursor: approving ? "default" : "pointer", opacity: approving ? 0.7 : 1 }}>
+                  {approving ? "Sending..." : "Send ↗"}
+                </button>
+                {draftStatus && <span style={{ fontSize: 13, color: T.textMuted, alignSelf: "center" }}>{draftStatus}</span>}
+              </div>
             </div>
           )}
           {approveStep === "done" && (
-            <div style={{ fontSize: 14, color: "#155724", fontWeight: 600 }}>Draft reply created. ✓</div>
+            <div style={{ fontSize: 14, color: "#155724", fontWeight: 600 }}>✓ Sent</div>
           )}
         </>
       )}
