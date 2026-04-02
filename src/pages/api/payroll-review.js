@@ -108,12 +108,31 @@ async function handleGet(token, messageId) {
   const currentMsg = await fetchMessage(token, messageId);
   const currentHeaders = currentMsg.payload?.headers || [];
 
-  const currentAttachment = findPdfAttachment(currentMsg.payload);
+  let currentAttachment = findPdfAttachment(currentMsg.payload);
+  let attachmentMessageId = messageId;
+
+  // The displayed message may be a reply (no PDF) — search the thread for the original with the PDF
+  if (!currentAttachment && currentMsg.threadId) {
+    const threadRes = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/threads/${currentMsg.threadId}?format=full`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!threadRes.ok) {
+      console.error('payroll-review:fetchThread', { threadId: currentMsg.threadId, status: threadRes.status });
+    } else {
+      const threadData = await threadRes.json();
+      for (const msg of (threadData.messages || [])) {
+        const att = findPdfAttachment(msg.payload);
+        if (att) { currentAttachment = att; attachmentMessageId = msg.id; break; }
+      }
+    }
+  }
+
   if (!currentAttachment) {
     throw new Error('No PDF attachment found in current payroll email');
   }
 
-  const currentText = await fetchAndParsePdf(token, messageId, currentAttachment.attachmentId);
+  const currentText = await fetchAndParsePdf(token, attachmentMessageId, currentAttachment.attachmentId);
 
   // Find previous payroll approval emails (from same sender domain, same subject)
   const q = encodeURIComponent('from:@dnatsi.com subject:"Payroll Approval" has:attachment');
