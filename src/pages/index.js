@@ -2683,6 +2683,7 @@ export default function Home() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
               <span style={{ fontWeight: 600, fontSize: 16, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fromName}</span>
+              {email.unreadCount > 1 && <span style={{ fontSize: 11, fontWeight: 700, padding: "1px 6px", borderRadius: 10, background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, flexShrink: 0 }}>{email.unreadCount}</span>}
               <span style={{ fontSize: 14, color: T.textDim, flexShrink: 0 }}>{fmtRel(email.date)}</span>
             </div>
             <div style={{ fontSize: 16, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{email.subject}</div>

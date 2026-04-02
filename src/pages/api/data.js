@@ -112,13 +112,20 @@ export default async function handler(req, res) {
           recipientCount,
         };
       });
-      // Deduplicate by threadId — keep only the first (most-recent) message per thread (#91)
+      // Deduplicate by threadId — keep only the most-recent message per thread, but
+      // attach unreadCount so the UI can show a badge (like Gmail conversation counts) (#91)
+      const threadCounts = {};
+      for (const e of emails) {
+        if (e.threadId) threadCounts[e.threadId] = (threadCounts[e.threadId] || 0) + 1;
+      }
       const seenThreads = new Set();
-      emails = emails.filter(e => {
-        if (!e.threadId || seenThreads.has(e.threadId)) return false;
-        seenThreads.add(e.threadId);
-        return true;
-      });
+      emails = emails
+        .filter(e => {
+          if (!e.threadId || seenThreads.has(e.threadId)) return false;
+          seenThreads.add(e.threadId);
+          return true;
+        })
+        .map(e => ({ ...e, unreadCount: threadCounts[e.threadId] || 1 }));
     }
 
     const events = (cData.items || []).map(e => ({
