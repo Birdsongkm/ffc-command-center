@@ -9,8 +9,6 @@
  *
  * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
  */
-import pdfParseMod from 'pdf-parse';
-const pdfParse = typeof pdfParseMod === 'function' ? pdfParseMod : pdfParseMod.default;
 
 function parseCookies(req) {
   const c = {};
@@ -101,6 +99,7 @@ async function fetchAndParsePdf(token, messageId, attachmentId) {
   // Gmail attachment data is base64url-encoded — decode to buffer for pdf-parse
   const base64 = data.data.replace(/-/g, '+').replace(/_/g, '/');
   const buffer = Buffer.from(base64, 'base64');
+  const pdfParse = require('pdf-parse');
   const parsed = await pdfParse(buffer);
   return parsed.text;
 }
