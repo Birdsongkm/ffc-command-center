@@ -9,7 +9,8 @@
  *
  * Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
  */
-import pdfParse from 'pdf-parse';
+import pdfParseMod from 'pdf-parse';
+const pdfParse = typeof pdfParseMod === 'function' ? pdfParseMod : pdfParseMod.default;
 
 function parseCookies(req) {
   const c = {};
