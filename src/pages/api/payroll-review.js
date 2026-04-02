@@ -99,11 +99,7 @@ async function fetchAndParsePdf(token, messageId, attachmentId) {
   // Gmail attachment data is base64url-encoded — decode to buffer for pdf-parse
   const base64 = data.data.replace(/-/g, '+').replace(/_/g, '/');
   const buffer = Buffer.from(base64, 'base64');
-  let pdfParse = require('pdf-parse');
-  // Webpack sometimes wraps CJS modules — unwrap until we have the function
-  if (typeof pdfParse !== 'function') pdfParse = pdfParse.default;
-  if (typeof pdfParse !== 'function') pdfParse = pdfParse.default;
-  if (typeof pdfParse !== 'function') throw new Error('pdf-parse module failed to load (not a function)');
+  const pdfParse = require('pdf-parse');
   const parsed = await pdfParse(buffer);
   return parsed.text;
 }
