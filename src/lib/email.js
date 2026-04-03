@@ -1,14 +1,15 @@
 /**
  * Builds a base64url-encoded raw email for the Gmail send API.
  */
-function buildRawEmail({ to, cc, subject, body, inReplyTo, references, signature, forward, originalBody }) {
-  let finalBody = body;
+function buildRawEmail({ to, cc, subject, body, html, inReplyTo, references, signature, forward, originalBody }) {
+  let finalBody = html || body;
+  const contentType = html ? 'text/html' : 'text/plain';
 
-  if (signature) {
+  if (!html && signature) {
     finalBody += '\n--\n' + signature;
   }
 
-  if (forward && originalBody) {
+  if (!html && forward && originalBody) {
     finalBody += '\n\n---------- Forwarded message ---------\n' + originalBody;
   }
 
@@ -16,7 +17,7 @@ function buildRawEmail({ to, cc, subject, body, inReplyTo, references, signature
   if (cc) lines.push(`Cc: ${cc}`);
   lines.push(
     `Subject: ${subject}`,
-    'Content-Type: text/plain; charset=utf-8',
+    `Content-Type: ${contentType}; charset=utf-8`,
     'MIME-Version: 1.0',
   );
   if (inReplyTo) {

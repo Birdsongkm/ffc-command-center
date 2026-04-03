@@ -1679,6 +1679,11 @@ function BoardPrepPanel({ meeting, latestBoardReport, onClose, showToast }) {
   const [year] = useState(BOARD_PREP_DEFAULTS.year);
   const [boardMeetingDate] = useState(BOARD_PREP_DEFAULTS.boardMeetingDate);
   const [financialsQuery] = useState(BOARD_PREP_DEFAULTS.financialsQuery);
+  const [showStaffDraft, setShowStaffDraft] = useState(false);
+  const [showBoardDraft, setShowBoardDraft] = useState(false);
+  const [agendaItems, setAgendaItems] = useState([]);
+  const [noteTaker, setNoteTaker] = useState('');
+  const [agendaInsertStep, setAgendaInsertStep] = useState('idle'); // idle | inserting | done
 
   // If meeting from API, derive defaults
   const meetingTitle = meeting ? (meeting.summary || 'FFC Board Meeting') : 'FFC Board Meeting';
@@ -1697,6 +1702,8 @@ function BoardPrepPanel({ meeting, latestBoardReport, onClose, showToast }) {
       if (!r.ok) { setErrorMsg(data.error || 'Board prep failed'); setStep('error'); return; }
       setResults(data);
       setStep('done');
+      // Pre-populate agenda items from extracted 1:1 bullets
+      if (data.boardAgendaItems?.length) setAgendaItems(data.boardAgendaItems);
       if (data.errors?.length) showToast(`Prep ran with ${data.errors.length} warning(s)`, true);
       else showToast('Board prep complete!');
     } catch (e) {
@@ -1780,27 +1787,70 @@ function BoardPrepPanel({ meeting, latestBoardReport, onClose, showToast }) {
 
           {/* Staff Draft */}
           <div style={{ background: T.bg, borderRadius: 10, padding: 14 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: T.text, marginBottom: 6 }}>📨 Staff Email Draft Created</div>
-            {results.staffDraftId
-              ? <a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noreferrer" style={{ color: T.emailBlue, fontSize: 13 }}>View in Gmail Drafts →</a>
-              : <div style={{ color: T.danger, fontSize: 13 }}>Draft not created — check errors below</div>}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>📨 Staff Email Draft Created</div>
+              {results.staffDraftId && (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => setShowStaffDraft(v => !v)} style={{ fontSize: 12, padding: "4px 10px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>{showStaffDraft ? "Hide" : "View draft"}</button>
+                  <a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noreferrer" style={{ fontSize: 12, padding: "4px 10px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, textDecoration: "none" }}>Gmail →</a>
+                </div>
+              )}
+            </div>
+            {!results.staffDraftId && <div style={{ color: T.danger, fontSize: 13 }}>Draft not created — check errors below</div>}
+            {showStaffDraft && results.staffDraftBody && (
+              <pre style={{ fontSize: 13, color: T.text, whiteSpace: "pre-wrap", margin: 0, fontFamily: "inherit", background: T.surface, padding: "12px 14px", borderRadius: 8, border: `1px solid ${T.border}`, lineHeight: 1.6 }}>{results.staffDraftBody}</pre>
+            )}
           </div>
 
-          {/* Jack 1:1 notes */}
+          {/* Agenda items from Jack 1:1 */}
           <div style={{ background: T.bg, borderRadius: 10, padding: 14 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: T.text, marginBottom: 6 }}>📋 Recent Jack 1:1 Notes (review for agenda items)</div>
-            {results.jack1on1Text
-              ? <pre style={{ fontSize: 12, color: T.textMuted, whiteSpace: "pre-wrap", maxHeight: 200, overflow: "auto", margin: 0, fontFamily: "inherit" }}>{results.jack1on1Text}</pre>
-              : <div style={{ fontSize: 13, color: T.textMuted }}>Could not read 1:1 doc</div>}
-          </div>
-
-          {/* Agenda rotation */}
-          <div style={{ background: T.bg, borderRadius: 10, padding: 14 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: T.text, marginBottom: 4 }}>📖 Agenda Doc — Rotation Info</div>
-            {results.agendaDocUrl && <a href={results.agendaDocUrl} target="_blank" rel="noreferrer" style={{ color: T.emailBlue, fontSize: 12, display: "block", marginBottom: 6 }}>Open Agenda Doc →</a>}
-            {results.agendaRotationText
-              ? <pre style={{ fontSize: 12, color: T.textMuted, whiteSpace: "pre-wrap", maxHeight: 160, overflow: "auto", margin: 0, fontFamily: "inherit" }}>{results.agendaRotationText}</pre>
-              : <div style={{ fontSize: 13, color: T.textMuted }}>Could not read agenda doc</div>}
+            <div style={{ fontWeight: 700, fontSize: 14, color: T.text, marginBottom: 4 }}>📋 Board Meeting Agenda Items — from Jack 1:1</div>
+            {results.agendaDocUrl && (
+              <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center" }}>
+                <a href={results.agendaDocUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: T.emailBlue }}>Open Agenda Doc →</a>
+                {results.jack1on1Text && <span style={{ fontSize: 12, color: T.textMuted }}>·</span>}
+              </div>
+            )}
+            {agendaItems.length === 0 && results.jack1on1Text && (
+              <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 10 }}>No "board meeting" bullets found automatically. Add items manually below or check the raw notes.</div>
+            )}
+            <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 8 }}>Are these right? Edit, add, or remove items — then add them to the agenda doc.</div>
+            {agendaItems.map((item, i) => (
+              <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
+                <span style={{ color: T.textDim, fontSize: 13, minWidth: 16 }}>•</span>
+                <input value={item} onChange={e => setAgendaItems(prev => prev.map((it, idx) => idx === i ? e.target.value : it))}
+                  style={{ flex: 1, padding: "6px 10px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, background: T.surface, color: T.text, outline: "none" }} />
+                <button onClick={() => setAgendaItems(prev => prev.filter((_, idx) => idx !== i))} style={{ background: "none", border: "none", color: T.danger, cursor: "pointer", fontSize: 16, padding: "0 4px" }}>×</button>
+              </div>
+            ))}
+            <button onClick={() => setAgendaItems(prev => [...prev, ''])} style={{ fontSize: 12, padding: "5px 12px", background: T.bg, color: T.textMuted, border: `1px dashed ${T.border}`, borderRadius: 6, cursor: "pointer", marginTop: 4 }}>+ Add item</button>
+            <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 12, color: T.textMuted, whiteSpace: "nowrap" }}>Note-taker:</span>
+                <input value={noteTaker} onChange={e => setNoteTaker(e.target.value)} placeholder="Name (from rotation)" style={{ padding: "6px 10px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, background: T.surface, color: T.text, outline: "none", width: 180 }} />
+              </div>
+              {results.agendaDocId && agendaInsertStep !== 'done' && (
+                <button disabled={agendaInsertStep === 'inserting'} onClick={async () => {
+                  setAgendaInsertStep('inserting');
+                  try {
+                    const r = await fetch('/api/board-prep', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ action: 'insertAgendaSection', agendaDocId: results.agendaDocId, boardMeetingDate: meetingStart, noteTaker, agendaItems: agendaItems.filter(Boolean) }) });
+                    const d = await r.json();
+                    if (d.success) { setAgendaInsertStep('done'); showToast('Agenda section added to doc!'); }
+                    else { showToast('Failed: ' + (d.error || 'unknown')); setAgendaInsertStep('idle'); }
+                  } catch (e) { showToast('Failed to insert agenda section'); setAgendaInsertStep('idle'); }
+                }} style={{ padding: "8px 18px", background: T.emailBlue, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: agendaInsertStep === 'inserting' ? "not-allowed" : "pointer", opacity: agendaInsertStep === 'inserting' ? 0.7 : 1 }}>
+                  {agendaInsertStep === 'inserting' ? 'Adding…' : '📄 Add to Agenda Doc'}
+                </button>
+              )}
+              {agendaInsertStep === 'done' && <span style={{ fontSize: 13, color: T.calGreen, fontWeight: 700 }}>✓ Added to agenda doc</span>}
+            </div>
+            {results.agendaRotationText && (
+              <details style={{ marginTop: 12 }}>
+                <summary style={{ fontSize: 12, color: T.textMuted, cursor: "pointer" }}>Show rotation notes from agenda doc</summary>
+                <pre style={{ fontSize: 11, color: T.textMuted, whiteSpace: "pre-wrap", maxHeight: 140, overflow: "auto", margin: "8px 0 0", fontFamily: "inherit" }}>{results.agendaRotationText}</pre>
+              </details>
+            )}
           </div>
 
           {/* Financials */}
@@ -1813,11 +1863,20 @@ function BoardPrepPanel({ meeting, latestBoardReport, onClose, showToast }) {
 
           {/* Board Draft */}
           <div style={{ background: T.bg, borderRadius: 10, padding: 14 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: T.text, marginBottom: 6 }}>✉️ Board Email Draft Created</div>
-            <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 6 }}>Review and update links before sending.</div>
-            {results.boardDraftId
-              ? <a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noreferrer" style={{ color: T.emailBlue, fontSize: 13 }}>View in Gmail Drafts →</a>
-              : <div style={{ color: T.danger, fontSize: 13 }}>Draft not created</div>}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>✉️ Board Email Draft Created</div>
+              {results.boardDraftId && (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => setShowBoardDraft(v => !v)} style={{ fontSize: 12, padding: "4px 10px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>{showBoardDraft ? "Hide" : "View draft"}</button>
+                  <a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noreferrer" style={{ fontSize: 12, padding: "4px 10px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, textDecoration: "none" }}>Gmail →</a>
+                </div>
+              )}
+            </div>
+            <div style={{ fontSize: 12, color: T.textMuted, marginBottom: showBoardDraft ? 8 : 0 }}>Review and update links before sending.</div>
+            {!results.boardDraftId && <div style={{ color: T.danger, fontSize: 13 }}>Draft not created</div>}
+            {showBoardDraft && results.boardDraftBody && (
+              <pre style={{ fontSize: 13, color: T.text, whiteSpace: "pre-wrap", margin: 0, fontFamily: "inherit", background: T.surface, padding: "12px 14px", borderRadius: 8, border: `1px solid ${T.border}`, lineHeight: 1.6 }}>{results.boardDraftBody}</pre>
+            )}
           </div>
 
           {/* Errors */}

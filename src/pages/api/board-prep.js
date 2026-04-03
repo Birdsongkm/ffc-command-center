@@ -88,15 +88,70 @@ function buildBoardDocName(meetingLabel, year) {
   return `${meetingLabel} ${year}- Board Report- FFC`;
 }
 
-function buildStaffEmailBody(meetingLabel, docUrl, deadlineStr) {
+function buildStaffEmailHtml(meetingLabel, docUrl, docName, deadlineStr) {
+  return `<p>Hi team,</p>
+<p>Here's the ${meetingLabel} Board Report — please update your section(s) by EOB ${deadlineStr}.</p>
+<p>As always, the previous info is highlighted in grey — please remove the grey as you update, and let me know once your section is ready to go.</p>
+<p>📄 <a href="${docUrl}">${docName}</a></p>
+<p>Thank you!</p>`;
+}
+
+function buildStaffEmailPlainText(meetingLabel, docUrl, docName, deadlineStr) {
   return `Hi team,
 
 Here's the ${meetingLabel} Board Report — please update your section(s) by EOB ${deadlineStr}.
 
 As always, the previous info is highlighted in grey — please remove the grey as you update, and let me know once your section is ready to go.
 
-Thank you!
-${docUrl}`;
+📄 ${docName}
+${docUrl}
+
+Thank you!`;
+}
+
+// Extract board-meeting agenda bullets from 1:1 doc text.
+// Scans for a "board meeting" subsection in the most recent meeting notes,
+// returns the bullet items under it.
+function extractBoardAgendaItems(text) {
+  if (!text) return [];
+  const lines = text.split('\n');
+  const items = [];
+  let inBoardSection = false;
+
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+    const trimmed = line.trim();
+
+    // Detect "Board Meeting" or "Board Agenda" or "For Board" heading
+    if (/board\s*(meeting|agenda|items?|prep)/i.test(trimmed) && trimmed.length < 80) {
+      inBoardSection = true;
+      continue;
+    }
+
+    // A non-indented, non-bullet line that isn't empty ends the board section
+    if (inBoardSection && trimmed && !trimmed.match(/^[-•*◦]/) && !/^\s/.test(line) && trimmed.length > 3) {
+      inBoardSection = false;
+    }
+
+    // Collect bullets inside the board section
+    if (inBoardSection && trimmed.match(/^[-•*◦]/)) {
+      const content = trimmed.replace(/^[-•*◦]\s*/, '').trim();
+      if (content) items.push(content);
+    }
+  }
+
+  // Fallback: if nothing found, grab any bullet that mentions "board" or "agenda"
+  if (items.length === 0) {
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.match(/^[-•*◦]/) && /(board|agenda)/i.test(trimmed)) {
+        const content = trimmed.replace(/^[-•*◦]\s*/, '').trim();
+        if (content) items.push(content);
+      }
+    }
+  }
+
+  return items;
 }
 
 function buildBoardEmailBody(meetingDateStr, meetingTimeStr, boardReportUrl, financialsUrl, agendaUrl) {
@@ -245,9 +300,9 @@ async function prependDocText(token, docId, text) {
   }
 }
 
-// Create a Gmail draft
-async function createDraft(token, { to, subject, body }) {
-  const raw = buildRawEmail({ to, subject, body });
+// Create a Gmail draft (html overrides body for HTML emails)
+async function createDraft(token, { to, subject, body, html }) {
+  const raw = buildRawEmail({ to, subject, body, html });
   const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/drafts', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -311,10 +366,15 @@ async function handlePost(token, { meetingLabel, year, boardMeetingDate, financi
 
   const results = {
     boardReportUrl: null,
+    boardReportName: null,
     staffDraftId: null,
+    staffDraftBody: null,  // plain text for inline preview
     boardDraftId: null,
+    boardDraftBody: null,
     jack1on1Text: null,
+    boardAgendaItems: [],  // extracted bullet items for confirmation
     agendaDocUrl: null,
+    agendaDocId: null,
     agendaRotationText: null,
     financialsUrl: null,
     errors: [],
@@ -329,6 +389,7 @@ async function handlePost(token, { meetingLabel, year, boardMeetingDate, financi
     const copied = await copyDriveFile(token, sourceDoc.id, newName);
     const newDocId = copied.id;
     results.boardReportUrl = `https://docs.google.com/document/d/${newDocId}/edit`;
+    results.boardReportName = newName;
     // Highlight all text grey
     await highlightDocGrey(token, newDocId);
   } catch (e) {
@@ -336,14 +397,17 @@ async function handlePost(token, { meetingLabel, year, boardMeetingDate, financi
     results.errors.push(`Board report copy failed: ${e.message}`);
   }
 
-  // 2. Read Jack 1:1 doc — return recent text for review
+  // 2. Read Jack 1:1 doc — extract board-meeting agenda items
   try {
     const files = await driveSearch(token, 'Jack & Kayla 1:1s 2026', 2);
     if (files.length) {
       const doc = await readDoc(token, files[0].id);
       const fullText = extractDocPlainText(doc.body);
-      // Return last ~2000 chars (most recent entries)
-      results.jack1on1Text = fullText.length > 2000 ? fullText.slice(-2000) : fullText;
+      // Keep last ~3000 chars (most recent meetings) for context display
+      results.jack1on1Text = fullText.length > 3000 ? fullText.slice(-3000) : fullText;
+      // Extract board-meeting bullet items from the most recent meeting section
+      const recentText = fullText.length > 3000 ? fullText.slice(-3000) : fullText;
+      results.boardAgendaItems = extractBoardAgendaItems(recentText);
     }
   } catch (e) {
     console.error('board-prep:read1on1', { message: e.message });
@@ -355,6 +419,7 @@ async function handlePost(token, { meetingLabel, year, boardMeetingDate, financi
     const files = await driveSearch(token, 'FFC National Board Meeting Agenda', 2);
     if (files.length) {
       results.agendaDocUrl = files[0].webViewLink;
+      results.agendaDocId = files[0].id;
       const doc = await readDoc(token, files[0].id);
       const fullText = extractDocPlainText(doc.body);
       // Return first 1500 chars — rotation is typically at the top
@@ -377,12 +442,15 @@ async function handlePost(token, { meetingLabel, year, boardMeetingDate, financi
     results.errors.push(`Financials search failed: ${e.message}`);
   }
 
-  // 5. Create staff email draft
+  // 5. Create staff email draft (HTML so doc link is clickable, not a bare URL)
   if (results.boardReportUrl) {
     try {
       const staffTo = 'Laura Lavid <laura@freshfoodconnect.org>, Carmen Alcantara <carmen@freshfoodconnect.org>, Gretchen Roberts <gretchen@freshfoodconnect.org>, Adjoa Kittoe <adjoa@freshfoodconnect.org>';
-      const staffBody = buildStaffEmailBody(meetingLabel, results.boardReportUrl, deadlineStr);
-      results.staffDraftId = await createDraft(token, { to: staffTo, subject: staffSubject, body: staffBody });
+      const docName = results.boardReportName || `${meetingLabel} ${year}- Board Report- FFC`;
+      const staffHtml = buildStaffEmailHtml(meetingLabel, results.boardReportUrl, docName, deadlineStr);
+      const staffPlain = buildStaffEmailPlainText(meetingLabel, results.boardReportUrl, docName, deadlineStr);
+      results.staffDraftId = await createDraft(token, { to: staffTo, subject: staffSubject, html: staffHtml });
+      results.staffDraftBody = staffPlain; // for inline preview in CC
     } catch (e) {
       console.error('board-prep:staffDraft', { message: e.message });
       results.errors.push(`Staff draft failed: ${e.message}`);
@@ -403,12 +471,41 @@ async function handlePost(token, { meetingLabel, year, boardMeetingDate, financi
       results.agendaDocUrl || '[Agenda URL — add after updating agenda doc]'
     );
     results.boardDraftId = await createDraft(token, { to: boardTo, subject: boardSubject, body: boardBody });
+    results.boardDraftBody = boardBody;
   } catch (e) {
     console.error('board-prep:boardDraft', { message: e.message });
     results.errors.push(`Board draft failed: ${e.message}`);
   }
 
   return results;
+}
+
+async function handleInsertAgendaSection(token, { agendaDocId, boardMeetingDate, noteTaker, agendaItems }) {
+  if (!agendaDocId || !boardMeetingDate) {
+    throw new Error('Missing required fields: agendaDocId, boardMeetingDate');
+  }
+  const d = parseDateLocal(boardMeetingDate);
+  const month = MONTH_NAMES[d.getMonth()];
+  const day = d.getDate();
+  const year = d.getFullYear();
+  const dayName = DAY_NAMES[d.getDay()];
+
+  const itemLines = (agendaItems || []).map(item => `• ${item}`).join('\n');
+  const separator = '─'.repeat(48);
+  const sectionText = [
+    `${separator}`,
+    `${month} ${year} FFC Board Meeting — ${dayName}, ${month} ${day}, ${year}`,
+    `Note-taker: ${noteTaker || 'TBD'}`,
+    '',
+    'AGENDA ITEMS:',
+    itemLines || '• (none confirmed)',
+    '',
+    separator,
+    '',
+  ].join('\n');
+
+  await prependDocText(token, agendaDocId, sectionText);
+  return { success: true };
 }
 
 export default async function handler(req, res) {
@@ -420,6 +517,11 @@ export default async function handler(req, res) {
       return res.status(200).json(await handleGet(token));
     }
     if (req.method === 'POST') {
+      const { action } = req.body;
+      if (action === 'insertAgendaSection') {
+        const { agendaDocId, boardMeetingDate, noteTaker, agendaItems } = req.body;
+        return res.status(200).json(await handleInsertAgendaSection(token, { agendaDocId, boardMeetingDate, noteTaker, agendaItems }));
+      }
       const { meetingLabel, year, boardMeetingDate, financialsQuery } = req.body;
       return res.status(200).json(await handlePost(token, { meetingLabel, year, boardMeetingDate, financialsQuery }));
     }
