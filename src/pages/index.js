@@ -1479,7 +1479,7 @@ function getPayrollChanges(currentLines, prevLines) {
   return { added, removed, unchanged };
 }
 
-function PayrollReviewPanel({ email, cache, onCacheUpdate, onClose, showToast }) {
+function PayrollReviewPanel({ email, cache, onCacheUpdate, onClose, onApproved, showToast }) {
   const [loading, setLoading] = useState(!cache[email.id]);
   const [loadProgress, setLoadProgress] = useState(0);
   const [error, setError] = useState(null);
@@ -1527,6 +1527,7 @@ function PayrollReviewPanel({ email, cache, onCacheUpdate, onClose, showToast })
       if (d.success) {
         setApproveStep("done");
         showToast("Approval sent ✓");
+        if (onApproved) onApproved(email.id);
       } else {
         setDraftStatus(d.error || "Could not send.");
       }
@@ -2083,7 +2084,14 @@ export default function Home() {
   const [boardPrepPanel, setBoardPrepPanel] = useState(false);
   const [birthdayInfo, setBirthdayInfo] = useState(null); // { birthdays, recipients, pastSubject }
   const [birthdayPanel, setBirthdayPanel] = useState(false);
-  const [dismissedPayrollIds, setDismissedPayrollIds] = useState(new Set());
+  const [dismissedPayrollIds, setDismissedPayrollIds] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('ffc_dismissed_payroll') || '[]')); } catch { return new Set(); }
+  });
+  const dismissPayroll = id => setDismissedPayrollIds(prev => {
+    const next = new Set([...prev, id]);
+    try { localStorage.setItem('ffc_dismissed_payroll', JSON.stringify([...next])); } catch {}
+    return next;
+  });
   const [aiPrep, setAiPrep] = useState({}); // eventId → { loading, text, error }
   const [editingDraft, setEditingDraft] = useState(null); // { id, to, subject, body } or null
   const [draftSaving, setDraftSaving] = useState(false);
@@ -3005,7 +3013,7 @@ export default function Home() {
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div onClick={() => setPayrollPanel(e)} style={{ padding: "10px 24px", background: "#fff", color: "#D45555", borderRadius: 8, fontWeight: 800, fontSize: 15, whiteSpace: "nowrap", cursor: "pointer" }}>Run Payroll Review →</div>
-              <button onClick={ev => { ev.stopPropagation(); setDismissedPayrollIds(prev => new Set([...prev, e.id])); }} style={{ background: "rgba(255,255,255,0.25)", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", color: "#fff", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Dismiss">×</button>
+              <button onClick={ev => { ev.stopPropagation(); dismissPayroll(e.id); }} style={{ background: "rgba(255,255,255,0.25)", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", color: "#fff", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Dismiss">×</button>
             </div>
           </div>
         ))}
@@ -3059,7 +3067,7 @@ export default function Home() {
 
         {/* Payroll Review Panel (#94) */}
         {payrollPanel && (
-          <PayrollReviewPanel email={payrollPanel} cache={payrollCache} onCacheUpdate={(id, data) => setPayrollCache(prev => ({ ...prev, [id]: data }))} onClose={() => setPayrollPanel(null)} showToast={showToast} />
+          <PayrollReviewPanel email={payrollPanel} cache={payrollCache} onCacheUpdate={(id, data) => setPayrollCache(prev => ({ ...prev, [id]: data }))} onClose={() => setPayrollPanel(null)} onApproved={id => dismissPayroll(id)} showToast={showToast} />
         )}
 
         {/* TABS */}

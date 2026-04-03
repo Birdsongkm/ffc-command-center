@@ -67,8 +67,10 @@ function extractBirthdayName(summary) {
 async function handleGet(token) {
   const h = { Authorization: `Bearer ${token}` };
   const now = new Date();
-  const in14 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
-  const timeMin = now.toISOString();
+  // Use start of today so all-day events (like birthdays) aren't excluded mid-day
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const in14 = new Date(todayStart.getTime() + 14 * 24 * 60 * 60 * 1000);
+  const timeMin = todayStart.toISOString();
   const timeMax = in14.toISOString();
 
   // 1. Get all calendars to find birthday-specific ones
