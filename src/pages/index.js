@@ -2090,6 +2090,8 @@ export default function Home() {
     return [];
   });
   const [newStickyText, setNewStickyText] = useState("");
+  const [editingCaptureId, setEditingCaptureId] = useState(null);
+  const [editingCaptureText, setEditingCaptureText] = useState("");
   const [showWeekPrep, setShowWeekPrep] = useState(false);
   const [weekPrepEvents, setWeekPrepEvents] = useState([]);
   const [digest, setDigest] = useState(null);
@@ -2818,7 +2820,10 @@ export default function Home() {
               {email.unreadCount > 1 && <span style={{ fontSize: 11, fontWeight: 700, padding: "1px 6px", borderRadius: 10, background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, flexShrink: 0 }}>{email.unreadCount}</span>}
               <span style={{ fontSize: 14, color: T.textDim, flexShrink: 0 }}>{fmtRel(email.date)}</span>
             </div>
-            <div style={{ fontSize: 16, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{email.subject}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 16, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500, flex: 1, minWidth: 0 }}>{email.subject}</span>
+              {email.hasAttachment && <span title="Has attachment" style={{ fontSize: 14, flexShrink: 0 }}>📎</span>}
+            </div>
             {!isExp && <div style={{ fontSize: 15, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 3 }}>{decodeHtml(email.snippet)}</div>}
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
@@ -4085,15 +4090,17 @@ export default function Home() {
                     </div>
                     {catTasks.map(task => {
                       const urg = URGENCY.find(u => u.id === task.urgency);
+                      const isCritical = task.urgency === 'critical';
                       return (
                         <div key={task.id} draggable onDragStart={e => handleTaskDragStart(e, task)} onDragOver={(e) => handleTaskDragOver(e, task, cat.id)} onDrop={(e) => handleTaskDrop(e, task, cat.id)}
-                          style={{ background: dragOverTask === task.id ? T.cardHover : T.surface, border: `1px solid ${dragOverTask === task.id ? cat.color : T.border}`, borderRadius: 8, padding: "16px 18px", marginBottom: 10, cursor: "grab", borderLeft: `4px solid ${urg?.dot || T.border}`, transition: "all 0.1s" }}>
+                          style={{ background: dragOverTask === task.id ? T.cardHover : isCritical ? '#2A0A0A' : T.surface, border: `1px solid ${dragOverTask === task.id ? cat.color : isCritical ? '#FF4444' : T.border}`, borderRadius: 8, padding: "16px 18px", marginBottom: 10, cursor: "grab", borderLeft: `6px solid ${urg?.dot || T.border}`, transition: "all 0.1s", boxShadow: isCritical ? '0 0 0 1px #FF444433, 0 2px 12px #FF444422' : 'none' }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
                             <input type="checkbox" checked={task.done} onChange={() => { const wasDone = task.done; setTasks(prev => prev.map(t => t.id === task.id ? { ...t, done: !t.done } : t)); if (wasDone) { showToast("Task reopened"); } else { showToast("Task completed!", () => setTasks(prev => prev.map(t => t.id === task.id ? { ...t, done: false } : t))); } }} style={{ cursor: "pointer", width: 20, height: 20, accentColor: cat.color }} />
-                            <span style={{ flex: 1, fontWeight: 600, fontSize: 16, color: T.text }}>{task.title}</span>
+                            {isCritical && <span style={{ fontSize: 14 }}>🔴</span>}
+                            <span style={{ flex: 1, fontWeight: 700, fontSize: 16, color: isCritical ? '#FF6666' : T.text }}>{task.title}</span>
                           </div>
                           <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                            {urg && <span style={{ fontSize: 13, padding: "3px 9px", borderRadius: 4, background: urg.bg, color: urg.color, fontWeight: 600 }}>{urg.label}</span>}
+                            {urg && <span style={{ fontSize: 13, padding: "3px 9px", borderRadius: 4, background: isCritical ? '#FF444422' : urg.bg, color: isCritical ? '#FF6666' : urg.color, fontWeight: 700, letterSpacing: isCritical ? '0.03em' : 0 }}>{isCritical ? '⚠ CRITICAL' : urg.label}</span>}
                             {task.due && <span style={{ fontSize: 13, padding: "3px 9px", borderRadius: 4, background: new Date(task.due) < new Date() ? T.dangerBg : T.bg, color: new Date(task.due) < new Date() ? T.danger : T.textMuted }}>{task.due}</span>}
                           </div>
                           {task.notes && <div style={{ fontSize: 14, color: T.textMuted, marginTop: 7, lineHeight: 1.4 }}>{task.notes}</div>}
@@ -4375,10 +4382,25 @@ export default function Home() {
               <div key={note.id} style={{ background: note.processed ? T.bg : T.stickyYellowBg, border: `1px solid ${note.processed ? T.border : T.stickyYellowBorder}`, borderRadius: 10, padding: "16px 20px", marginBottom: 10, opacity: note.processed ? 0.6 : 1 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 16, color: T.text, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{note.text}</div>
-                    <div style={{ fontSize: 13, color: T.textDim, marginTop: 6 }}>{fmtRel(note.createdAt)}</div>
+                    {editingCaptureId === note.id ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        <textarea value={editingCaptureText} onChange={e => setEditingCaptureText(e.target.value)} rows={3} autoFocus
+                          style={{ width: "100%", padding: "10px 14px", border: `2px solid ${T.stickyYellowBorder}`, borderRadius: 8, fontSize: 16, background: T.bg, color: T.text, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }}
+                          onKeyDown={e => { if (e.key === "Escape") { setEditingCaptureId(null); setEditingCaptureText(""); } }} />
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button onClick={() => { if (editingCaptureText.trim()) { setStickyNotes(prev => prev.map(n => n.id === note.id ? { ...n, text: editingCaptureText.trim() } : n)); } setEditingCaptureId(null); setEditingCaptureText(""); }} style={{ padding: "6px 16px", background: "#B8A030", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600, fontSize: 14 }}>Save</button>
+                          <button onClick={() => { setEditingCaptureId(null); setEditingCaptureText(""); }} style={{ padding: "6px 14px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 14 }}>Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 16, color: T.text, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{note.text}</div>
+                        <div style={{ fontSize: 13, color: T.textDim, marginTop: 6 }}>{fmtRel(note.createdAt)}</div>
+                      </>
+                    )}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+                    <button onClick={() => { setEditingCaptureId(note.id); setEditingCaptureText(note.text); }} style={{ padding: "6px 12px", background: T.surface, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 500 }}>✏ Edit</button>
                     <button onClick={() => { setShowTaskForm({ prefillFromEmail: { subject: note.text } }); setStickyNotes(prev => prev.map(n => n.id === note.id ? { ...n, processed: true } : n)); }} style={{ padding: "6px 12px", background: T.taskAmberBg, color: T.taskAmber, border: `1px solid ${T.taskAmberBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>→ Task</button>
                     <button onClick={() => { setComposing("compose"); }} style={{ padding: "6px 12px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>→ Email</button>
                     <button onClick={() => { setShowEventForm({ prefillFromEmail: { subject: note.text } }); setStickyNotes(prev => prev.map(n => n.id === note.id ? { ...n, processed: true } : n)); }} style={{ padding: "6px 12px", background: T.calGreenBg, color: T.calGreen, border: `1px solid ${T.calGreenBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>→ Event</button>

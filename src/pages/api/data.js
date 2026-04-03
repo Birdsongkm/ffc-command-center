@@ -109,6 +109,7 @@ export default async function handler(req, res) {
           snippet: d.snippet,
           unread: (d.labelIds || []).includes('UNREAD'),
           labels: d.labelIds || [],
+          hasAttachment: d.payload?.mimeType === 'multipart/mixed',
           recipientCount,
         };
       });
