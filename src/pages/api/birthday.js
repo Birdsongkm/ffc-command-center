@@ -73,34 +73,20 @@ async function handleGet(token) {
   const timeMin = todayStart.toISOString();
   const timeMax = in14.toISOString();
 
-  // 1. Get all calendars — query every one, since the Birthdays calendar ID varies
-  const calListRes = await fetch(
-    'https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=50',
-    { headers: h }
-  );
-  const calList = calListRes.ok ? await calListRes.json() : { items: [] };
-  const allCals = (calList.items || []);
-
-  // 2. Query every calendar for events in the window; filter by title unless it's a birthday calendar
+  // Query only the primary calendar — Kayla manually adds board/staff birthdays there.
+  // The auto-generated Google Contacts "Birthdays" calendar includes all contacts and
+  // creates noise (people not on board/staff). Primary-only keeps it intentional.
   const birthdays = [];
-  const seenIds = new Set();
-
-  for (const cal of allCals) {
-    try {
-      const evRes = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&maxResults=50`,
-        { headers: h }
-      );
-      if (!evRes.ok) continue;
+  try {
+    const evRes = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&maxResults=50&q=birthday`,
+      { headers: h }
+    );
+    if (evRes.ok) {
       const evData = await evRes.json();
-      const isBirthdayCal = (cal.summary || '').toLowerCase().includes('birthday') ||
-        (cal.id || '').toLowerCase().includes('birthday') ||
-        (cal.id || '').includes('contacts@group.v.calendar.google.com');
       for (const ev of (evData.items || [])) {
-        if (seenIds.has(ev.id)) continue;
         const title = ev.summary || '';
-        if (!isBirthdayCal && !title.toLowerCase().includes('birthday')) continue;
-        seenIds.add(ev.id);
+        if (!title.toLowerCase().includes('birthday')) continue;
         birthdays.push({
           id: ev.id,
           summary: title,
@@ -108,9 +94,9 @@ async function handleGet(token) {
           name: extractBirthdayName(title),
         });
       }
-    } catch (e) {
-      console.error('birthday:fetchCal', { calId: cal.id, message: e.message });
     }
+  } catch (e) {
+    console.error('birthday:fetchCal', { calId: 'primary', message: e.message });
   }
 
   // 2. Find most recent happy birthday sent email for the recipient list
