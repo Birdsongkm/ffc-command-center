@@ -2178,6 +2178,22 @@ export default function Home() {
     try { localStorage.setItem('ffc_dismissed_payroll', JSON.stringify([...next])); } catch {}
     return next;
   });
+
+  const [dismissedFinanceIds, setDismissedFinanceIds] = useState(new Set());
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('ffc_dismissed_finance') || '[]');
+      if (stored.length > 0) setDismissedFinanceIds(new Set(stored));
+    } catch {}
+  }, []);
+  const dismissFinance = id => setDismissedFinanceIds(prev => {
+    const next = new Set([...prev, id]);
+    try { localStorage.setItem('ffc_dismissed_finance', JSON.stringify([...next])); } catch {}
+    return next;
+  });
+
+  const [boardPrepDismissed, setBoardPrepDismissed] = useState(false);
+  const [birthdayDismissed, setBirthdayDismissed] = useState(false);
   const [aiPrep, setAiPrep] = useState({}); // eventId → { loading, text, error }
   const [editingDraft, setEditingDraft] = useState(null); // { id, to, subject, body } or null
   const [draftSaving, setDraftSaving] = useState(false);
@@ -3125,8 +3141,8 @@ export default function Home() {
         ))}
 
         {/* Board prep — sticky alert when board meeting is within 21 days */}
-        {boardPrepInfo?.meeting && !boardPrepPanel && (
-          <div onClick={() => setBoardPrepPanel(true)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "14px 22px", background: T.emailBlue, borderRadius: 12, marginBottom: 12, cursor: "pointer", boxShadow: "0 4px 20px rgba(59,130,196,0.35)" }}>
+        {boardPrepInfo?.meeting && !boardPrepPanel && !boardPrepDismissed && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "14px 22px", background: T.emailBlue, borderRadius: 12, marginBottom: 12, cursor: "pointer", boxShadow: "0 4px 20px rgba(59,130,196,0.35)" }} onClick={() => setBoardPrepPanel(true)}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontSize: 26 }}>📋</span>
               <div>
@@ -3134,7 +3150,10 @@ export default function Home() {
                 <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", marginTop: 1 }}>Copy board report, draft staff email, draft board email, pull 1:1 agenda items</div>
               </div>
             </div>
-            <div style={{ padding: "10px 24px", background: "#fff", color: T.emailBlue, borderRadius: 8, fontWeight: 800, fontSize: 15, whiteSpace: "nowrap" }}>Start Prep →</div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <div style={{ padding: "10px 24px", background: "#fff", color: T.emailBlue, borderRadius: 8, fontWeight: 800, fontSize: 15, whiteSpace: "nowrap" }}>Start Prep →</div>
+              <button onClick={e => { e.stopPropagation(); setBoardPrepDismissed(true); }} style={{ background: "rgba(255,255,255,0.25)", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", color: "#fff", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Dismiss">×</button>
+            </div>
           </div>
         )}
 
@@ -3144,8 +3163,8 @@ export default function Home() {
         )}
 
         {/* Birthday alert */}
-        {birthdayInfo?.birthdays?.length > 0 && !birthdayPanel && (
-          <div onClick={() => setBirthdayPanel(true)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "14px 22px", background: T.gold, borderRadius: 12, marginBottom: 12, cursor: "pointer", boxShadow: `0 4px 20px rgba(196,148,42,0.4)` }}>
+        {birthdayInfo?.birthdays?.length > 0 && !birthdayPanel && !birthdayDismissed && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "14px 22px", background: T.gold, borderRadius: 12, marginBottom: 12, cursor: "pointer", boxShadow: `0 4px 20px rgba(196,148,42,0.4)` }} onClick={() => setBirthdayPanel(true)}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontSize: 26 }}>🎂</span>
               <div>
@@ -3157,7 +3176,10 @@ export default function Home() {
                 <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", marginTop: 1 }}>Send a birthday message to board and staff</div>
               </div>
             </div>
-            <div style={{ padding: "10px 24px", background: "#fff", color: T.gold, borderRadius: 8, fontWeight: 800, fontSize: 15, whiteSpace: "nowrap" }}>Draft Message →</div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <div style={{ padding: "10px 24px", background: "#fff", color: T.gold, borderRadius: 8, fontWeight: 800, fontSize: 15, whiteSpace: "nowrap" }}>Draft Message →</div>
+              <button onClick={e => { e.stopPropagation(); setBirthdayDismissed(true); }} style={{ background: "rgba(255,255,255,0.25)", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", color: "#fff", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Dismiss">×</button>
+            </div>
           </div>
         )}
 
@@ -3303,7 +3325,7 @@ export default function Home() {
             </div>
 
             {/* Finance review banner — shows when Debbie's details email is in inbox */}
-            {debbieDetailsEmail && !financePanel && (
+            {debbieDetailsEmail && !financePanel && !dismissedFinanceIds.has(debbieDetailsEmail.id) && (
               <div style={{ background: T.taskAmberBg, border: `2px solid ${T.taskAmberBorder}`, borderRadius: 12, padding: "16px 22px", marginBottom: 22, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <span style={{ fontSize: 22 }}>📊</span>
@@ -3312,9 +3334,12 @@ export default function Home() {
                     <div style={{ fontSize: 14, color: T.textMuted, marginTop: 2 }}>{debbieDetailsEmail.subject}</div>
                   </div>
                 </div>
-                <button onClick={() => setFinancePanel(debbieDetailsEmail)} style={{ padding: "10px 22px", background: T.taskAmber, color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: "pointer", flexShrink: 0 }}>
-                  Run Finance Review →
-                </button>
+                <div style={{ display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
+                  <button onClick={() => setFinancePanel(debbieDetailsEmail)} style={{ padding: "10px 22px", background: T.taskAmber, color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: "pointer" }}>
+                    Run Finance Review →
+                  </button>
+                  <button onClick={e => { e.stopPropagation(); dismissFinance(debbieDetailsEmail.id); }} style={{ background: "none", border: `1px solid ${T.taskAmberBorder}`, borderRadius: "50%", width: 30, height: 30, cursor: "pointer", color: T.taskAmber, fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }} title="Dismiss">×</button>
+                </div>
               </div>
             )}
 
