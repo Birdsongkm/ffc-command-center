@@ -7,8 +7,8 @@
 
 function extractBirthdayName(summary) {
   return (summary || '')
-    .replace(/[\u0027\u2018\u2019`]s?\s*birthday\s*$/i, '')
-    .replace(/^birthday\s*[-–:]\s*/i, '')
+    .replace(/[\u0027\u2018\u2019`]s?\s*(b-?day|birthday)\s*$/i, '')
+    .replace(/^(b-?day|birthday)\s*[-–:]\s*/i, '')
     .trim();
 }
 
@@ -54,5 +54,21 @@ describe('extractBirthdayName', () => {
   test('first name extraction from full name', () => {
     const name = extractBirthdayName("Gretchen Roberts's birthday");
     expect(name.split(' ')[0]).toBe('Gretchen');
+  });
+
+  test("\"Bill Johnson's Bday\" → \"Bill Johnson\"", () => {
+    expect(extractBirthdayName("Bill Johnson's Bday")).toBe('Bill Johnson');
+  });
+
+  test("\"Bill Johnson's bday\" → \"Bill Johnson\"", () => {
+    expect(extractBirthdayName("Bill Johnson's bday")).toBe('Bill Johnson');
+  });
+
+  test("\"Bill Johnson's B-Day\" → \"Bill Johnson\"", () => {
+    expect(extractBirthdayName("Bill Johnson's B-Day")).toBe('Bill Johnson');
+  });
+
+  test('\"Bday - Carmen\" → \"Carmen\"', () => {
+    expect(extractBirthdayName('Bday - Carmen')).toBe('Carmen');
   });
 });

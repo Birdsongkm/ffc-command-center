@@ -1402,12 +1402,12 @@ function TaskForm({ task = null, onSave, onCancel, prefillFromEmail = null, cate
 //  BIRTHDAY PANEL
 // ═══════════════════════════════════════════════
 function BirthdayPanel({ birthdays, recipients, onClose, showToast }) {
-  const firstName = birthdays[0]?.name?.split(' ')[0] || 'them';
-  const fullName = birthdays[0]?.name || '';
+  const rawFirst = birthdays[0]?.name?.split(' ')[0] || 'them';
+  const firstName = rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1).toLowerCase();
   const [to, setTo] = useState(recipients.to || '');
   const [cc, setCc] = useState(recipients.cc || '');
-  const [subject, setSubject] = useState(`Happy Birthday, ${fullName}! 🎂`);
-  const [body, setBody] = useState(`Happy Birthday, ${firstName}! 🎂\n\nWishing you a wonderful day and a fantastic year ahead. We're so grateful to have you!\n\nWith appreciation,\nKayla`);
+  const [subject, setSubject] = useState(`Happy Birthday, ${firstName}!`);
+  const [body, setBody] = useState(`Happy Birthday, ${firstName}!\n\nWishing you a wonderful day and a fantastic year ahead. We're so grateful to have you!\n\nWith appreciation,\nKayla`);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState(null);

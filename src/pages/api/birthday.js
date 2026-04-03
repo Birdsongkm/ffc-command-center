@@ -57,10 +57,11 @@ async function getToken(req, res) {
 
 // "John Smith's birthday" → "John Smith"
 // "Birthday - John Smith" → "John Smith"
+// "Bill Johnson's Bday" → "Bill Johnson"
 function extractBirthdayName(summary) {
   return (summary || '')
-    .replace(/[\u0027\u2018\u2019`]s?\s*birthday\s*$/i, '')
-    .replace(/^birthday\s*[-–:]\s*/i, '')
+    .replace(/[\u0027\u2018\u2019`]s?\s*(b-?day|birthday)\s*$/i, '')
+    .replace(/^(b-?day|birthday)\s*[-–:]\s*/i, '')
     .trim();
 }
 
@@ -69,9 +70,20 @@ async function handleGet(token) {
   const now = new Date();
   // Use start of today so all-day events (like birthdays) aren't excluded mid-day
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const in14 = new Date(todayStart.getTime() + 14 * 24 * 60 * 60 * 1000);
+  const todayStr = todayStart.toISOString().slice(0, 10);
+
+  // On Friday: also surface weekend birthdays so they aren't missed.
+  // Any other day: today only.
+  const dayOfWeek = todayStart.getDay(); // 0=Sun,1=Mon,...,5=Fri,6=Sat
+  const allowedDates = new Set([todayStr]);
+  if (dayOfWeek === 5) {
+    allowedDates.add(new Date(todayStart.getTime() + 1 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)); // Sat
+    allowedDates.add(new Date(todayStart.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)); // Sun
+  }
+
+  // Fetch up to 3 days ahead (covers Fri→Sun window); filter to allowedDates below
   const timeMin = todayStart.toISOString();
-  const timeMax = in14.toISOString();
+  const timeMax = new Date(todayStart.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString();
 
   // Query only the primary calendar — Kayla manually adds board/staff birthdays there.
   // The auto-generated Google Contacts "Birthdays" calendar includes all contacts and
@@ -87,11 +99,13 @@ async function handleGet(token) {
       for (const ev of (evData.items || [])) {
         const title = (ev.summary || '').toLowerCase();
         if (!title.includes('birthday') && !title.includes('bday') && !title.includes('b-day')) continue;
+        const evDate = ev.start?.date || ev.start?.dateTime?.slice(0, 10);
+        if (!allowedDates.has(evDate)) continue;
         birthdays.push({
           id: ev.id,
-          summary: title,
-          date: ev.start?.date || ev.start?.dateTime?.slice(0, 10),
-          name: extractBirthdayName(title),
+          summary: ev.summary || '',
+          date: evDate,
+          name: extractBirthdayName(ev.summary || ''), // use original case, not lowercased
         });
       }
     }
