@@ -79,14 +79,14 @@ async function handleGet(token) {
   const birthdays = [];
   try {
     const evRes = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&maxResults=50&q=birthday`,
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&maxResults=250`,
       { headers: h }
     );
     if (evRes.ok) {
       const evData = await evRes.json();
       for (const ev of (evData.items || [])) {
-        const title = ev.summary || '';
-        if (!title.toLowerCase().includes('birthday')) continue;
+        const title = (ev.summary || '').toLowerCase();
+        if (!title.includes('birthday') && !title.includes('bday') && !title.includes('b-day')) continue;
         birthdays.push({
           id: ev.id,
           summary: title,
