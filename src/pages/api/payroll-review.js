@@ -178,11 +178,12 @@ async function handleGet(token, messageId) {
   };
 }
 
-async function handlePost(token, { messageId, threadId, to, subject }) {
+async function handlePost(token, { messageId, threadId, to, cc, subject }) {
   const { buildRawEmail } = require('../../lib/email');
   const replySubject = (subject || '').startsWith('Re: ') ? subject : `Re: ${subject}`;
   const raw = buildRawEmail({
     to,
+    cc,
     subject: replySubject,
     body: 'I approve, thank you',
     inReplyTo: messageId,
@@ -217,9 +218,9 @@ export default async function handler(req, res) {
       return res.status(200).json(await handleGet(token, messageId));
     }
     if (req.method === 'POST') {
-      const { messageId, threadId, to, subject } = req.body;
+      const { messageId, threadId, to, cc, subject } = req.body;
       if (!messageId || !to || !subject) return res.status(400).json({ error: 'Missing required fields: messageId, to, subject' });
-      return res.status(200).json(await handlePost(token, { messageId, threadId, to, subject }));
+      return res.status(200).json(await handlePost(token, { messageId, threadId, to, cc, subject }));
     }
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {

@@ -998,8 +998,13 @@ function SnoozePicker({ onSnooze, onCancel }) {
 // ═══════════════════════════════════════════════
 function ComposeForm({ mode = "compose", email = null, onSend, onSchedule, onCancel, signature = "", suggestedForwardTo = "", prefillBody = "", contacts = [], forwardAttachments = [] }) {
   const [to, setTo] = useState(mode === "reply" && email ? (email.replyTo || email.from || "") : (mode === "forward" ? suggestedForwardTo : ""));
-  // Reply defaults to sender-only (not reply-all). User can click "Reply All" to expand CC.
-  const [cc, setCc] = useState("");
+  // Reply defaults to reply-all — always include original To + CC recipients
+  const [cc, setCc] = useState(() => {
+    if (mode === "reply" && email) {
+      return [email.to, email.cc].filter(v => v && v.trim()).join(', ');
+    }
+    return "";
+  });
   const [bcc, setBcc] = useState("");
   const [showBcc, setShowBcc] = useState(false);
   const [subject, setSubject] = useState(
@@ -1427,6 +1432,7 @@ function PayrollReviewPanel({ email, cache, onCacheUpdate, onClose, showToast })
           messageId: email.id,
           threadId: email.threadId,
           to: email.from,
+          cc: [email.to, email.cc].filter(v => v && v.trim()).join(', '),
           subject: email.subject || "Payroll Approval",
         }),
       });
@@ -1529,6 +1535,7 @@ function PayrollReviewPanel({ email, cache, onCacheUpdate, onClose, showToast })
             <div style={{ border: `1px solid ${T.border}`, borderRadius: 10, overflow: "hidden", marginTop: 4 }}>
               <div style={{ background: T.bg, padding: "10px 14px", fontSize: 13, color: T.textMuted, borderBottom: `1px solid ${T.borderLight}` }}>
                 <div><strong>To:</strong> {email.from}</div>
+                {[email.to, email.cc].filter(v => v && v.trim()).join(', ') && <div><strong>CC:</strong> {[email.to, email.cc].filter(v => v && v.trim()).join(', ')}</div>}
                 <div><strong>Subject:</strong> {(email.subject || "Payroll Approval").startsWith("Re: ") ? email.subject : `Re: ${email.subject || "Payroll Approval"}`}</div>
               </div>
               <div style={{ padding: "12px 14px", fontSize: 14, color: T.text }}>I approve, thank you</div>

@@ -122,6 +122,18 @@ Not required on:
 
 ---
 
+## Email reply behavior
+
+**Reply-all is always the default.** When composing a reply (in `ComposeForm` or any automated send like payroll approval), always include the original To and CC recipients in the outgoing CC. Never default to reply-to-sender-only.
+
+- `ComposeForm` reply mode: CC initializes to `[email.to, email.cc].filter(...).join(', ')`
+- Payroll approval POST: passes `cc` built from original email's To + CC
+- `buildRawEmail` in `src/lib/email.js` already supports a `cc` parameter — always pass it for replies
+
+The toggle in ComposeForm lets the user switch to sender-only if needed, but reply-all is the starting state.
+
+---
+
 ## Email classification (`classifyEmail` in `index.js`)
 
 The classifier runs client-side on every email object returned by `/api/data`. The buckets in priority order:
