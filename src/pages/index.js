@@ -2042,6 +2042,11 @@ export default function Home() {
   const [nextWeekEvents, setNextWeekEvents] = useState([]);
   const [pastWeekEvents, setPastWeekEvents] = useState([]);
   const [showEventForm, setShowEventForm] = useState(null);
+  const [calSearchTerm, setCalSearchTerm] = useState("");
+  const [calShowAll, setCalShowAll] = useState(false);
+  const [expandedCalEventId, setExpandedCalEventId] = useState(null);
+  const [calRsvpBusy, setCalRsvpBusy] = useState(null);
+  const [calRsvpOverrides, setCalRsvpOverrides] = useState({});
   const [preppedEvents, setPreppedEvents] = useState(() => {
     if (typeof window !== "undefined") { try { return JSON.parse(localStorage.getItem("ffc_prepped") || "{}"); } catch { return {}; } }
     return {};
@@ -2548,6 +2553,23 @@ export default function Home() {
     const d = await r.json();
     if (d.success) { showToast(action === "create" ? "Event created!" : action === "delete" ? "Event deleted" : "Event updated"); fetchData(); }
     return d;
+  };
+
+  const calendarRsvp = async (eventId, status) => {
+    setCalRsvpBusy(eventId);
+    try {
+      const r = await fetch("/api/calendar-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "rsvp", eventId, status }) });
+      const d = await r.json();
+      if (d.success) {
+        setCalRsvpOverrides(prev => ({ ...prev, [eventId]: status }));
+        showToast(status === "accepted" ? "✓ RSVP'd Yes" : status === "declined" ? "✗ RSVP'd No" : "? RSVP'd Maybe");
+      } else {
+        showToast("RSVP failed: " + (d.error || "unknown error"));
+      }
+    } catch (e) {
+      showToast("RSVP failed");
+    }
+    setCalRsvpBusy(null);
   };
 
   // "This Week" — starts from TODAY, not Sunday
@@ -3848,13 +3870,17 @@ export default function Home() {
         {/* ═══════════ CALENDAR TAB ═══════════ */}
         {tab === "calendar" && (
           <div className="tab-content">
-            <div style={{ display: "flex", gap: 10, marginBottom: 26 }}>
+            <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
               <button onClick={() => setCalView("today")} style={{ padding: "11px 24px", background: calView === "today" ? T.calGreenBg : T.bg, color: calView === "today" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "today" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Today</button>
               <button onClick={() => { setCalView("week"); fetchWeekEvents(); }} style={{ padding: "11px 24px", background: calView === "week" ? T.calGreenBg : T.bg, color: calView === "week" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "week" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>This Week</button>
               <button onClick={() => { setCalView("nextWeek"); fetchNextWeekEvents(); }} style={{ padding: "11px 24px", background: calView === "nextWeek" ? T.calGreenBg : T.bg, color: calView === "nextWeek" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "nextWeek" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Next Week</button>
               <button onClick={() => { setCalView("pastWeek"); fetchPastWeekEvents(); }} style={{ padding: "11px 24px", background: calView === "pastWeek" ? T.calGreenBg : T.bg, color: calView === "pastWeek" ? T.calGreen : T.textMuted, border: `1px solid ${calView === "pastWeek" ? T.calGreenBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Past Week</button>
               <div style={{ flex: 1 }} />
+              <button onClick={() => setCalShowAll(v => !v)} style={{ padding: "11px 18px", background: calShowAll ? T.taskAmberBg : T.bg, color: calShowAll ? T.taskAmber : T.textMuted, border: `1px solid ${calShowAll ? T.taskAmberBorder : T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600 }} title="Show/hide calendar blocks (focus, OOO, etc.)">{calShowAll ? "👁 All events" : "👁 Meetings only"}</button>
               <button onClick={() => setShowEventForm({})} style={{ padding: "11px 24px", background: T.calGreen, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>+ New Event</button>
+            </div>
+            <div style={{ marginBottom: 20 }}>
+              <input value={calSearchTerm} onChange={e => setCalSearchTerm(e.target.value)} placeholder="🔍  Search events by title, location, or attendee…" style={{ width: "100%", padding: "10px 16px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 15, background: T.bg, color: T.text, outline: "none", boxSizing: "border-box" }} />
             </div>
             {showEventForm && !showEventForm.prefillFromEmail && <EventForm event={showEventForm.event || null} contacts={contacts} onSave={(data) => { if (data.eventId) { calendarAction("update", { eventId: data.eventId, event: data }); } else { calendarAction("create", { event: data }); } setShowEventForm(null); }} onCancel={() => setShowEventForm(null)} />}
 
@@ -3862,7 +3888,7 @@ export default function Home() {
               <div>
                 <h3 style={{ fontSize: 18, fontWeight: 700, color: T.calGreen, marginBottom: 16 }}>Today — {fmtDate(new Date())}</h3>
                 {(() => {
-                  const emptyState = calendarEmptyStateMessage(events);
+                  const emptyState = !calShowAll && !calSearchTerm ? calendarEmptyStateMessage(events) : null;
                   if (emptyState) {
                     return (
                       <div style={{ padding: "48px 32px", textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, fontSize: 15 }}>
@@ -3872,7 +3898,11 @@ export default function Home() {
                       </div>
                     );
                   }
-                  return events.map(ev => {
+                  const calSearch = calSearchTerm.toLowerCase();
+                  return events
+                    .filter(ev => !calSearch || (ev.title + ev.location + (ev.attendees || []).map(a => a.name + a.email).join(" ")).toLowerCase().includes(calSearch))
+                    .filter(ev => calShowAll || isRealMeeting(ev))
+                    .map(ev => {
                     const evStatus = getEventStatus(ev);
                     const isNow = evStatus === "inprogress";
                     const isSoon = evStatus === "soon";
@@ -3880,9 +3910,13 @@ export default function Home() {
                     const real = isRealMeeting(ev);
                     const duration = formatDuration(ev.start, ev.end);
                     const mapsUrl = !isVideoCallLocation(ev.location) ? buildMapsUrl(ev.location) : null;
+                    const isExpanded = expandedCalEventId === ev.id;
+                    const selfRsvp = calRsvpOverrides[ev.id] || ev.selfRsvp;
+                    const isSelf = ev.attendees?.some(a => a.self);
                     return (
-                  <div key={ev.id} style={{ background: isNow ? T.calGreenBg : T.card, border: `2px solid ${isNow ? T.calGreen : isSoon ? T.calGreenBorder : T.calGreenBorder}`, borderLeft: isNow ? `5px solid ${T.calGreen}` : isSoon ? `5px solid ${T.taskAmber}` : undefined, borderRadius: 10, padding: "18px 22px", marginBottom: 12, display: "flex", alignItems: "center", gap: 16, opacity: (real || isNow) ? 1 : 0.5, transition: "all 0.15s" }}>
-                    <div style={{ minWidth: 66, textAlign: "center" }}>
+                  <div key={ev.id} style={{ background: isNow ? T.calGreenBg : T.card, border: `2px solid ${isNow ? T.calGreen : isSoon ? T.taskAmber : T.calGreenBorder}`, borderLeft: isNow ? `5px solid ${T.calGreen}` : isSoon ? `5px solid ${T.taskAmber}` : undefined, borderRadius: 10, marginBottom: 12, transition: "all 0.15s" }}>
+                    <div style={{ padding: "18px 22px", display: "flex", alignItems: "flex-start", gap: 16 }}>
+                    <div style={{ minWidth: 66, textAlign: "center", flexShrink: 0 }}>
                       <div style={{ fontSize: 15, fontWeight: 700, color: T.calGreen }}>{fmtTime(ev.start)}</div>
                       <div style={{ fontSize: 13, color: T.textMuted }}>{fmtTime(ev.end)}</div>
                       {duration && <div style={{ fontSize: 11, color: T.textDim, marginTop: 2 }}>{duration}</div>}
@@ -3890,17 +3924,25 @@ export default function Home() {
                       {isSoon && <div style={{ marginTop: 4, fontSize: 11, fontWeight: 700, color: T.taskAmber, background: T.taskAmberBg, borderRadius: 4, padding: "2px 6px" }}>{minsUntil(ev)}</div>}
                       {isPast && <div style={{ marginTop: 4, fontSize: 11, color: T.textMuted }}>Done</div>}
                     </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: 17, color: T.text }}>{ev.title}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }} onClick={() => setExpandedCalEventId(isExpanded ? null : ev.id)}>
+                        <span style={{ fontWeight: 600, fontSize: 17, color: T.text }}>{ev.title}</span>
+                        {ev.recurringEventId && <span title="Recurring event" style={{ fontSize: 13, flexShrink: 0 }}>🔁</span>}
+                        <span style={{ fontSize: 12, color: T.textMuted, marginLeft: "auto", flexShrink: 0 }}>{isExpanded ? "▲" : "▼"}</span>
+                      </div>
                       {ev.location && (
                         <div style={{ fontSize: 14, color: T.textMuted, marginTop: 3 }}>
                           📍 {mapsUrl ? <a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{ color: T.calGreen, textDecoration: "none", fontWeight: 500 }}>{ev.location}</a> : ev.location}
                         </div>
                       )}
-                      {ev.description && <div style={{ fontSize: 13, color: T.textMuted, marginTop: 4, lineHeight: 1.5, maxHeight: 40, overflow: "hidden" }}>{ev.description.replace(/<[^>]*>/g, "").slice(0, 120)}{ev.description.length > 120 ? "…" : ""}</div>}
+                      {ev.description && (
+                        <div style={{ fontSize: 13, color: T.textMuted, marginTop: 4, lineHeight: 1.5, ...(!isExpanded && { maxHeight: 40, overflow: "hidden" }) }}>
+                          {isExpanded ? ev.description.replace(/<[^>]*>/g, "") : ev.description.replace(/<[^>]*>/g, "").slice(0, 120) + (ev.description.length > 120 ? "…" : "")}
+                        </div>
+                      )}
                       {ev.attendees?.length > 1 && (
                         <div style={{ display: "flex", gap: 4, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
-                          {ev.attendees.slice(0, 6).map((a, i) => {
+                          {(isExpanded ? ev.attendees : ev.attendees.slice(0, 6)).map((a, i) => {
                             const av = senderAvatar(a.name || a.email);
                             const rsvpIcon = getAttendeeRsvpIcon(a.status);
                             const rsvpCol = getAttendeeRsvpColor(a.status);
@@ -3912,15 +3954,40 @@ export default function Home() {
                               </div>
                             );
                           })}
-                          {ev.attendees.length > 6 && <span style={{ fontSize: 12, color: T.textMuted }}>+{ev.attendees.length - 6} more</span>}
+                          {!isExpanded && ev.attendees.length > 6 && <span style={{ fontSize: 12, color: T.textMuted }}>+{ev.attendees.length - 6} more</span>}
                         </div>
                       )}
                     </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end", flexShrink: 0 }}>
                       {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "9px 18px", background: isNow ? T.calGreen : T.calGreenBg, color: isNow ? "#fff" : T.calGreen, borderRadius: 7, textDecoration: "none", fontSize: 15, fontWeight: 700, border: `1px solid ${T.calGreenBorder}` }}>📹 {isNow ? "Join Now!" : "Join Call"}</a>}
-                      {real && !preppedEvents[ev.id] && (() => { const docUrl = extractDocFromEvent(ev); return docUrl ? <a href={docUrl} target="_blank" rel="noopener noreferrer" style={{ padding: "9px 16px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 7, fontSize: 14, fontWeight: 600, textDecoration: "none", display: "inline-block" }}>📄 Open Agenda</a> : <button onClick={() => { setTab("drive"); setDriveSearch(ev.title); fetchDrive("search", ev.title); }} style={{ padding: "9px 16px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 7, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Prepare</button>; })()}
-                      {real && <button onClick={() => setShowEventForm({ event: ev })} style={{ padding: "9px 16px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>✏️ Edit</button>}
-                      {real && <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "9px 16px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>{preppedEvents[ev.id] ? "✓ Prepped" : "Prep Done"}</button>}
+                      {ev.htmlLink && <a href={ev.htmlLink} target="_blank" rel="noopener noreferrer" style={{ padding: "8px 14px", background: T.bg, color: T.calGreen, border: `1px solid ${T.calGreenBorder}`, borderRadius: 7, textDecoration: "none", fontSize: 13, fontWeight: 600 }}>📅 Open</a>}
+                      {real && !preppedEvents[ev.id] && (() => { const docUrl = extractDocFromEvent(ev); return docUrl ? <a href={docUrl} target="_blank" rel="noopener noreferrer" style={{ padding: "8px 14px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 7, fontSize: 13, fontWeight: 600, textDecoration: "none", display: "inline-block" }}>📄 Agenda</a> : null; })()}
+                      {real && <button onClick={() => setShowEventForm({ event: ev })} style={{ padding: "8px 14px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>✏️ Edit</button>}
+                      {real && <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "8px 14px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{preppedEvents[ev.id] ? "✓ Prepped" : "Prep Done"}</button>}
+                      <button onClick={() => { if (window.confirm(`Delete "${ev.title}"?`)) calendarAction("delete", { eventId: ev.id }); }} style={{ padding: "8px 14px", background: T.dangerBg, color: T.danger, border: `1px solid ${T.danger}30`, borderRadius: 7, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>🗑 Delete</button>
+                    </div>
+                    </div>
+                    {/* Footer action row */}
+                    <div style={{ display: "flex", gap: 8, padding: "10px 22px 14px", borderTop: `1px solid ${T.borderLight}`, flexWrap: "wrap", alignItems: "center" }}>
+                      {isSelf && (
+                        <>
+                          <span style={{ fontSize: 12, color: T.textMuted, marginRight: 2 }}>RSVP:</span>
+                          {['accepted', 'declined', 'tentative'].map(status => (
+                            <button key={status} onClick={() => calendarRsvp(ev.id, status)} disabled={calRsvpBusy === ev.id}
+                              style={{ padding: "4px 11px", fontSize: 12, fontWeight: selfRsvp === status ? 700 : 500,
+                                background: selfRsvp === status ? (status === 'accepted' ? T.calGreenBg : status === 'declined' ? T.dangerBg : T.taskAmberBg) : T.bg,
+                                color: selfRsvp === status ? (status === 'accepted' ? T.calGreen : status === 'declined' ? T.danger : T.taskAmber) : T.textMuted,
+                                border: `1px solid ${selfRsvp === status ? (status === 'accepted' ? T.calGreenBorder : status === 'declined' ? T.danger : T.taskAmberBorder) : T.border}`,
+                                borderRadius: 6, cursor: calRsvpBusy === ev.id ? "not-allowed" : "pointer", opacity: calRsvpBusy === ev.id ? 0.6 : 1 }}>
+                              {status === 'accepted' ? '✓ Yes' : status === 'declined' ? '✗ No' : '? Maybe'}
+                            </button>
+                          ))}
+                          <span style={{ width: 1, height: 16, background: T.border, display: "inline-block", margin: "0 4px" }} />
+                        </>
+                      )}
+                      {real && <button onClick={() => setComposing({ to: ev.attendees?.filter(a => !a.self).map(a => a.email).join(', ') || '', subject: ev.title, body: '' })} style={{ padding: "4px 11px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 500 }}>✉️ Email attendees</button>}
+                      {real && <button onClick={() => setShowTaskForm({ title: ev.title, category: "admin" })} style={{ padding: "4px 11px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 500 }}>📋 Task</button>}
+                      <button onClick={() => { const txt = `${ev.title}\n${fmtDate(ev.start)} ${fmtTime(ev.start)}–${fmtTime(ev.end)}${ev.location ? "\n📍 " + ev.location : ""}${ev.attendees?.length ? "\nAttendees: " + ev.attendees.map(a => a.name || a.email).join(", ") : ""}`; navigator.clipboard.writeText(txt).then(() => showToast("Event details copied!")); }} style={{ padding: "4px 11px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 500 }}>📋 Copy details</button>
                     </div>
                   </div>
                     );
@@ -3933,8 +4000,12 @@ export default function Home() {
             {calView === "week" && (
               <div>{(() => {
                 const today = new Date(); today.setHours(0, 0, 0, 0);
+                const calSearch = calSearchTerm.toLowerCase();
                 const days = {};
-                weekEvents.forEach(ev => {
+                weekEvents
+                  .filter(ev => !calSearch || (ev.title + ev.location + (ev.attendees || []).map(a => a.name + a.email).join(" ")).toLowerCase().includes(calSearch))
+                  .filter(ev => calShowAll || isRealMeeting(ev))
+                  .forEach(ev => {
                   if (new Date(ev.start) < today) return; // skip past days
                   const day = new Date(ev.start).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
                   if (!days[day]) days[day] = [];
@@ -3952,7 +4023,8 @@ export default function Home() {
                       const wkDuration = formatDuration(ev.start, ev.end);
                       const wkMapsUrl = !isVideoCallLocation(ev.location) ? buildMapsUrl(ev.location) : null;
                       return (
-                      <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", marginBottom: 6, background: wkNow ? T.calGreenBg : T.card, border: `1px solid ${wkNow ? T.calGreen : T.border}`, borderLeft: wkNow ? `4px solid ${T.calGreen}` : wkSoon ? `4px solid ${T.taskAmber}` : undefined, borderRadius: 8, opacity: isRealMeeting(ev) ? 1 : 0.5 }}>
+                      <div key={ev.id} style={{ marginBottom: 6, background: wkNow ? T.calGreenBg : T.card, border: `1px solid ${wkNow ? T.calGreen : T.border}`, borderLeft: wkNow ? `4px solid ${T.calGreen}` : wkSoon ? `4px solid ${T.taskAmber}` : undefined, borderRadius: 8, opacity: (calShowAll || isRealMeeting(ev)) ? 1 : 0.5 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px" }}>
                         <div style={{ minWidth: 70, textAlign: "center" }}>
                           <span style={{ fontWeight: 600, fontSize: 14, color: T.calGreen, display: "block" }}>{fmtTime(ev.start)}</span>
                           {wkDuration && <span style={{ fontSize: 11, color: T.textDim, display: "block" }}>{wkDuration}</span>}
@@ -3960,7 +4032,10 @@ export default function Home() {
                           {wkSoon && <span style={{ fontSize: 10, fontWeight: 700, color: T.taskAmber, display: "block", marginTop: 2 }}>{minsUntil(ev)}</span>}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 16, color: T.text, fontWeight: wkNow ? 700 : 400 }}>{ev.title}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                            <span style={{ fontSize: 16, color: T.text, fontWeight: wkNow ? 700 : 400 }}>{ev.title}</span>
+                            {ev.recurringEventId && <span title="Recurring" style={{ fontSize: 12 }}>🔁</span>}
+                          </div>
                           {ev.location && <div style={{ fontSize: 13, color: T.textMuted, marginTop: 2 }}>📍 {wkMapsUrl ? <a href={wkMapsUrl} target="_blank" rel="noopener noreferrer" style={{ color: T.calGreen, textDecoration: "none" }}>{ev.location}</a> : ev.location}</div>}
                           {ev.attendees?.length > 1 && (
                             <div style={{ display: "flex", gap: 3, marginTop: 4, flexWrap: "wrap" }}>
@@ -3980,9 +4055,13 @@ export default function Home() {
                             </div>
                           )}
                         </div>
-                        {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 14px", background: wkNow ? T.calGreen : T.calGreenBg, color: wkNow ? "#fff" : T.calGreen, borderRadius: 6, textDecoration: "none", fontSize: 14, fontWeight: 600, border: `1px solid ${T.calGreenBorder}` }}>📹 {wkNow ? "Join Now" : "Join"}</a>}
-                        <button onClick={() => setShowEventForm({ event: ev })} style={{ padding: "6px 12px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>✏️</button>
-                        <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "6px 14px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>{preppedEvents[ev.id] ? "✓ Prepped" : "Prep Done"}</button>
+                        {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", background: wkNow ? T.calGreen : T.calGreenBg, color: wkNow ? "#fff" : T.calGreen, borderRadius: 6, textDecoration: "none", fontSize: 13, fontWeight: 600, border: `1px solid ${T.calGreenBorder}`, flexShrink: 0 }}>📹 {wkNow ? "Join Now" : "Join"}</a>}
+                        {ev.htmlLink && <a href={ev.htmlLink} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 10px", background: T.bg, color: T.calGreen, border: `1px solid ${T.calGreenBorder}`, borderRadius: 6, textDecoration: "none", fontSize: 12, fontWeight: 600, flexShrink: 0 }}>📅</a>}
+                        <button onClick={() => setShowEventForm({ event: ev })} style={{ padding: "6px 10px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 13, flexShrink: 0 }}>✏️</button>
+                        <button onClick={() => setComposing({ to: ev.attendees?.filter(a => !a.self).map(a => a.email).join(', ') || '', subject: ev.title, body: '' })} style={{ padding: "6px 10px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 12, flexShrink: 0 }}>✉️</button>
+                        <button onClick={() => { if (window.confirm(`Delete "${ev.title}"?`)) calendarAction("delete", { eventId: ev.id }); }} style={{ padding: "6px 10px", background: T.dangerBg, color: T.danger, border: `1px solid ${T.danger}30`, borderRadius: 6, cursor: "pointer", fontSize: 12, flexShrink: 0 }}>🗑</button>
+                        <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "6px 12px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>{preppedEvents[ev.id] ? "✓" : "Prep"}</button>
+                        </div>
                       </div>
                     ); })}
                   </div>
@@ -3993,8 +4072,12 @@ export default function Home() {
             {/* Next Week */}
             {calView === "nextWeek" && (
               <div>{(() => {
+                const calSearch = calSearchTerm.toLowerCase();
                 const days = {};
-                nextWeekEvents.forEach(ev => {
+                nextWeekEvents
+                  .filter(ev => !calSearch || (ev.title + ev.location + (ev.attendees || []).map(a => a.name + a.email).join(" ")).toLowerCase().includes(calSearch))
+                  .filter(ev => calShowAll || isRealMeeting(ev))
+                  .forEach(ev => {
                   const day = new Date(ev.start).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
                   if (!days[day]) days[day] = [];
                   days[day].push(ev);
@@ -4008,18 +4091,23 @@ export default function Home() {
                       const nwDuration = formatDuration(ev.start, ev.end);
                       const nwMapsUrl = !isVideoCallLocation(ev.location) ? buildMapsUrl(ev.location) : null;
                       return (
-                      <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", marginBottom: 6, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, opacity: isRealMeeting(ev) ? 1 : 0.5 }}>
+                      <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", marginBottom: 6, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8 }}>
                         <div style={{ minWidth: 66, textAlign: "center" }}>
                           <span style={{ fontWeight: 600, fontSize: 15, color: T.calGreen, display: "block" }}>{fmtTime(ev.start)}</span>
                           {nwDuration && <span style={{ fontSize: 11, color: T.textDim, display: "block" }}>{nwDuration}</span>}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <span style={{ fontSize: 16, color: T.text }}>{ev.title}</span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                            <span style={{ fontSize: 16, color: T.text }}>{ev.title}</span>
+                            {ev.recurringEventId && <span title="Recurring" style={{ fontSize: 12 }}>🔁</span>}
+                          </div>
                           {ev.location && <div style={{ fontSize: 13, color: T.textMuted, marginTop: 2 }}>📍 {nwMapsUrl ? <a href={nwMapsUrl} target="_blank" rel="noopener noreferrer" style={{ color: T.calGreen, textDecoration: "none" }}>{ev.location}</a> : ev.location}</div>}
                         </div>
-                        {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 14px", background: T.calGreen, color: "#fff", borderRadius: 6, textDecoration: "none", fontSize: 14, fontWeight: 600 }}>Join</a>}
-                        <button onClick={() => setShowEventForm({ event: ev })} style={{ padding: "6px 12px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>✏️</button>
-                        <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "6px 14px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>{preppedEvents[ev.id] ? "✓ Prepped" : "Prep Done"}</button>
+                        {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", background: T.calGreen, color: "#fff", borderRadius: 6, textDecoration: "none", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>Join</a>}
+                        {ev.htmlLink && <a href={ev.htmlLink} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 10px", background: T.bg, color: T.calGreen, border: `1px solid ${T.calGreenBorder}`, borderRadius: 6, textDecoration: "none", fontSize: 12, flexShrink: 0 }}>📅</a>}
+                        <button onClick={() => setShowEventForm({ event: ev })} style={{ padding: "6px 10px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 13, flexShrink: 0 }}>✏️</button>
+                        <button onClick={() => { if (window.confirm(`Delete "${ev.title}"?`)) calendarAction("delete", { eventId: ev.id }); }} style={{ padding: "6px 10px", background: T.dangerBg, color: T.danger, border: `1px solid ${T.danger}30`, borderRadius: 6, cursor: "pointer", fontSize: 12, flexShrink: 0 }}>🗑</button>
+                        <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "6px 12px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>{preppedEvents[ev.id] ? "✓" : "Prep"}</button>
                       </div>
                     ); })}
                   </div>

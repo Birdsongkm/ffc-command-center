@@ -109,6 +109,36 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: data.error?.message || 'Failed to delete' });
     }
 
+    if (action === 'rsvp' && eventId) {
+      const { status } = req.body; // 'accepted' | 'declined' | 'tentative'
+      if (!['accepted', 'declined', 'tentative'].includes(status)) {
+        return res.status(400).json({ error: 'Invalid status' });
+      }
+      // Fetch the event to get current attendees list
+      const evRes = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!evRes.ok) {
+        console.error('calendar-actions:rsvp:fetchEvent', { eventId, status: evRes.status });
+        throw new Error('Failed to fetch event for RSVP');
+      }
+      const evData = await evRes.json();
+      const attendees = (evData.attendees || []).map(a =>
+        a.self ? { ...a, responseStatus: status } : a
+      );
+      const patchRes = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}?sendUpdates=all`,
+        { method: 'PATCH', headers: h, body: JSON.stringify({ attendees }) }
+      );
+      const patchData = await patchRes.json();
+      if (patchData.error) {
+        console.error('calendar-actions:rsvp:patch', { eventId, status, message: patchData.error.message });
+        return res.status(400).json({ error: patchData.error.message });
+      }
+      return res.json({ success: true, selfRsvp: status });
+    }
+
     // Helper function to format events
     const formatEvents = (items) => (items || []).map(e => ({
       id: e.id,
@@ -117,9 +147,11 @@ export default async function handler(req, res) {
       end: e.end?.dateTime || e.end?.date,
       location: e.location || '',
       description: e.description || '',
-      attendees: (e.attendees || []).map(a => ({ email: a.email, name: a.displayName || '', status: a.responseStatus || '' })),
+      attendees: (e.attendees || []).map(a => ({ email: a.email, name: a.displayName || '', self: a.self || false, status: a.responseStatus || '' })),
       hangoutLink: e.hangoutLink || '',
       htmlLink: e.htmlLink || '',
+      recurringEventId: e.recurringEventId || null,
+      selfRsvp: (e.attendees || []).find(a => a.self)?.responseStatus || null,
     }));
 
     // Get week's events (for proactive weekly view)
