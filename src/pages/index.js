@@ -20,7 +20,7 @@ const LIGHT_T = {
 };
 
 const DARK_T = {
-  bg: "#0D1628", surface: "#1F2937", card: "#1F2937", cardHover: "#2D3748",
+  bg: "#0A0A0A", surface: "#1C1C1E", card: "#1C1C1E", cardHover: "#2A2A2E",
   border: "#2A4A2A", borderLight: "#1A3020", text: "#E8F0E8", textMuted: "#9CAE98",
   textDim: "#7A9278", accent: "#5AAD5A", accentDark: "#4A9B4A", accentBg: "#0F2010",
   gold: "#D4A840", goldBg: "#1F1A00", danger: "#E06868", dangerBg: "#200808",
@@ -173,6 +173,22 @@ function hasExternalRecipient(toStr, ccStr) {
   return addrs.some(a => !a.includes('freshfoodconnect') && !a.includes('@ffc'));
 }
 
+// Decode HTML entities in Gmail snippets (#98)
+function decodeHtml(str) {
+  return (str || '')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'");
+}
+
+// Force all links in rendered email HTML to open in a new tab (#100)
+function ensureLinksOpenInNewTab(html) {
+  return (html || '').replace(/<a([^>]*)>/gi, (_, attrs) => {
+    const cleaned = attrs.replace(/\s*target="[^"]*"/i, '').replace(/\s*rel="[^"]*"/i, '');
+    return `<a${cleaned} target="_blank" rel="noopener noreferrer">`;
+  });
+}
+
 function classifyEmail(e) {
   const from = (e.from || "").toLowerCase();
   const subj = (e.subject || "").toLowerCase();
@@ -206,8 +222,8 @@ function classifyEmail(e) {
     return "newsletter";
   }
   if (from.includes("calendar-notification") || from.includes("calendar.google.com")) return "calendar-notif";
-  // Calendar RSVP replies arrive from the attendee's own email, not calendar.google.com (#91)
-  if (/^(accepted|declined|tentative):/.test(subj)) return "calendar-notif";
+  // Calendar RSVP replies and invites arrive from attendee emails or with recognizable subjects (#97)
+  if (/^(accepted|declined|tentative|invitation|updated invitation|canceled|cancelled|new event):/.test(subj)) return "calendar-notif";
   if (from.includes("drive-shares-dm") || from.includes("comments-noreply") || from.includes("docs.google.com") || from.includes("drive.google.com")) return "docs-activity";
   // Classy checks must come before the generic noreply check — Classy sends from noreply addresses
   if ((from.includes("classy") || subj.includes("classy")) && (subj.includes("donation") || subj.includes("gift") || subj.includes("contribut"))) return "classy-onetime";
@@ -2799,7 +2815,7 @@ export default function Home() {
               <span style={{ fontSize: 14, color: T.textDim, flexShrink: 0 }}>{fmtRel(email.date)}</span>
             </div>
             <div style={{ fontSize: 16, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{email.subject}</div>
-            {!isExp && <div style={{ fontSize: 15, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 3 }}>{email.snippet}</div>}
+            {!isExp && <div style={{ fontSize: 15, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 3 }}>{decodeHtml(email.snippet)}</div>}
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
             {score !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: score >= 10 ? T.urgentCoralBg : score >= 5 ? T.taskAmberBg : T.bg, color: score >= 10 ? T.urgentCoral : score >= 5 ? T.taskAmber : T.textMuted, border: `1px solid ${score >= 10 ? T.urgentCoral : score >= 5 ? T.taskAmber : T.border}30` }} title="Priority score">P{score}</span>}
@@ -2888,11 +2904,11 @@ export default function Home() {
             {/* Email body */}
             <div style={{ padding: "14px 0", fontSize: 16, lineHeight: 1.7, color: T.text, maxHeight: 420, overflowY: "auto" }}>
               {body?.bodyHtml ? (
-                <div dangerouslySetInnerHTML={{ __html: body.bodyHtml }} style={{ wordBreak: "break-word" }} />
+                <div dangerouslySetInnerHTML={{ __html: ensureLinksOpenInNewTab(body.bodyHtml) }} style={{ wordBreak: "break-word" }} />
               ) : body?.body ? (
-                <div style={{ whiteSpace: "pre-wrap" }} dangerouslySetInnerHTML={{ __html: (body.body || "").replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color:#3B82C4">$1</a>') }} />
+                <div style={{ whiteSpace: "pre-wrap" }} dangerouslySetInnerHTML={{ __html: ensureLinksOpenInNewTab((body.body || "").replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>')) }} />
               ) : (
-                <div style={{ whiteSpace: "pre-wrap" }} dangerouslySetInnerHTML={{ __html: (email.snippet || "Loading...").replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color:#3B82C4">$1</a>') }} />
+                <div style={{ whiteSpace: "pre-wrap" }}>{decodeHtml(email.snippet) || "Loading..."}</div>
               )}
             </div>
 
