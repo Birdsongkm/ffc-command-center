@@ -73,39 +73,33 @@ async function handleGet(token) {
   const timeMin = todayStart.toISOString();
   const timeMax = in14.toISOString();
 
-  // 1. Get all calendars to find birthday-specific ones
+  // 1. Get all calendars — query every one, since the Birthdays calendar ID varies
   const calListRes = await fetch(
-    'https://www.googleapis.com/calendar/v3/users/me/calendarList',
+    'https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=50',
     { headers: h }
   );
   const calList = calListRes.ok ? await calListRes.json() : { items: [] };
+  const allCals = (calList.items || []);
 
-  const birthdayCals = (calList.items || []).filter(c =>
-    (c.summary || '').toLowerCase().includes('birthday') ||
-    (c.id || '').includes('contacts@group.v.calendar.google.com')
-  );
-
-  // Query primary (filter by title) + dedicated birthday calendars (all events)
+  // 2. Query every calendar for events in the window; filter by title unless it's a birthday calendar
   const birthdays = [];
   const seenIds = new Set();
 
-  const calsToQuery = [
-    { id: 'primary', filterByTitle: true },
-    ...birthdayCals.map(c => ({ id: c.id, filterByTitle: false })),
-  ];
-
-  for (const { id, filterByTitle } of calsToQuery) {
+  for (const cal of allCals) {
     try {
       const evRes = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(id)}/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&maxResults=50`,
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&maxResults=50`,
         { headers: h }
       );
       if (!evRes.ok) continue;
       const evData = await evRes.json();
+      const isBirthdayCal = (cal.summary || '').toLowerCase().includes('birthday') ||
+        (cal.id || '').toLowerCase().includes('birthday') ||
+        (cal.id || '').includes('contacts@group.v.calendar.google.com');
       for (const ev of (evData.items || [])) {
         if (seenIds.has(ev.id)) continue;
         const title = ev.summary || '';
-        if (filterByTitle && !title.toLowerCase().includes('birthday')) continue;
+        if (!isBirthdayCal && !title.toLowerCase().includes('birthday')) continue;
         seenIds.add(ev.id);
         birthdays.push({
           id: ev.id,
@@ -115,7 +109,7 @@ async function handleGet(token) {
         });
       }
     } catch (e) {
-      console.error('birthday:fetchCal', { calId: id, message: e.message });
+      console.error('birthday:fetchCal', { calId: cal.id, message: e.message });
     }
   }
 
@@ -189,4 +183,3 @@ export default async function handler(req, res) {
   }
 }
 
-module.exports.extractBirthdayName = extractBirthdayName;
