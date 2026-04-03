@@ -2100,9 +2100,13 @@ export default function Home() {
   const [boardPrepPanel, setBoardPrepPanel] = useState(false);
   const [birthdayInfo, setBirthdayInfo] = useState(null); // { birthdays, recipients, pastSubject }
   const [birthdayPanel, setBirthdayPanel] = useState(false);
-  const [dismissedPayrollIds, setDismissedPayrollIds] = useState(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('ffc_dismissed_payroll') || '[]')); } catch { return new Set(); }
-  });
+  const [dismissedPayrollIds, setDismissedPayrollIds] = useState(new Set());
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('ffc_dismissed_payroll') || '[]');
+      if (stored.length > 0) setDismissedPayrollIds(new Set(stored));
+    } catch {}
+  }, []);
   const dismissPayroll = id => setDismissedPayrollIds(prev => {
     const next = new Set([...prev, id]);
     try { localStorage.setItem('ffc_dismissed_payroll', JSON.stringify([...next])); } catch {}
