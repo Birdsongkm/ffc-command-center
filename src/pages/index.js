@@ -1382,6 +1382,93 @@ function TaskForm({ task = null, onSave, onCancel, prefillFromEmail = null, cate
 // ═══════════════════════════════════════════════
 //  FINANCE REVIEW PANEL
 // ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════
+//  BIRTHDAY PANEL
+// ═══════════════════════════════════════════════
+function BirthdayPanel({ birthdays, recipients, onClose, showToast }) {
+  const firstName = birthdays[0]?.name?.split(' ')[0] || 'them';
+  const fullName = birthdays[0]?.name || '';
+  const [to, setTo] = useState(recipients.to || '');
+  const [cc, setCc] = useState(recipients.cc || '');
+  const [subject, setSubject] = useState(`Happy Birthday, ${fullName}! 🎂`);
+  const [body, setBody] = useState(`Happy Birthday, ${firstName}! 🎂\n\nWishing you a wonderful day and a fantastic year ahead. We're so grateful to have you!\n\nWith appreciation,\nKayla`);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState(null);
+
+  const send = async () => {
+    setSending(true);
+    setError(null);
+    try {
+      const r = await fetch('/api/birthday', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ to, cc, subject, body }),
+      });
+      const d = await r.json();
+      if (d.success) {
+        setSent(true);
+        showToast('Birthday email sent! 🎂');
+      } else {
+        setError(d.error || 'Could not send.');
+      }
+    } catch (e) { setError(e.message); }
+    setSending(false);
+  };
+
+  const inp = (val, onChange) => ({
+    value: val, onChange: e => onChange(e.target.value),
+    style: { width: '100%', padding: '7px 10px', fontSize: 13, color: T.text, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, boxSizing: 'border-box', fontFamily: 'inherit' },
+  });
+
+  return (
+    <div style={{ background: T.card, border: `2px solid #E8C84A`, borderRadius: 16, padding: 24, marginBottom: 26 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 22 }}>🎂</span>
+          <div>
+            <span style={{ fontSize: 19, fontWeight: 700, color: T.gold }}>Birthday Message</span>
+            {birthdays.map((b, i) => (
+              <span key={i} style={{ fontSize: 13, color: T.textMuted, marginLeft: 10 }}>
+                {b.name}{b.date === new Date().toISOString().slice(0, 10) ? ' — today!' : ` — ${new Date(b.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+              </span>
+            ))}
+          </div>
+        </div>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: T.textMuted }}>×</button>
+      </div>
+
+      {sent ? (
+        <div style={{ fontSize: 15, color: '#155724', fontWeight: 700 }}>✓ Sent!</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr', gap: 6, alignItems: 'center' }}>
+            <span style={{ fontSize: 12, color: T.textMuted, textAlign: 'right' }}>To</span>
+            <input {...inp(to, setTo)} />
+            <span style={{ fontSize: 12, color: T.textMuted, textAlign: 'right' }}>CC</span>
+            <input {...inp(cc, setCc)} />
+            <span style={{ fontSize: 12, color: T.textMuted, textAlign: 'right' }}>Subj</span>
+            <input {...inp(subject, setSubject)} />
+          </div>
+          <textarea
+            value={body} onChange={e => setBody(e.target.value)}
+            rows={6}
+            style={{ width: '100%', padding: '10px 12px', fontSize: 14, color: T.text, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, boxSizing: 'border-box', fontFamily: 'inherit', resize: 'vertical', marginTop: 4 }}
+          />
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <button onClick={onClose} style={{ padding: '7px 16px', background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+            <button onClick={send} disabled={sending || !to.trim()} style={{ padding: '8px 22px', background: T.gold, color: '#fff', border: 'none', borderRadius: 7, fontWeight: 700, fontSize: 14, cursor: sending ? 'default' : 'pointer', opacity: sending || !to.trim() ? 0.7 : 1 }}>
+              {sending ? 'Sending...' : 'Send 🎂'}
+            </button>
+            {error && <span style={{ fontSize: 13, color: T.danger }}>{error}</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── getPayrollChanges — pure diff helper (mirrored in __tests__/payrollReview.test.js) ──
 function getPayrollChanges(currentLines, prevLines) {
   const currentSet = new Set((currentLines || []).filter(l => l.trim()));
@@ -1994,6 +2081,9 @@ export default function Home() {
   const [payrollCache, setPayrollCache] = useState({}); // keyed by email.id — avoids re-fetch
   const [boardPrepInfo, setBoardPrepInfo] = useState(null); // { meeting, latestBoardReport, ... }
   const [boardPrepPanel, setBoardPrepPanel] = useState(false);
+  const [birthdayInfo, setBirthdayInfo] = useState(null); // { birthdays, recipients, pastSubject }
+  const [birthdayPanel, setBirthdayPanel] = useState(false);
+  const [dismissedPayrollIds, setDismissedPayrollIds] = useState(new Set());
   const [aiPrep, setAiPrep] = useState({}); // eventId → { loading, text, error }
   const [editingDraft, setEditingDraft] = useState(null); // { id, to, subject, body } or null
   const [draftSaving, setDraftSaving] = useState(false);
@@ -2195,6 +2285,7 @@ export default function Home() {
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { if (auth) fetch("/api/signature").then(r => r.json()).then(d => { if (d.signature) setSignature(d.signature); }).catch(() => {}); }, [auth]);
   useEffect(() => { if (auth) fetch("/api/board-prep", { credentials: "include" }).then(r => r.json()).then(d => { if (d.meeting) setBoardPrepInfo(d); }).catch(() => {}); }, [auth]);
+  useEffect(() => { if (auth) fetch("/api/birthday", { credentials: "include" }).then(r => r.json()).then(d => { if (d.birthdays?.length > 0) setBirthdayInfo(d); }).catch(() => {}); }, [auth]);
 
   // Google Chat notifications — poll every 30s, show popup for new messages
   useEffect(() => {
@@ -2903,16 +2994,19 @@ export default function Home() {
         </div>
 
         {/* Payroll approval — sticky global alert, always visible regardless of tab (#94) */}
-{!payrollPanel && emails.filter(e => (e.from || "").toLowerCase().includes("@dnatsi.com") && (e.subject || "").toLowerCase().includes("payroll approval")).map(e => (
-          <div key={e.id} onClick={() => setPayrollPanel(e)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "14px 22px", background: "#D45555", borderRadius: 12, marginBottom: 20, cursor: "pointer", boxShadow: "0 4px 20px rgba(212,85,85,0.4)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {!payrollPanel && emails.filter(e => (e.from || "").toLowerCase().includes("@dnatsi.com") && (e.subject || "").toLowerCase().includes("payroll approval") && !dismissedPayrollIds.has(e.id)).map(e => (
+          <div key={e.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "14px 22px", background: "#D45555", borderRadius: 12, marginBottom: 20, boxShadow: "0 4px 20px rgba(212,85,85,0.4)" }}>
+            <div onClick={() => setPayrollPanel(e)} style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, cursor: "pointer" }}>
               <span style={{ fontSize: 26 }}>💰</span>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>Payroll Approval Needed — Respond Today</div>
                 <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", marginTop: 1 }}>{e.from?.replace(/<.*>/, "").trim()} · {e.subject}</div>
               </div>
             </div>
-            <div style={{ padding: "10px 24px", background: "#fff", color: "#D45555", borderRadius: 8, fontWeight: 800, fontSize: 15, whiteSpace: "nowrap" }}>Run Payroll Review →</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div onClick={() => setPayrollPanel(e)} style={{ padding: "10px 24px", background: "#fff", color: "#D45555", borderRadius: 8, fontWeight: 800, fontSize: 15, whiteSpace: "nowrap", cursor: "pointer" }}>Run Payroll Review →</div>
+              <button onClick={ev => { ev.stopPropagation(); setDismissedPayrollIds(prev => new Set([...prev, e.id])); }} style={{ background: "rgba(255,255,255,0.25)", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", color: "#fff", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Dismiss">×</button>
+            </div>
           </div>
         ))}
 
@@ -2933,6 +3027,29 @@ export default function Home() {
         {/* Board Prep Panel */}
         {boardPrepPanel && (
           <BoardPrepPanel meeting={boardPrepInfo?.meeting} latestBoardReport={boardPrepInfo?.latestBoardReport} onClose={() => setBoardPrepPanel(false)} showToast={showToast} />
+        )}
+
+        {/* Birthday alert */}
+        {birthdayInfo?.birthdays?.length > 0 && !birthdayPanel && (
+          <div onClick={() => setBirthdayPanel(true)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "14px 22px", background: T.gold, borderRadius: 12, marginBottom: 12, cursor: "pointer", boxShadow: `0 4px 20px rgba(196,148,42,0.4)` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: 26 }}>🎂</span>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>
+                  {birthdayInfo.birthdays.map((b, i) => (
+                    <span key={i}>{i > 0 ? " · " : ""}{b.name}{b.date === new Date().toISOString().slice(0, 10) ? "'s birthday is today!" : `'s birthday is ${new Date(b.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}</span>
+                  ))}
+                </div>
+                <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", marginTop: 1 }}>Send a birthday message to board and staff</div>
+              </div>
+            </div>
+            <div style={{ padding: "10px 24px", background: "#fff", color: T.gold, borderRadius: 8, fontWeight: 800, fontSize: 15, whiteSpace: "nowrap" }}>Draft Message →</div>
+          </div>
+        )}
+
+        {/* Birthday Panel */}
+        {birthdayPanel && birthdayInfo && (
+          <BirthdayPanel birthdays={birthdayInfo.birthdays} recipients={birthdayInfo.recipients} onClose={() => setBirthdayPanel(false)} showToast={showToast} />
         )}
 
         {/* Finance Review Panel (modal-style overlay) */}
