@@ -2117,23 +2117,63 @@ function CreditCardPanel({ emailInfo, onClose, showToast }) {
         </div>
       )}
 
-      {/* Step 5: Reply to Debbie */}
-      {step === 'reply' && (
-        <div style={cardStyle}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 12 }}>📤 Reply to Debbie</div>
-          <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 14 }}>Creates a reply draft on the original email thread. You review in Gmail before sending.</div>
-          <button onClick={draftReply} disabled={loading} style={btnPrimary}>
-            {loading ? 'Creating draft...' : 'Create Reply Draft'}
-          </button>
-        </div>
-      )}
+      {/* Step 5: Reply to Debbie — inline compose */}
+      {step === 'reply' && (() => {
+        const replySubject = (emailInfo?.subject || '').startsWith('Re:') ? emailInfo.subject : `Re: ${emailInfo?.subject || 'Credit Card Allocations'}`;
+        const defaultBody = `Hey Debbie, the credit card allocations are all done for ${monthLabel}. Let me know if you need anything else!\n\nThanks,\nKayla`;
+        return (
+          <div style={cardStyle}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 12 }}>📤 Reply to Debbie</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr', gap: 6, alignItems: 'center' }}>
+                <span style={{ fontSize: 12, color: T.textMuted, textAlign: 'right' }}>To</span>
+                <input defaultValue={emailInfo?.from || 'dnash@dnatsi.com'} id="cc-reply-to"
+                  style={{ width: '100%', padding: '7px 10px', fontSize: 13, color: T.text, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, boxSizing: 'border-box' }} />
+                <span style={{ fontSize: 12, color: T.textMuted, textAlign: 'right' }}>CC</span>
+                <input defaultValue={[emailInfo?.to, emailInfo?.cc].filter(Boolean).join(', ')} id="cc-reply-cc"
+                  style={{ width: '100%', padding: '7px 10px', fontSize: 13, color: T.text, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, boxSizing: 'border-box' }} />
+                <span style={{ fontSize: 12, color: T.textMuted, textAlign: 'right' }}>Subj</span>
+                <input defaultValue={replySubject} id="cc-reply-subject"
+                  style={{ width: '100%', padding: '7px 10px', fontSize: 13, color: T.text, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, boxSizing: 'border-box' }} />
+              </div>
+              <textarea defaultValue={defaultBody} id="cc-reply-body" rows={6}
+                style={{ width: '100%', padding: '10px 12px', fontSize: 14, color: T.text, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, boxSizing: 'border-box', fontFamily: 'inherit', resize: 'vertical' }} />
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={async () => {
+                  setLoading(true);
+                  setError(null);
+                  try {
+                    const to = document.getElementById('cc-reply-to').value;
+                    const cc = document.getElementById('cc-reply-cc').value;
+                    const subject = document.getElementById('cc-reply-subject').value;
+                    const body = document.getElementById('cc-reply-body').value;
+                    const r = await fetch('/api/send-email', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      credentials: 'include',
+                      body: JSON.stringify({ to, cc, subject, body, threadId: emailInfo?.threadId, inReplyTo: emailInfo?.messageId }),
+                    });
+                    const d = await r.json();
+                    if (d.id || d.success) { setStep('done'); showToast('Reply sent!'); }
+                    else { setError(d.error || 'Failed to send'); }
+                  } catch (e) { setError(e.message); }
+                  setLoading(false);
+                }} disabled={loading} style={{ ...btnPrimary, background: T.accent }}>
+                  {loading ? 'Sending...' : '✉️ Send Reply'}
+                </button>
+                <button onClick={() => setStep('done')} style={btnSecondary}>Skip</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Done */}
       {step === 'done' && (
         <div style={{ ...cardStyle, textAlign: 'center', background: T.accentBg, border: `1px solid ${T.accent}30` }}>
           <div style={{ fontSize: 36, marginBottom: 8 }}>🎉</div>
           <div style={{ fontSize: 17, fontWeight: 700, color: T.text, marginBottom: 6 }}>Credit Card Allocations Complete!</div>
-          <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 16 }}>Reply draft is in Gmail — review and send when ready.</div>
+          <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 16 }}>All done — great work!</div>
           <button onClick={onClose} style={btnPrimary}>Done</button>
         </div>
       )}
