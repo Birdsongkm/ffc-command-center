@@ -10,7 +10,8 @@ const COLOR_SCHEMES = {
     label: "Fresh", description: "Nature-inspired green",
     swatch: ["#6AAF6A", "#3E6B4E", "#F5F9F5"],
     light: {
-      bg: "#3E6B4E", surface: "#F5F9F5", card: "#F5F9F5", cardHover: "#E8F0E8",
+      pageBg: "#3E6B4E",
+      bg: "#E8F0E8", surface: "#F5F9F5", card: "#FFFFFF", cardHover: "#E8F0E8",
       border: "#C4D8C4", borderLight: "#D8E8D8", text: "#1A2E1A", textMuted: "#5A7858",
       textDim: "#88A886", accent: "#6AAF6A", accentDark: "#4A9B4A", accentBg: "#E8F5E8",
       gold: "#D4A840", goldBg: "#FFF8E8", danger: "#D45555", dangerBg: "#FFF0F0",
@@ -24,6 +25,7 @@ const COLOR_SCHEMES = {
       leafDecor: "#6AAF6A",
     },
     dark: {
+      pageBg: "#0A0A0A",
       bg: "#0A0A0A", surface: "#1C1C1E", card: "#1C1C1E", cardHover: "#2A2A2E",
       border: "#2A4A2A", borderLight: "#1A3020", text: "#E8F0E8", textMuted: "#9CAE98",
       textDim: "#7A9278", accent: "#5AAD5A", accentDark: "#4A9B4A", accentBg: "#0F2010",
@@ -42,7 +44,8 @@ const COLOR_SCHEMES = {
     label: "Ocean", description: "Calm, professional blue",
     swatch: ["#5A9BD0", "#2A5478", "#F2F7FB"],
     light: {
-      bg: "#2A5478", surface: "#F2F7FB", card: "#F2F7FB", cardHover: "#E0EAF2",
+      pageBg: "#2A5478",
+      bg: "#E0EAF2", surface: "#F2F7FB", card: "#FFFFFF", cardHover: "#E0EAF2",
       border: "#C0D4E4", borderLight: "#D4E2F0", text: "#0E2840", textMuted: "#4A6A88",
       textDim: "#80A0B8", accent: "#5A9BD0", accentDark: "#2E7DB5", accentBg: "#E4F0FA",
       gold: "#D4A840", goldBg: "#FFF8E8", danger: "#D45555", dangerBg: "#FFF0F0",
@@ -56,6 +59,7 @@ const COLOR_SCHEMES = {
       leafDecor: "#5A9BD0",
     },
     dark: {
+      pageBg: "#080E14",
       bg: "#080E14", surface: "#121C26", card: "#121C26", cardHover: "#1A2A38",
       border: "#1A3050", borderLight: "#122240", text: "#D8E8F4", textMuted: "#8AA4B8",
       textDim: "#6A8A9E", accent: "#4A9BD5", accentDark: "#2E7DB5", accentBg: "#0A1828",
@@ -74,7 +78,8 @@ const COLOR_SCHEMES = {
     label: "Sunset", description: "Warm coral and amber",
     swatch: ["#E8926A", "#6B3A28", "#FDF6F2"],
     light: {
-      bg: "#6B3A28", surface: "#FDF6F2", card: "#FDF6F2", cardHover: "#F0E4DA",
+      pageBg: "#6B3A28",
+      bg: "#F0E4DA", surface: "#FDF6F2", card: "#FFFFFF", cardHover: "#F0E4DA",
       border: "#E0D0C4", borderLight: "#EAE0D6", text: "#2A1A0E", textMuted: "#7A6050",
       textDim: "#A89080", accent: "#E8926A", accentDark: "#D4724A", accentBg: "#FFF2EA",
       gold: "#D4A840", goldBg: "#FFF8E8", danger: "#D45555", dangerBg: "#FFF0F0",
@@ -88,6 +93,7 @@ const COLOR_SCHEMES = {
       leafDecor: "#E8926A",
     },
     dark: {
+      pageBg: "#100A06",
       bg: "#100A06", surface: "#1E1612", card: "#1E1612", cardHover: "#2E2218",
       border: "#4A2A1A", borderLight: "#301A0E", text: "#F0E4DA", textMuted: "#B09880",
       textDim: "#8A7A68", accent: "#E88A5A", accentDark: "#D4724A", accentBg: "#201008",
@@ -106,7 +112,8 @@ const COLOR_SCHEMES = {
     label: "Lavender", description: "Modern, creative purple",
     swatch: ["#9B7ADA", "#3E2860", "#F6F3FA"],
     light: {
-      bg: "#3E2860", surface: "#F6F3FA", card: "#F6F3FA", cardHover: "#E8E0F0",
+      pageBg: "#3E2860",
+      bg: "#E8E0F0", surface: "#F6F3FA", card: "#FFFFFF", cardHover: "#E8E0F0",
       border: "#D0C4E0", borderLight: "#DED6EC", text: "#1A1030", textMuted: "#6A5888",
       textDim: "#9888B0", accent: "#9B7ADA", accentDark: "#7C5AC4", accentBg: "#F0EBF9",
       gold: "#D4A840", goldBg: "#FFF8E8", danger: "#D45555", dangerBg: "#FFF0F0",
@@ -120,6 +127,7 @@ const COLOR_SCHEMES = {
       leafDecor: "#9B7ADA",
     },
     dark: {
+      pageBg: "#0A0810",
       bg: "#0A0810", surface: "#181420", card: "#181420", cardHover: "#24202E",
       border: "#2A1A4A", borderLight: "#1A1230", text: "#E8E0F4", textMuted: "#A090B8",
       textDim: "#7A6A92", accent: "#9B7ADA", accentDark: "#7C5AC4", accentBg: "#140E22",
@@ -138,7 +146,8 @@ const COLOR_SCHEMES = {
     label: "Slate", description: "Minimal, low-distraction gray",
     swatch: ["#8A96A4", "#3A4450", "#F4F5F6"],
     light: {
-      bg: "#3A4450", surface: "#F4F5F6", card: "#F4F5F6", cardHover: "#E4E6E8",
+      pageBg: "#3A4450",
+      bg: "#E4E6EA", surface: "#F4F5F6", card: "#FFFFFF", cardHover: "#E4E6E8",
       border: "#CCD0D6", borderLight: "#D8DCE0", text: "#10181E", textMuted: "#50606E",
       textDim: "#8894A0", accent: "#8A96A4", accentDark: "#5A6A7A", accentBg: "#EAECF0",
       gold: "#D4A840", goldBg: "#FFF8E8", danger: "#D45555", dangerBg: "#FFF0F0",
@@ -152,6 +161,7 @@ const COLOR_SCHEMES = {
       leafDecor: "#8A96A4",
     },
     dark: {
+      pageBg: "#0E1014",
       bg: "#0E1014", surface: "#1A1C20", card: "#1A1C20", cardHover: "#262A2E",
       border: "#2A3040", borderLight: "#1E2430", text: "#D8DCE4", textMuted: "#8A96A4",
       textDim: "#6A7A88", accent: "#8A9AAA", accentDark: "#6A7A8A", accentBg: "#141820",
@@ -2188,7 +2198,7 @@ function MagicLoginScreen() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: T.bg }}>
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: T.pageBg || T.bg }}>
       <div style={{ textAlign: "center", maxWidth: 400, width: "100%", padding: "0 24px" }}>
         <LeafIcon size={52} style={{ marginBottom: 18 }} />
         <h1 style={{ fontSize: 28, color: T.text, marginBottom: 8, fontWeight: 700 }}>Fresh Food Connect</h1>
@@ -3264,7 +3274,7 @@ export default function Home() {
   //  LOADING / AUTH SCREENS
   // ═══════════════════════════════════════════════
   if (loading) return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: T.bg }}>
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: T.pageBg || T.bg }}>
       <div style={{ textAlign: "center" }}><LeafIcon size={44} style={{ marginBottom: 12, opacity: 0.6 }} /><div style={{ color: T.textMuted, fontSize: 18 }}>Loading your command center...</div></div>
     </div>
   );
@@ -3276,7 +3286,7 @@ export default function Home() {
       <Head><title>FFC Command Center</title><meta name="viewport" content="width=device-width, initial-scale=1" /></Head>
       <style jsx global>{`
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: ${T.bg}; color: ${T.text}; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: ${T.pageBg || T.bg}; color: ${T.text}; }
         @keyframes slideUp { from { transform: translateX(-50%) translateY(20px); opacity: 0; } to { transform: translateX(-50%) translateY(0); opacity: 1; } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         .tab-content { animation: fadeIn 0.15s ease; }
