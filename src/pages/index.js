@@ -1862,7 +1862,7 @@ function CreditCardPanel({ emailInfo, onClose, showToast }) {
     } catch { return 'this month'; }
   })();
 
-  const staffForCC = TEAM.filter(m => m.email !== 'dnash@freshfoodconnect.org');
+  const staffForCC = TEAM.filter(m => m.email !== 'dnash@freshfoodconnect.org' && m.email !== 'brittany@freshfoodconnect.org');
 
   const checkStatus = async () => {
     if (!spreadsheetId) { setError('No spreadsheet found in email'); return; }
