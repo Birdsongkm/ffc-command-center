@@ -305,12 +305,24 @@ async function reviewAllocations(token, spreadsheetId, sheetName) {
       }
     }
 
-    // Skip known header/label rows
-    const skipNames = new Set(['staff credit', 'staff credit card', 'naming:', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december', 'january', 'february']);
-
-    // Find ALL rows with empty category or receipt location (any staff member)
-    const emptyRows = [];
+    // Find the most recent month header row — only review that month
+    const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+    const skipNames = new Set(['staff credit', 'staff credit card', 'naming:', ...monthNames]);
+    let lastMonthIdx = -1;
+    let lastMonthName = '';
     for (let i = 0; i < rows.length; i++) {
+      const name = (rows[i][0] || '').trim().toLowerCase();
+      if (monthNames.includes(name)) {
+        lastMonthIdx = i;
+        lastMonthName = rows[i][0].trim();
+      }
+    }
+    // Start scanning from the last month header (or beginning if none found)
+    const startIdx = lastMonthIdx >= 0 ? lastMonthIdx + 1 : 0;
+
+    // Find rows with empty category or receipt location in the most recent month only
+    const emptyRows = [];
+    for (let i = startIdx; i < rows.length; i++) {
       const row = rows[i];
       const name = (row[0] || '').trim();
       if (!name || skipNames.has(name.toLowerCase())) continue;
@@ -351,7 +363,7 @@ async function reviewAllocations(token, spreadsheetId, sheetName) {
       }
     }
 
-    return { emptyRows, totalRows: rows.length, patternCount: Object.keys(patterns).length };
+    return { emptyRows, totalRows: rows.length, patternCount: Object.keys(patterns).length, month: lastMonthName || 'Unknown' };
   } catch (e) {
     console.error('credit-card:reviewAllocations', { spreadsheetId, message: e.message });
     return { error: e.message };
