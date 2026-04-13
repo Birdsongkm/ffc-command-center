@@ -207,7 +207,7 @@ const TEAM = [
   { name: "Carmen Alcantara", initials: "CA", email: "carmen@freshfoodconnect.org", meetingStyle: "email-chat" },
   { name: "Adjoa Kittoe", initials: "AK", email: "adjoa@freshfoodconnect.org", meetingStyle: "notes", docName: "Kayla & Adjoa 1:1 Meetings" },
   { name: "Debbie Nash", initials: "DN", email: "dnash@freshfoodconnect.org", meetingStyle: "email" },
-  { name: "Brittany", initials: "BR", email: "brittany@freshfoodconnect.org", meetingStyle: "notes" },
+  { name: "Brittany", initials: "BR", email: "brittany@freshfoodconnect.org", meetingStyle: "email-doc", docName: "FFC & PE Grants Meeting Notes" },
 ];
 
 // ── Email action button configuration (#90) ────────────────────────────────────
@@ -4187,14 +4187,25 @@ export default function Home() {
                             </div>
                           );
                         })()}
-                        {(style === 'email' || style === 'email-chat') && (() => {
+                        {(style === 'email' || style === 'email-chat' || style === 'email-doc') && (() => {
                           const noteText = teamNoteTexts[m.email] || '';
+                          const isSaving = teamNoteSaving === m.email;
                           return (
                             <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
                               <textarea value={noteText} onChange={e => setTeamNoteTexts(prev => ({ ...prev, [m.email]: e.target.value }))} placeholder={`Quick message to ${m.name.split(' ')[0]}…`} rows={2} style={{ width: "100%", padding: "7px 10px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit", color: T.text, background: T.surface, boxSizing: "border-box" }} />
                               <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                                 <button onClick={() => { setComposing({ to: m.email, subject: '', body: noteText }); setTeamNoteTexts(prev => ({ ...prev, [m.email]: '' })); }} style={{ flex: 1, padding: "6px 0", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>✉️ Email</button>
                                 {style === 'email-chat' && <button onClick={() => window.open('https://chat.google.com/', '_blank')} style={{ flex: 1, padding: "6px 0", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>💬 Chat</button>}
+                                {style === 'email-doc' && teamMember?.docName && <button disabled={!noteText.trim() || isSaving} onClick={async () => {
+                                  setTeamNoteSaving(m.email);
+                                  try {
+                                    const r = await fetch('/api/drive-note', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ personName: m.name, note: noteText, docName: teamMember.docName }) });
+                                    const d = await r.json();
+                                    if (r.ok) { showToast(`Added to ${d.docName}`); setTeamNoteTexts(prev => ({ ...prev, [m.email]: '' })); }
+                                    else { showToast('Failed: ' + (d.error || 'Unknown error')); }
+                                  } catch (err) { showToast('Error: ' + err.message); }
+                                  finally { setTeamNoteSaving(null); }
+                                }} style={{ flex: 1, padding: "6px 0", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 6, cursor: noteText.trim() ? "pointer" : "default", fontSize: 13, fontWeight: 600 }}>{isSaving ? "Saving…" : "📄 Doc"}</button>}
                               </div>
                             </div>
                           );
