@@ -1869,7 +1869,7 @@ function CreditCardPanel({ emailInfo, onClose, showToast }) {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ action: 'checkTeamCompletion', spreadsheetId, sheetName: 'Sheet1' });
+      const params = new URLSearchParams({ action: 'checkTeamCompletion', spreadsheetId, sheetName: '2026 CC Purchases' });
       staffForCC.forEach(m => params.append('staffInitials', m.initials));
       const r = await fetch(`/api/credit-card?${params}`, { credentials: 'include' });
       const d = await r.json();
