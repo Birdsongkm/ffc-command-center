@@ -1841,6 +1841,240 @@ const BOARD_PREP_DEFAULTS = {
   financialsQuery: 'Feb 2026 Financials',
 };
 
+// ── Credit Card Allocation Panel ──────────────────────────────────────────────
+function CreditCardPanel({ emailInfo, onClose, showToast }) {
+  const [step, setStep] = useState('detect'); // detect | status | nudge | review | reply | done
+  const [loading, setLoading] = useState(false);
+  const [teamStatus, setTeamStatus] = useState(null); // { completed: [], pending: [] }
+  const [nudgedNames, setNudgedNames] = useState(new Set());
+  const [reviewDone, setReviewDone] = useState(false);
+  const [replyDrafted, setReplyDrafted] = useState(false);
+  const [error, setError] = useState(null);
+
+  const spreadsheetUrl = emailInfo?.spreadsheetUrl;
+  const spreadsheetId = emailInfo?.spreadsheetId;
+
+  const monthLabel = (() => {
+    if (!emailInfo?.date) return 'this month';
+    try {
+      const d = new Date(emailInfo.date);
+      return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    } catch { return 'this month'; }
+  })();
+
+  const staffForCC = TEAM.filter(m => m.email !== 'dnash@freshfoodconnect.org');
+
+  const checkStatus = async () => {
+    if (!spreadsheetId) { setError('No spreadsheet found in email'); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({ action: 'checkTeamCompletion', spreadsheetId, sheetName: 'Sheet1' });
+      staffForCC.forEach(m => params.append('staffInitials', m.initials));
+      const r = await fetch(`/api/credit-card?${params}`, { credentials: 'include' });
+      const d = await r.json();
+      if (d.error) { setError(d.error); } else { setTeamStatus(d); setStep('status'); }
+    } catch (e) { setError(e.message); }
+    setLoading(false);
+  };
+
+  const sendNudge = async (member) => {
+    try {
+      const r = await fetch(`/api/credit-card?action=draftNudge&to=${encodeURIComponent(member.email)}&staffName=${encodeURIComponent(member.name.split(' ')[0])}`, { credentials: 'include' });
+      const d = await r.json();
+      if (d.success) {
+        setNudgedNames(prev => new Set([...prev, member.initials]));
+        showToast(`Draft created for ${member.name.split(' ')[0]}`);
+      } else { showToast(d.error || 'Failed to create draft'); }
+    } catch (e) { showToast(e.message); }
+  };
+
+  const draftReply = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await fetch('/api/credit-card?action=draftReplyToDebbie', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          threadId: emailInfo.threadId,
+          messageId: emailInfo.messageId,
+          to: emailInfo.from,
+          cc: [emailInfo.to, emailInfo.cc].filter(Boolean).join(', '),
+          subject: emailInfo.subject,
+          month: monthLabel,
+        }),
+      });
+      const d = await r.json();
+      if (d.success) { setReplyDrafted(true); setStep('done'); showToast('Reply draft created!'); }
+      else { setError(d.error || 'Failed to create draft'); }
+    } catch (e) { setError(e.message); }
+    setLoading(false);
+  };
+
+  const steps = [
+    { id: 'detect', label: '1. Email', icon: '📧' },
+    { id: 'status', label: '2. Status', icon: '📊' },
+    { id: 'nudge', label: '3. Nudge', icon: '💬' },
+    { id: 'review', label: '4. Review', icon: '✅' },
+    { id: 'reply', label: '5. Reply', icon: '📤' },
+  ];
+  const stepOrder = ['detect', 'status', 'nudge', 'review', 'reply', 'done'];
+  const currentIdx = stepOrder.indexOf(step);
+
+  const cardStyle = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: '20px 24px', marginBottom: 14 };
+  const btnPrimary = { padding: '10px 22px', background: T.taskAmber, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 15 };
+  const btnSecondary = { padding: '8px 16px', background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: 'pointer', fontSize: 13, fontWeight: 500 };
+
+  return (
+    <div style={{ background: T.card, border: `2px solid ${T.taskAmber}`, borderRadius: 16, padding: 24, marginBottom: 26 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 24 }}>💳</span>
+          <div>
+            <span style={{ fontSize: 19, fontWeight: 700, color: T.taskAmber }}>Credit Card Allocations</span>
+            <span style={{ fontSize: 13, color: T.textMuted, marginLeft: 10 }}>{monthLabel}</span>
+          </div>
+        </div>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: T.textMuted }}>×</button>
+      </div>
+
+      {/* Step indicators */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20 }}>
+        {steps.map((s, i) => (
+          <div key={s.id}
+            onClick={() => { if (stepOrder.indexOf(s.id) <= currentIdx) setStep(s.id); }}
+            style={{
+              flex: 1, textAlign: 'center', padding: '8px 4px', borderRadius: 8, cursor: stepOrder.indexOf(s.id) <= currentIdx ? 'pointer' : 'default',
+              background: step === s.id ? T.taskAmberBg : stepOrder.indexOf(s.id) < currentIdx ? T.accentBg : T.bg,
+              border: `1px solid ${step === s.id ? T.taskAmber : stepOrder.indexOf(s.id) < currentIdx ? T.accent : T.border}`,
+            }}>
+            <div style={{ fontSize: 16 }}>{s.icon}</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: step === s.id ? T.taskAmber : stepOrder.indexOf(s.id) < currentIdx ? T.accent : T.textDim }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {error && <div style={{ padding: '10px 14px', background: T.dangerBg, color: T.danger, borderRadius: 8, marginBottom: 14, fontSize: 13 }}>{error}</div>}
+
+      {/* Step 1: Email detected */}
+      {step === 'detect' && (
+        <div style={cardStyle}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 12 }}>📧 Allocation Email from Debbie</div>
+          <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 6 }}><strong>Subject:</strong> {emailInfo?.subject || 'N/A'}</div>
+          <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 6 }}><strong>Date:</strong> {emailInfo?.date || 'N/A'}</div>
+          <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 14 }}><strong>Preview:</strong> {emailInfo?.snippet || 'N/A'}</div>
+          {spreadsheetUrl && (
+            <a href={spreadsheetUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '8px 18px', background: T.calGreenBg, color: T.calGreen, border: `1px solid ${T.calGreenBorder}`, borderRadius: 8, textDecoration: 'none', fontSize: 14, fontWeight: 600, marginBottom: 14 }}>📊 Open Spreadsheet</a>
+          )}
+          <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 14 }}>
+            <strong>Team members to fill in:</strong> {staffForCC.map(m => m.name.split(' ')[0]).join(', ')}
+          </div>
+          <button onClick={checkStatus} disabled={loading} style={btnPrimary}>
+            {loading ? 'Checking...' : 'Check Team Status →'}
+          </button>
+        </div>
+      )}
+
+      {/* Step 2: Team completion status */}
+      {step === 'status' && teamStatus && (
+        <div style={cardStyle}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 14 }}>📊 Team Completion Status</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+            {staffForCC.map(m => {
+              const isDone = teamStatus.completed.includes(m.initials);
+              return (
+                <div key={m.initials} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: isDone ? T.accentBg : T.dangerBg, borderRadius: 8, border: `1px solid ${isDone ? T.accent + '30' : T.danger + '30'}` }}>
+                  <span style={{ fontSize: 18 }}>{isDone ? '✅' : '⏳'}</span>
+                  <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: T.text }}>{m.name}</span>
+                  <span style={{ fontSize: 12, color: isDone ? T.accent : T.danger, fontWeight: 600 }}>{isDone ? 'Done' : 'Pending'}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button onClick={checkStatus} disabled={loading} style={btnSecondary}>{loading ? 'Checking...' : '↻ Refresh'}</button>
+            {teamStatus.pending.length > 0 && (
+              <button onClick={() => setStep('nudge')} style={btnPrimary}>Send Reminders →</button>
+            )}
+            {teamStatus.pending.length === 0 && (
+              <button onClick={() => setStep('review')} style={btnPrimary}>Everyone's done — Review →</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: Nudge pending members */}
+      {step === 'nudge' && (
+        <div style={cardStyle}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 6 }}>💬 Send Reminders</div>
+          <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 14 }}>Creates a Gmail draft for each person — you review before sending.</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+            {staffForCC.filter(m => teamStatus?.pending?.includes(m.initials)).map(m => (
+              <div key={m.initials} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: T.bg, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: T.text }}>{m.name}</span>
+                {nudgedNames.has(m.initials) ? (
+                  <span style={{ fontSize: 13, color: T.accent, fontWeight: 600 }}>✓ Draft created</span>
+                ) : (
+                  <button onClick={() => sendNudge(m)} style={{ padding: '6px 14px', background: T.taskAmberBg, color: T.taskAmber, border: `1px solid ${T.taskAmberBorder}`, borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Draft Nudge</button>
+                )}
+              </div>
+            ))}
+            {staffForCC.filter(m => teamStatus?.pending?.includes(m.initials)).length === 0 && (
+              <div style={{ fontSize: 14, color: T.accent, fontWeight: 600 }}>✅ No one left to nudge — everyone's done!</div>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={() => { setStep('status'); checkStatus(); }} style={btnSecondary}>← Back to Status</button>
+            <button onClick={() => setStep('review')} style={btnPrimary}>Move to Review →</button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 4: Kayla's review */}
+      {step === 'review' && (
+        <div style={cardStyle}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 12 }}>✅ Your Review</div>
+          <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 16 }}>Open the spreadsheet, review all allocations, then mark as done.</div>
+          {spreadsheetUrl && (
+            <a href={spreadsheetUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '10px 22px', background: T.calGreenBg, color: T.calGreen, border: `1px solid ${T.calGreenBorder}`, borderRadius: 8, textDecoration: 'none', fontSize: 14, fontWeight: 600, marginBottom: 16 }}>📊 Open Spreadsheet for Review</a>
+          )}
+          <div style={{ display: 'flex', gap: 10 }}>
+            {!reviewDone ? (
+              <button onClick={() => { setReviewDone(true); showToast('Review marked complete!'); }} style={btnPrimary}>✓ Mark Review Done</button>
+            ) : (
+              <button onClick={() => setStep('reply')} style={btnPrimary}>Draft Reply to Debbie →</button>
+            )}
+          </div>
+          {reviewDone && <div style={{ marginTop: 12, fontSize: 14, color: T.accent, fontWeight: 600 }}>✅ Review complete — ready to reply to Debbie</div>}
+        </div>
+      )}
+
+      {/* Step 5: Reply to Debbie */}
+      {step === 'reply' && (
+        <div style={cardStyle}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 12 }}>📤 Reply to Debbie</div>
+          <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 14 }}>Creates a reply draft on the original email thread. You review in Gmail before sending.</div>
+          <button onClick={draftReply} disabled={loading} style={btnPrimary}>
+            {loading ? 'Creating draft...' : 'Create Reply Draft'}
+          </button>
+        </div>
+      )}
+
+      {/* Done */}
+      {step === 'done' && (
+        <div style={{ ...cardStyle, textAlign: 'center', background: T.accentBg, border: `1px solid ${T.accent}30` }}>
+          <div style={{ fontSize: 36, marginBottom: 8 }}>🎉</div>
+          <div style={{ fontSize: 17, fontWeight: 700, color: T.text, marginBottom: 6 }}>Credit Card Allocations Complete!</div>
+          <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 16 }}>Reply draft is in Gmail — review and send when ready.</div>
+          <button onClick={onClose} style={btnPrimary}>Done</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BoardPrepPanel({ meeting, latestBoardReport, jack1on1, initialAgendaItems, onClose, showToast }) {
   const [step, setStep] = useState('confirm'); // confirm | running | done | error
   const [results, setResults] = useState(null);
@@ -2379,6 +2613,9 @@ export default function Home() {
 
   const [boardPrepDismissed, setBoardPrepDismissed] = useState(false);
   const [birthdayDismissed, setBirthdayDismissed] = useState(false);
+  const [ccAllocInfo, setCcAllocInfo] = useState(null); // { found, messageId, threadId, subject, spreadsheetUrl, ... }
+  const [ccAllocPanel, setCcAllocPanel] = useState(false);
+  const [ccAllocDismissed, setCcAllocDismissed] = useState(false);
   const [aiPrep, setAiPrep] = useState({}); // eventId → { loading, text, error }
   const [editingDraft, setEditingDraft] = useState(null); // { id, to, subject, body } or null
   const [draftSaving, setDraftSaving] = useState(false);
@@ -2587,6 +2824,7 @@ export default function Home() {
   useEffect(() => { if (auth) fetch("/api/signature").then(r => r.json()).then(d => { if (d.signature) setSignature(d.signature); }).catch(() => {}); }, [auth]);
   useEffect(() => { if (auth) fetch("/api/board-prep", { credentials: "include" }).then(r => r.json()).then(d => { if (d.meeting) setBoardPrepInfo(d); }).catch(() => {}); }, [auth]);
   useEffect(() => { if (auth) fetch("/api/birthday", { credentials: "include" }).then(r => r.json()).then(d => { if (d.birthdays?.length > 0) setBirthdayInfo(d); }).catch(() => {}); }, [auth]);
+  useEffect(() => { if (auth) fetch("/api/credit-card?action=findAllocationEmail", { credentials: "include" }).then(r => r.json()).then(d => { if (d.found) setCcAllocInfo(d); }).catch(() => {}); }, [auth]);
 
   // Google Chat notifications — poll every 30s, show popup for new messages
   useEffect(() => {
@@ -3351,6 +3589,28 @@ export default function Home() {
         {/* Board Prep Panel */}
         {boardPrepPanel && (
           <BoardPrepPanel meeting={boardPrepInfo?.meeting} latestBoardReport={boardPrepInfo?.latestBoardReport} jack1on1={boardPrepInfo?.jack1on1} initialAgendaItems={boardPrepInfo?.boardAgendaItems || []} onClose={() => setBoardPrepPanel(false)} showToast={showToast} />
+        )}
+
+        {/* Credit Card Allocation alert */}
+        {ccAllocInfo?.found && !ccAllocPanel && !ccAllocDismissed && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "14px 22px", background: T.taskAmber, borderRadius: 12, marginBottom: 12, cursor: "pointer", boxShadow: "0 4px 20px rgba(196,148,42,0.35)" }} onClick={() => setCcAllocPanel(true)}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: 26 }}>💳</span>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>Credit Card Allocations Ready</div>
+                <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", marginTop: 1 }}>Debbie sent the spreadsheet — check team status, nudge, review, and reply</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <div style={{ padding: "10px 24px", background: "#fff", color: T.taskAmber, borderRadius: 8, fontWeight: 800, fontSize: 15, whiteSpace: "nowrap" }}>Start Flow →</div>
+              <button onClick={e => { e.stopPropagation(); setCcAllocDismissed(true); }} style={{ background: "rgba(255,255,255,0.25)", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", color: "#fff", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Dismiss">×</button>
+            </div>
+          </div>
+        )}
+
+        {/* Credit Card Allocation Panel */}
+        {ccAllocPanel && ccAllocInfo && (
+          <CreditCardPanel emailInfo={ccAllocInfo} onClose={() => setCcAllocPanel(false)} showToast={showToast} />
         )}
 
         {/* Birthday alert */}
