@@ -2779,6 +2779,13 @@ export default function Home() {
   const [teamNoteOpen, setTeamNoteOpen] = useState(null); // email of open team member
   const [teamNoteTexts, setTeamNoteTexts] = useState({}); // keyed by email
   const [teamNoteSaving, setTeamNoteSaving] = useState(null); // email currently saving
+  const [teamDocs, setTeamDocs] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('ffc_team_docs') || '{}'); } catch { return {}; }
+  }); // email → { docId, docName }
+  const [teamDocSearch, setTeamDocSearch] = useState(null); // email of member being searched
+  const [teamDocQuery, setTeamDocQuery] = useState('');
+  const [teamDocResults, setTeamDocResults] = useState([]);
+  const [teamDocSearching, setTeamDocSearching] = useState(false);
   const [scheduledEmails, setScheduledEmails] = useState(() => {
     try { return JSON.parse(localStorage.getItem('ffc_scheduled_emails') || '[]'); } catch { return []; }
   });
@@ -4273,45 +4280,89 @@ export default function Home() {
                           {m.completedTaskCount > 0 && <div style={{ color: T.calGreen }}>✓ {m.completedTaskCount} done</div>}
                           {m.pendingTaskCount > 0 && <div>📋 {m.pendingTaskCount} pending</div>}
                         </div>
-                        {style === 'notes' && (() => {
+                        {(style === 'notes' || style === 'email-doc') && (() => {
                           const noteText = teamNoteTexts[m.email] || '';
                           const isSaving = teamNoteSaving === m.email;
+                          const linked = teamDocs[m.email]; // { docId, docName }
+                          const isSearching = teamDocSearch === m.email;
                           return (
                             <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
-                              <textarea value={noteText} onChange={e => setTeamNoteTexts(prev => ({ ...prev, [m.email]: e.target.value }))} placeholder={`Add to 1:1 with ${m.name.split(' ')[0]}…`} rows={3} style={{ width: "100%", padding: "7px 10px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit", color: T.text, background: T.surface, boxSizing: "border-box" }} />
-                              <button disabled={!noteText.trim() || isSaving} onClick={async () => {
-                                setTeamNoteSaving(m.email);
-                                try {
-                                  const teamMemberDoc = TEAM.find(t => t.email === m.email);
-                                  const r = await fetch('/api/drive-note', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ personName: m.name, note: noteText, docName: teamMemberDoc?.docName || null }) });
-                                  const d = await r.json();
-                                  if (r.ok) { showToast(`Added to ${d.docName}`); setTeamNoteTexts(prev => ({ ...prev, [m.email]: '' })); }
-                                  else { showToast('Failed: ' + (d.error || 'Unknown error')); }
-                                } catch (err) { showToast('Error: ' + err.message); }
-                                finally { setTeamNoteSaving(null); }
-                              }} style={{ marginTop: 6, width: "100%", padding: "6px 0", background: T.accent, color: "#fff", border: "none", borderRadius: 6, cursor: noteText.trim() ? "pointer" : "default", fontSize: 13, fontWeight: 600 }}>{isSaving ? "Saving…" : "→ Google Doc"}</button>
+                              {/* Linked doc indicator or search */}
+                              {linked ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                                  <span style={{ fontSize: 11 }}>📄</span>
+                                  <a href={`https://docs.google.com/document/d/${linked.docId}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: T.driveViolet, textDecoration: 'none', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{linked.docName}</a>
+                                  <button onClick={() => { setTeamDocs(prev => { const u = { ...prev }; delete u[m.email]; try { localStorage.setItem('ffc_team_docs', JSON.stringify(u)); } catch {} return u; }); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: T.textDim, padding: 0 }}>✕</button>
+                                </div>
+                              ) : (
+                                <div style={{ marginBottom: 8 }}>
+                                  {isSearching ? (
+                                    <div>
+                                      <div style={{ display: 'flex', gap: 4 }}>
+                                        <input value={teamDocQuery} onChange={e => setTeamDocQuery(e.target.value)} placeholder="Search Google Drive…" autoFocus
+                                          onKeyDown={async e => {
+                                            if (e.key === 'Enter' && teamDocQuery.trim()) {
+                                              setTeamDocSearching(true);
+                                              try {
+                                                const r = await fetch(`/api/drive?action=search&q=${encodeURIComponent(teamDocQuery)}`, { credentials: 'include' });
+                                                const d = await r.json();
+                                                setTeamDocResults(d.files || []);
+                                              } catch {} finally { setTeamDocSearching(false); }
+                                            }
+                                            if (e.key === 'Escape') { setTeamDocSearch(null); setTeamDocQuery(''); setTeamDocResults([]); }
+                                          }}
+                                          style={{ flex: 1, padding: '5px 8px', border: `1px solid ${T.driveVioletBorder}`, borderRadius: 5, fontSize: 12, color: T.text, background: T.surface, boxSizing: 'border-box' }} />
+                                        <button onClick={() => { setTeamDocSearch(null); setTeamDocQuery(''); setTeamDocResults([]); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: T.textDim }}>✕</button>
+                                      </div>
+                                      {teamDocSearching && <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>Searching…</div>}
+                                      {teamDocResults.length > 0 && (
+                                        <div style={{ marginTop: 4, maxHeight: 120, overflowY: 'auto', border: `1px solid ${T.border}`, borderRadius: 6, background: T.surface }}>
+                                          {teamDocResults.map(f => (
+                                            <button key={f.id} onClick={() => {
+                                              const updated = { ...teamDocs, [m.email]: { docId: f.id, docName: f.name } };
+                                              setTeamDocs(updated);
+                                              try { localStorage.setItem('ffc_team_docs', JSON.stringify(updated)); } catch {}
+                                              setTeamDocSearch(null); setTeamDocQuery(''); setTeamDocResults([]);
+                                              showToast(`Linked "${f.name}"`);
+                                            }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', background: 'transparent', border: 'none', borderBottom: `1px solid ${T.borderLight}`, cursor: 'pointer', fontSize: 12, color: T.text }}>
+                                              📄 {f.name}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <button onClick={() => { setTeamDocSearch(m.email); setTeamDocQuery(m.name.split(' ')[0]); }} style={{ fontSize: 11, color: T.driveViolet, background: T.driveVioletBg, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>📄 Link Google Doc</button>
+                                  )}
+                                </div>
+                              )}
+                              {/* Note input + send to doc */}
+                              {linked && (
+                                <>
+                                  <textarea value={noteText} onChange={e => setTeamNoteTexts(prev => ({ ...prev, [m.email]: e.target.value }))} placeholder={`Add to ${linked.docName.split(' ')[0]}…`} rows={2} style={{ width: "100%", padding: "7px 10px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit", color: T.text, background: T.surface, boxSizing: "border-box" }} />
+                                  <button disabled={!noteText.trim() || isSaving} onClick={async () => {
+                                    setTeamNoteSaving(m.email);
+                                    try {
+                                      const r = await fetch('/api/drive-note', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ personName: m.name, note: noteText, docId: linked.docId }) });
+                                      const d = await r.json();
+                                      if (r.ok) { showToast(`Added to ${d.docName}`); setTeamNoteTexts(prev => ({ ...prev, [m.email]: '' })); }
+                                      else { showToast('Failed: ' + (d.error || 'Unknown error')); }
+                                    } catch (err) { showToast('Error: ' + err.message); }
+                                    finally { setTeamNoteSaving(null); }
+                                  }} style={{ marginTop: 6, width: "100%", padding: "6px 0", background: T.accent, color: "#fff", border: "none", borderRadius: 6, cursor: noteText.trim() ? "pointer" : "default", fontSize: 13, fontWeight: 600 }}>{isSaving ? "Saving…" : "→ Google Doc"}</button>
+                                </>
+                              )}
                             </div>
                           );
                         })()}
-                        {(style === 'email' || style === 'email-chat' || style === 'email-doc') && (() => {
+                        {(style === 'email' || style === 'email-chat') && (() => {
                           const noteText = teamNoteTexts[m.email] || '';
-                          const isSaving = teamNoteSaving === m.email;
                           return (
                             <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
                               <textarea value={noteText} onChange={e => setTeamNoteTexts(prev => ({ ...prev, [m.email]: e.target.value }))} placeholder={`Quick message to ${m.name.split(' ')[0]}…`} rows={2} style={{ width: "100%", padding: "7px 10px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit", color: T.text, background: T.surface, boxSizing: "border-box" }} />
                               <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                                 <button onClick={() => { setComposing({ to: m.email, subject: '', body: noteText }); setTeamNoteTexts(prev => ({ ...prev, [m.email]: '' })); }} style={{ flex: 1, padding: "6px 0", background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>✉️ Email</button>
                                 {style === 'email-chat' && <button onClick={() => window.open('https://chat.google.com/', '_blank')} style={{ flex: 1, padding: "6px 0", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>💬 Chat</button>}
-                                {style === 'email-doc' && teamMember?.docName && <button disabled={!noteText.trim() || isSaving} onClick={async () => {
-                                  setTeamNoteSaving(m.email);
-                                  try {
-                                    const r = await fetch('/api/drive-note', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ personName: m.name, note: noteText, docName: teamMember.docName }) });
-                                    const d = await r.json();
-                                    if (r.ok) { showToast(`Added to ${d.docName}`); setTeamNoteTexts(prev => ({ ...prev, [m.email]: '' })); }
-                                    else { showToast('Failed: ' + (d.error || 'Unknown error')); }
-                                  } catch (err) { showToast('Error: ' + err.message); }
-                                  finally { setTeamNoteSaving(null); }
-                                }} style={{ flex: 1, padding: "6px 0", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 6, cursor: noteText.trim() ? "pointer" : "default", fontSize: 13, fontWeight: 600 }}>{isSaving ? "Saving…" : "📄 Doc"}</button>}
                               </div>
                             </div>
                           );

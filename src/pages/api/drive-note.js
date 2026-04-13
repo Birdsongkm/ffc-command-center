@@ -178,37 +178,42 @@ export default async function handler(req, res) {
   const token = await getToken(req, res);
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { personName, note, docName } = req.body;
+  const { personName, note, docName, docId } = req.body;
   if (!personName || !note) return res.status(400).json({ error: 'Missing personName or note' });
 
   const h = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
   const firstName = personName.split(' ')[0];
 
   try {
-    // Search Drive for 1:1 doc — use flexible contains search for each word
-    const searchTerm = docName || `1:1 ${firstName}`;
-    let nameFilter;
-    if (docName) {
-      // Split doc name into significant words and require all of them
-      const words = docName.split(/[\s&,\-:]+/).filter(w => w.length > 1);
-      nameFilter = words.map(w => `name contains "${w}"`).join(' and ');
+    let file;
+    if (docId) {
+      // Direct doc ID — no search needed
+      file = { id: docId, name: docName || 'Linked Doc' };
     } else {
-      nameFilter = `name contains "1:1" and name contains "${firstName}"`;
+      // Search Drive for 1:1 doc — use flexible contains search for each word
+      const searchTerm = docName || `1:1 ${firstName}`;
+      let nameFilter;
+      if (docName) {
+        const words = docName.split(/[\s&,\-:]+/).filter(w => w.length > 1);
+        nameFilter = words.map(w => `name contains "${w}"`).join(' and ');
+      } else {
+        nameFilter = `name contains "1:1" and name contains "${firstName}"`;
+      }
+      const query = encodeURIComponent(`${nameFilter} and mimeType='application/vnd.google-apps.document' and trashed=false`);
+      const searchRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)&pageSize=5`,
+        { headers: h }
+      );
+      if (!searchRes.ok) {
+        const err = await searchRes.json().catch(() => ({}));
+        const msg = err.error?.message || err.message || 'Drive search failed';
+        console.error('drive-note:search', { firstName, status: searchRes.status, message: msg });
+        return res.status(502).json({ error: msg });
+      }
+      const searchData = await searchRes.json();
+      file = searchData.files?.[0];
+      if (!file) return res.status(404).json({ error: `No 1:1 doc found for "${firstName}" — looked for "${searchTerm}" in your Drive` });
     }
-    const query = encodeURIComponent(`${nameFilter} and mimeType='application/vnd.google-apps.document' and trashed=false`);
-    const searchRes = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)&pageSize=5`,
-      { headers: h }
-    );
-    if (!searchRes.ok) {
-      const err = await searchRes.json().catch(() => ({}));
-      const msg = err.error?.message || err.message || 'Drive search failed';
-      console.error('drive-note:search', { firstName, status: searchRes.status, message: msg });
-      return res.status(502).json({ error: msg });
-    }
-    const searchData = await searchRes.json();
-    const file = searchData.files?.[0];
-    if (!file) return res.status(404).json({ error: `No 1:1 doc found for "${firstName}" — looked for "${searchTerm}" in your Drive` });
 
     // Read the document content
     const docRes = await fetch(`https://docs.googleapis.com/v1/documents/${file.id}`, { headers: h });
