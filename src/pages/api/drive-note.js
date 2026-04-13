@@ -185,9 +185,16 @@ export default async function handler(req, res) {
   const firstName = personName.split(' ')[0];
 
   try {
-    // Search Drive for 1:1 doc
+    // Search Drive for 1:1 doc — use flexible contains search for each word
     const searchTerm = docName || `1:1 ${firstName}`;
-    const nameFilter = docName ? `name = "${docName}"` : `name contains "1:1 ${firstName}"`;
+    let nameFilter;
+    if (docName) {
+      // Split doc name into significant words and require all of them
+      const words = docName.split(/[\s&,\-:]+/).filter(w => w.length > 1);
+      nameFilter = words.map(w => `name contains "${w}"`).join(' and ');
+    } else {
+      nameFilter = `name contains "1:1" and name contains "${firstName}"`;
+    }
     const query = encodeURIComponent(`${nameFilter} and mimeType='application/vnd.google-apps.document' and trashed=false`);
     const searchRes = await fetch(
       `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)&pageSize=5`,
