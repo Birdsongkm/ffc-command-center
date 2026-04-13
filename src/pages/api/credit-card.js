@@ -110,7 +110,7 @@ async function checkTeamCompletion(token, spreadsheetId, sheetName, staffInitial
 
 async function findAllocationEmail(token) {
   try {
-    const q = 'from:dnash@freshfoodconnect.org subject:(credit card OR cc transactions OR allocations) newer_than:30d';
+    const q = 'from:@dnatsi.com subject:(credit card OR CC OR transactions OR allocation) newer_than:30d';
     const searchRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(q)}&maxResults=1`,
       { headers: { Authorization: `Bearer ${token}` } }
