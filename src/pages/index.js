@@ -4,35 +4,177 @@ import Head from "next/head";
 // ═══════════════════════════════════════════════
 //  THEME
 // ═══════════════════════════════════════════════
-const LIGHT_T = {
-  bg: "#DDEAF5", surface: "#FFFFFF", card: "#FFFFFF", cardHover: "#D4D4D4",
-  border: "#D8E4D2", borderLight: "#E8F0E4", text: "#2C3E2C", textMuted: "#6B8068",
-  textDim: "#94AC8E", accent: "#4A9B4A", accentDark: "#357A35", accentBg: "#E8F5E8",
-  gold: "#C4942A", goldBg: "#FFF8E8", danger: "#D45555", dangerBg: "#FFF0F0",
-  info: "#4A8BB5", infoBg: "#EDF5FB", white: "#FFFFFF",
-  emailBlue: "#3B82C4", emailBlueBg: "#EBF3FB", emailBlueBorder: "#B8D4F0",
-  calGreen: "#3A9B5A", calGreenBg: "#E6F5EC", calGreenBorder: "#A8DDB8",
-  taskAmber: "#C4942A", taskAmberBg: "#FFF8E8", taskAmberBorder: "#E8D5A0",
-  driveViolet: "#7C5AC4", driveVioletBg: "#F0EBF9", driveVioletBorder: "#C4B0E8",
-  urgentCoral: "#D45555", urgentCoralBg: "#FFF0F0", urgentCoralBorder: "#F0B8B8",
-  stickyYellow: "#F5E642", stickyYellowBg: "#FFFDE8", stickyYellowBorder: "#E8E0A0",
-  leafDecor: "#4A9B4A",
+// ── Color scheme presets ──────────────────────────────────────────────────────
+const COLOR_SCHEMES = {
+  fresh: {
+    label: "Fresh", description: "Nature-inspired green",
+    swatch: ["#4A9B4A", "#DDEAF5", "#E8F5E8"],
+    light: {
+      bg: "#DDEAF5", surface: "#FFFFFF", card: "#FFFFFF", cardHover: "#D4D4D4",
+      border: "#D8E4D2", borderLight: "#E8F0E4", text: "#2C3E2C", textMuted: "#6B8068",
+      textDim: "#94AC8E", accent: "#4A9B4A", accentDark: "#357A35", accentBg: "#E8F5E8",
+      gold: "#C4942A", goldBg: "#FFF8E8", danger: "#D45555", dangerBg: "#FFF0F0",
+      info: "#4A8BB5", infoBg: "#EDF5FB", white: "#FFFFFF",
+      emailBlue: "#3B82C4", emailBlueBg: "#EBF3FB", emailBlueBorder: "#B8D4F0",
+      calGreen: "#3A9B5A", calGreenBg: "#E6F5EC", calGreenBorder: "#A8DDB8",
+      taskAmber: "#C4942A", taskAmberBg: "#FFF8E8", taskAmberBorder: "#E8D5A0",
+      driveViolet: "#7C5AC4", driveVioletBg: "#F0EBF9", driveVioletBorder: "#C4B0E8",
+      urgentCoral: "#D45555", urgentCoralBg: "#FFF0F0", urgentCoralBorder: "#F0B8B8",
+      stickyYellow: "#F5E642", stickyYellowBg: "#FFFDE8", stickyYellowBorder: "#E8E0A0",
+      leafDecor: "#4A9B4A",
+    },
+    dark: {
+      bg: "#0A0A0A", surface: "#1C1C1E", card: "#1C1C1E", cardHover: "#2A2A2E",
+      border: "#2A4A2A", borderLight: "#1A3020", text: "#E8F0E8", textMuted: "#9CAE98",
+      textDim: "#7A9278", accent: "#5AAD5A", accentDark: "#4A9B4A", accentBg: "#0F2010",
+      gold: "#D4A840", goldBg: "#1F1A00", danger: "#E06868", dangerBg: "#200808",
+      info: "#5A9BC5", infoBg: "#0A1820", white: "#1F2937",
+      emailBlue: "#4A90D4", emailBlueBg: "#0A1828", emailBlueBorder: "#1A3855",
+      calGreen: "#4AAD6A", calGreenBg: "#081A10", calGreenBorder: "#1A4A28",
+      taskAmber: "#D4A840", taskAmberBg: "#1F1A00", taskAmberBorder: "#3A3010",
+      driveViolet: "#9B7ADA", driveVioletBg: "#120A28", driveVioletBorder: "#2A1A4A",
+      urgentCoral: "#E06868", urgentCoralBg: "#200808", urgentCoralBorder: "#3A1010",
+      stickyYellow: "#F5E642", stickyYellowBg: "#1A1A00", stickyYellowBorder: "#3A3A10",
+      leafDecor: "#5AAD5A",
+    },
+  },
+  ocean: {
+    label: "Ocean", description: "Calm, professional blue",
+    swatch: ["#2E7DB5", "#E0EEF8", "#D6E8F5"],
+    light: {
+      bg: "#E0EEF8", surface: "#FFFFFF", card: "#FFFFFF", cardHover: "#D0DCE6",
+      border: "#C4D8E8", borderLight: "#D6E8F5", text: "#1A3A52", textMuted: "#5A7A92",
+      textDim: "#88A4B8", accent: "#2E7DB5", accentDark: "#1A5E8F", accentBg: "#E0F0FA",
+      gold: "#C4942A", goldBg: "#FFF8E8", danger: "#D45555", dangerBg: "#FFF0F0",
+      info: "#2E7DB5", infoBg: "#E0F0FA", white: "#FFFFFF",
+      emailBlue: "#2E7DB5", emailBlueBg: "#E0F0FA", emailBlueBorder: "#A0C8E8",
+      calGreen: "#2E9B6A", calGreenBg: "#E2F5EC", calGreenBorder: "#A0D8C0",
+      taskAmber: "#C4942A", taskAmberBg: "#FFF8E8", taskAmberBorder: "#E8D5A0",
+      driveViolet: "#6A5AC4", driveVioletBg: "#EEEBF9", driveVioletBorder: "#B8B0E8",
+      urgentCoral: "#D45555", urgentCoralBg: "#FFF0F0", urgentCoralBorder: "#F0B8B8",
+      stickyYellow: "#F5E642", stickyYellowBg: "#FFFDE8", stickyYellowBorder: "#E8E0A0",
+      leafDecor: "#2E7DB5",
+    },
+    dark: {
+      bg: "#080E14", surface: "#121C26", card: "#121C26", cardHover: "#1A2A38",
+      border: "#1A3050", borderLight: "#122240", text: "#D8E8F4", textMuted: "#8AA4B8",
+      textDim: "#6A8A9E", accent: "#4A9BD5", accentDark: "#2E7DB5", accentBg: "#0A1828",
+      gold: "#D4A840", goldBg: "#1F1A00", danger: "#E06868", dangerBg: "#200808",
+      info: "#4A9BD5", infoBg: "#0A1828", white: "#1A2530",
+      emailBlue: "#4A9BD5", emailBlueBg: "#0A1828", emailBlueBorder: "#1A3855",
+      calGreen: "#4AAD7A", calGreenBg: "#081A14", calGreenBorder: "#1A4A32",
+      taskAmber: "#D4A840", taskAmberBg: "#1F1A00", taskAmberBorder: "#3A3010",
+      driveViolet: "#9B7ADA", driveVioletBg: "#120A28", driveVioletBorder: "#2A1A4A",
+      urgentCoral: "#E06868", urgentCoralBg: "#200808", urgentCoralBorder: "#3A1010",
+      stickyYellow: "#F5E642", stickyYellowBg: "#1A1A00", stickyYellowBorder: "#3A3A10",
+      leafDecor: "#4A9BD5",
+    },
+  },
+  sunset: {
+    label: "Sunset", description: "Warm coral and amber",
+    swatch: ["#D4724A", "#FDF0E8", "#FFECD8"],
+    light: {
+      bg: "#FDF0E8", surface: "#FFFFFF", card: "#FFFFFF", cardHover: "#E8DCD4",
+      border: "#E8D4C4", borderLight: "#F0E4DA", text: "#3E2C1A", textMuted: "#8A7060",
+      textDim: "#AC9480", accent: "#D4724A", accentDark: "#B85A32", accentBg: "#FFF0E8",
+      gold: "#C4942A", goldBg: "#FFF8E8", danger: "#D45555", dangerBg: "#FFF0F0",
+      info: "#4A8BB5", infoBg: "#EDF5FB", white: "#FFFFFF",
+      emailBlue: "#4A88B5", emailBlueBg: "#EBF3FB", emailBlueBorder: "#B8D0E8",
+      calGreen: "#5A9B5A", calGreenBg: "#E8F5E8", calGreenBorder: "#A8D8A8",
+      taskAmber: "#D4942A", taskAmberBg: "#FFF8E0", taskAmberBorder: "#E8D5A0",
+      driveViolet: "#8A5AC4", driveVioletBg: "#F2EBF9", driveVioletBorder: "#C8B0E8",
+      urgentCoral: "#D44A4A", urgentCoralBg: "#FFF0F0", urgentCoralBorder: "#F0B8B8",
+      stickyYellow: "#F5E642", stickyYellowBg: "#FFFDE8", stickyYellowBorder: "#E8E0A0",
+      leafDecor: "#D4724A",
+    },
+    dark: {
+      bg: "#100A06", surface: "#1E1612", card: "#1E1612", cardHover: "#2E2218",
+      border: "#4A2A1A", borderLight: "#301A0E", text: "#F0E4DA", textMuted: "#B09880",
+      textDim: "#8A7A68", accent: "#E88A5A", accentDark: "#D4724A", accentBg: "#201008",
+      gold: "#D4A840", goldBg: "#1F1A00", danger: "#E06868", dangerBg: "#200808",
+      info: "#5A9BC5", infoBg: "#0A1820", white: "#2A2018",
+      emailBlue: "#5A98C5", emailBlueBg: "#0A1828", emailBlueBorder: "#1A3855",
+      calGreen: "#5AAD6A", calGreenBg: "#081A10", calGreenBorder: "#1A4A28",
+      taskAmber: "#D4A840", taskAmberBg: "#1F1A00", taskAmberBorder: "#3A3010",
+      driveViolet: "#A07ADA", driveVioletBg: "#120A28", driveVioletBorder: "#2A1A4A",
+      urgentCoral: "#E06868", urgentCoralBg: "#200808", urgentCoralBorder: "#3A1010",
+      stickyYellow: "#F5E642", stickyYellowBg: "#1A1A00", stickyYellowBorder: "#3A3A10",
+      leafDecor: "#E88A5A",
+    },
+  },
+  lavender: {
+    label: "Lavender", description: "Modern, creative purple",
+    swatch: ["#7C5AC4", "#F0EBF9", "#E8E0F5"],
+    light: {
+      bg: "#F0EBF9", surface: "#FFFFFF", card: "#FFFFFF", cardHover: "#DCD4E8",
+      border: "#D4C8E8", borderLight: "#E8E0F5", text: "#2C1E42", textMuted: "#7A6892",
+      textDim: "#A090B8", accent: "#7C5AC4", accentDark: "#5A3AA0", accentBg: "#F0EBF9",
+      gold: "#C4942A", goldBg: "#FFF8E8", danger: "#D45555", dangerBg: "#FFF0F0",
+      info: "#5A7AC4", infoBg: "#EBF0FB", white: "#FFFFFF",
+      emailBlue: "#5A7AC4", emailBlueBg: "#EBF0FB", emailBlueBorder: "#B0C0E8",
+      calGreen: "#4A9B6A", calGreenBg: "#E4F5EC", calGreenBorder: "#A0D8B8",
+      taskAmber: "#C4942A", taskAmberBg: "#FFF8E8", taskAmberBorder: "#E8D5A0",
+      driveViolet: "#7C5AC4", driveVioletBg: "#F0EBF9", driveVioletBorder: "#C4B0E8",
+      urgentCoral: "#D45555", urgentCoralBg: "#FFF0F0", urgentCoralBorder: "#F0B8B8",
+      stickyYellow: "#F5E642", stickyYellowBg: "#FFFDE8", stickyYellowBorder: "#E8E0A0",
+      leafDecor: "#7C5AC4",
+    },
+    dark: {
+      bg: "#0A0810", surface: "#181420", card: "#181420", cardHover: "#24202E",
+      border: "#2A1A4A", borderLight: "#1A1230", text: "#E8E0F4", textMuted: "#A090B8",
+      textDim: "#7A6A92", accent: "#9B7ADA", accentDark: "#7C5AC4", accentBg: "#140E22",
+      gold: "#D4A840", goldBg: "#1F1A00", danger: "#E06868", dangerBg: "#200808",
+      info: "#7A9AD4", infoBg: "#0A1028", white: "#1E1A28",
+      emailBlue: "#7A9AD4", emailBlueBg: "#0A1028", emailBlueBorder: "#1A2855",
+      calGreen: "#5AAD7A", calGreenBg: "#081A12", calGreenBorder: "#1A4A30",
+      taskAmber: "#D4A840", taskAmberBg: "#1F1A00", taskAmberBorder: "#3A3010",
+      driveViolet: "#9B7ADA", driveVioletBg: "#140E22", driveVioletBorder: "#2A1A4A",
+      urgentCoral: "#E06868", urgentCoralBg: "#200808", urgentCoralBorder: "#3A1010",
+      stickyYellow: "#F5E642", stickyYellowBg: "#1A1A00", stickyYellowBorder: "#3A3A10",
+      leafDecor: "#9B7ADA",
+    },
+  },
+  slate: {
+    label: "Slate", description: "Minimal, low-distraction gray",
+    swatch: ["#5A6A7A", "#EEF0F2", "#E2E6EA"],
+    light: {
+      bg: "#EEF0F2", surface: "#FFFFFF", card: "#FFFFFF", cardHover: "#D8DCE0",
+      border: "#D0D4DA", borderLight: "#E2E6EA", text: "#1A2430", textMuted: "#5A6A7A",
+      textDim: "#8A96A2", accent: "#5A6A7A", accentDark: "#3A4A5A", accentBg: "#E8ECF0",
+      gold: "#C4942A", goldBg: "#FFF8E8", danger: "#D45555", dangerBg: "#FFF0F0",
+      info: "#4A7AA0", infoBg: "#EAF0F6", white: "#FFFFFF",
+      emailBlue: "#4A7AA0", emailBlueBg: "#EAF0F6", emailBlueBorder: "#B0C8D8",
+      calGreen: "#4A8A5A", calGreenBg: "#E6F2E8", calGreenBorder: "#A8D0B0",
+      taskAmber: "#B88A2A", taskAmberBg: "#FFF8E8", taskAmberBorder: "#E0D0A0",
+      driveViolet: "#6A5A8A", driveVioletBg: "#EEEAF2", driveVioletBorder: "#C0B8D0",
+      urgentCoral: "#C44A4A", urgentCoralBg: "#FFF0F0", urgentCoralBorder: "#E8B0B0",
+      stickyYellow: "#E8D830", stickyYellowBg: "#FFFDE8", stickyYellowBorder: "#E0D8A0",
+      leafDecor: "#5A6A7A",
+    },
+    dark: {
+      bg: "#0E1014", surface: "#1A1C20", card: "#1A1C20", cardHover: "#262A2E",
+      border: "#2A3040", borderLight: "#1E2430", text: "#D8DCE4", textMuted: "#8A96A4",
+      textDim: "#6A7A88", accent: "#8A9AAA", accentDark: "#6A7A8A", accentBg: "#141820",
+      gold: "#D4A840", goldBg: "#1F1A00", danger: "#E06868", dangerBg: "#200808",
+      info: "#6A9ABB", infoBg: "#0A1420", white: "#1E2028",
+      emailBlue: "#6A9ABB", emailBlueBg: "#0A1420", emailBlueBorder: "#1A3048",
+      calGreen: "#5AAA6A", calGreenBg: "#081A10", calGreenBorder: "#1A4028",
+      taskAmber: "#D4A840", taskAmberBg: "#1F1A00", taskAmberBorder: "#3A3010",
+      driveViolet: "#8A7AAA", driveVioletBg: "#100E1A", driveVioletBorder: "#2A2040",
+      urgentCoral: "#E06868", urgentCoralBg: "#200808", urgentCoralBorder: "#3A1010",
+      stickyYellow: "#E8D830", stickyYellowBg: "#1A1A00", stickyYellowBorder: "#3A3A10",
+      leafDecor: "#8A9AAA",
+    },
+  },
 };
 
-const DARK_T = {
-  bg: "#0A0A0A", surface: "#1C1C1E", card: "#1C1C1E", cardHover: "#2A2A2E",
-  border: "#2A4A2A", borderLight: "#1A3020", text: "#E8F0E8", textMuted: "#9CAE98",
-  textDim: "#7A9278", accent: "#5AAD5A", accentDark: "#4A9B4A", accentBg: "#0F2010",
-  gold: "#D4A840", goldBg: "#1F1A00", danger: "#E06868", dangerBg: "#200808",
-  info: "#5A9BC5", infoBg: "#0A1820", white: "#1F2937",
-  emailBlue: "#4A90D4", emailBlueBg: "#0A1828", emailBlueBorder: "#1A3855",
-  calGreen: "#4AAD6A", calGreenBg: "#081A10", calGreenBorder: "#1A4A28",
-  taskAmber: "#D4A840", taskAmberBg: "#1F1A00", taskAmberBorder: "#3A3010",
-  driveViolet: "#9B7ADA", driveVioletBg: "#120A28", driveVioletBorder: "#2A1A4A",
-  urgentCoral: "#E06868", urgentCoralBg: "#200808", urgentCoralBorder: "#3A1010",
-  stickyYellow: "#F5E642", stickyYellowBg: "#1A1A00", stickyYellowBorder: "#3A3A10",
-  leafDecor: "#5AAD5A",
-};
+function getSchemeThemes(schemeId) {
+  const scheme = COLOR_SCHEMES[schemeId] || COLOR_SCHEMES.fresh;
+  return { light: scheme.light, dark: scheme.dark };
+}
+
+const LIGHT_T = COLOR_SCHEMES.fresh.light;
+const DARK_T = COLOR_SCHEMES.fresh.dark;
 
 // Mutable module-level reference — reassigned at the top of each render
 // so all sub-components (LightbulbFAB, ComposeForm, etc.) see the current theme.
@@ -470,7 +612,7 @@ function extractDocFromEvent(ev) {
 
 // ── User settings helpers (#78) ───────────────────────────────────────────────
 function getDefaultSettings() {
-  return { userName: "Kayla", orgName: "Fresh Food Connect", accentColor: "#2D7A3A" };
+  return { userName: "Kayla", orgName: "Fresh Food Connect", accentColor: "#2D7A3A", colorScheme: "fresh" };
 }
 function mergeSettings(saved) {
   return Object.assign({}, getDefaultSettings(), saved || {});
@@ -1404,8 +1546,26 @@ function TaskForm({ task = null, onSave, onCancel, prefillFromEmail = null, cate
 function BirthdayPanel({ birthdays, recipients, onClose, showToast }) {
   const rawFirst = birthdays[0]?.name?.split(' ')[0] || 'them';
   const firstName = rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1).toLowerCase();
-  const [to, setTo] = useState(recipients.to || '');
-  const [cc, setCc] = useState(recipients.cc || '');
+  // Birthday person goes in To, everyone else in CC (#111)
+  const bdayName = (birthdays[0]?.name || '').toLowerCase();
+  const initRecipients = () => {
+    const allAddrs = [recipients.to, recipients.cc].filter(Boolean).join(', ')
+      .split(',').map(s => s.trim()).filter(Boolean);
+    if (!bdayName || allAddrs.length === 0) return { to: recipients.to || '', cc: recipients.cc || '' };
+    const bdayAddr = allAddrs.find(a => {
+      const namePart = a.replace(/<[^>]*>/, '').toLowerCase();
+      const nameParts = bdayName.split(/\s+/);
+      return nameParts.some(p => p.length > 1 && namePart.includes(p));
+    });
+    if (bdayAddr) {
+      const rest = allAddrs.filter(a => a !== bdayAddr);
+      return { to: bdayAddr, cc: rest.join(', ') };
+    }
+    return { to: recipients.to || '', cc: recipients.cc || '' };
+  };
+  const init = initRecipients();
+  const [to, setTo] = useState(init.to);
+  const [cc, setCc] = useState(init.cc);
   const [subject, setSubject] = useState(`Happy Birthday, ${firstName}!`);
   const [body, setBody] = useState(`Happy Birthday, ${firstName}!\n\nWishing you a wonderful day and a fantastic year ahead. We're so grateful to have you!\n\nWith appreciation,\nKayla`);
   const [sending, setSending] = useState(false);
@@ -1671,7 +1831,7 @@ const BOARD_PREP_DEFAULTS = {
   financialsQuery: 'Feb 2026 Financials',
 };
 
-function BoardPrepPanel({ meeting, latestBoardReport, onClose, showToast }) {
+function BoardPrepPanel({ meeting, latestBoardReport, jack1on1, initialAgendaItems, onClose, showToast }) {
   const [step, setStep] = useState('confirm'); // confirm | running | done | error
   const [results, setResults] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -1679,15 +1839,14 @@ function BoardPrepPanel({ meeting, latestBoardReport, onClose, showToast }) {
   const [year] = useState(BOARD_PREP_DEFAULTS.year);
   const [boardMeetingDate] = useState(BOARD_PREP_DEFAULTS.boardMeetingDate);
   const [financialsQuery] = useState(BOARD_PREP_DEFAULTS.financialsQuery);
-  const [showStaffDraft, setShowStaffDraft] = useState(false);
-  const [showBoardDraft, setShowBoardDraft] = useState(false);
-  const [agendaItems, setAgendaItems] = useState([]);
+  const [agendaItems, setAgendaItems] = useState(initialAgendaItems || []);
   const [noteTaker, setNoteTaker] = useState('');
+  const [introPerson, setIntroPerson] = useState('');
   const [agendaInsertStep, setAgendaInsertStep] = useState('idle'); // idle | inserting | done
 
-  // If meeting from API, derive defaults
   const meetingTitle = meeting ? (meeting.summary || 'FFC Board Meeting') : 'FFC Board Meeting';
   const meetingStart = meeting ? (meeting.start?.dateTime || meeting.start?.date || boardMeetingDate) : boardMeetingDate;
+  const jack1on1Url = jack1on1?.webViewLink;
 
   async function runPrep() {
     setStep('running');
@@ -1702,8 +1861,8 @@ function BoardPrepPanel({ meeting, latestBoardReport, onClose, showToast }) {
       if (!r.ok) { setErrorMsg(data.error || 'Board prep failed'); setStep('error'); return; }
       setResults(data);
       setStep('done');
-      // Pre-populate agenda items from extracted 1:1 bullets
-      if (data.boardAgendaItems?.length) setAgendaItems(data.boardAgendaItems);
+      if (data.suggestedNoteTaker) setNoteTaker(data.suggestedNoteTaker);
+      if (data.suggestedIntroPerson) setIntroPerson(data.suggestedIntroPerson);
       if (data.errors?.length) showToast(`Prep ran with ${data.errors.length} warning(s)`, true);
       else showToast('Board prep complete!');
     } catch (e) {
@@ -1720,7 +1879,7 @@ function BoardPrepPanel({ meeting, latestBoardReport, onClose, showToast }) {
           <span style={{ fontSize: 26 }}>📋</span>
           <div>
             <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>Board Meeting Prep</div>
-            <div style={{ fontSize: 13, color: T.textMuted }}>{meetingTitle} · April 6, 2026</div>
+            <div style={{ fontSize: 13, color: T.textMuted }}>{meetingTitle}</div>
           </div>
         </div>
         <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: T.textMuted }}>✕</button>
@@ -1734,10 +1893,9 @@ function BoardPrepPanel({ meeting, latestBoardReport, onClose, showToast }) {
               {[
                 `📄 Copy "${latestBoardReport?.name || 'latest Board Report'}" → rename to "${meetingLabel} ${year}- Board Report- FFC" → highlight all text grey`,
                 "📨 Create staff draft email to Laura, Carmen, Gretchen, Adjoa with doc link and deadline",
-                "📋 Read Jack & Kayla 1:1 notes (most recent) for agenda items",
-                "📖 Read board agenda doc → surface rotation info",
+                "📋 Read Jack & Kayla 1:1 notes → pull board meeting agenda items for your review",
                 "💰 Search Drive for Feb 2026 Financials",
-                "✉️ Create draft board email with all links",
+                "✉️ Create draft board email with hyperlinks to all docs",
               ].map((item, i) => (
                 <div key={i} style={{ display: "flex", gap: 8, fontSize: 13, color: T.textMuted }}>
                   <span style={{ minWidth: 16 }}>•</span>
@@ -1787,32 +1945,30 @@ function BoardPrepPanel({ meeting, latestBoardReport, onClose, showToast }) {
 
           {/* Staff Draft */}
           <div style={{ background: T.bg, borderRadius: 10, padding: 14 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>📨 Staff Email Draft Created</div>
-              {results.staffDraftId && (
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => setShowStaffDraft(v => !v)} style={{ fontSize: 12, padding: "4px 10px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>{showStaffDraft ? "Hide" : "View draft"}</button>
-                  <a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noreferrer" style={{ fontSize: 12, padding: "4px 10px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, textDecoration: "none" }}>Gmail →</a>
-                </div>
-              )}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>📨 Staff Email Draft</div>
+              {results.staffDraftId
+                ? <a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noreferrer" style={{ fontSize: 12, padding: "4px 10px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, textDecoration: "none" }}>Open in Gmail →</a>
+                : <div style={{ color: T.danger, fontSize: 13 }}>Draft not created</div>}
             </div>
-            {!results.staffDraftId && <div style={{ color: T.danger, fontSize: 13 }}>Draft not created — check errors below</div>}
-            {showStaffDraft && results.staffDraftBody && (
-              <pre style={{ fontSize: 13, color: T.text, whiteSpace: "pre-wrap", margin: 0, fontFamily: "inherit", background: T.surface, padding: "12px 14px", borderRadius: 8, border: `1px solid ${T.border}`, lineHeight: 1.6 }}>{results.staffDraftBody}</pre>
-            )}
           </div>
 
-          {/* Agenda items from Jack 1:1 */}
+          {/* Agenda items from Jack 1:1 — confirm then push to agenda doc */}
           <div style={{ background: T.bg, borderRadius: 10, padding: 14 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: T.text, marginBottom: 4 }}>📋 Board Meeting Agenda Items — from Jack 1:1</div>
-            {results.agendaDocUrl && (
-              <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center" }}>
-                <a href={results.agendaDocUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: T.emailBlue }}>Open Agenda Doc →</a>
-                {results.jack1on1Text && <span style={{ fontSize: 12, color: T.textMuted }}>·</span>}
-              </div>
-            )}
-            {agendaItems.length === 0 && results.jack1on1Text && (
-              <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 10 }}>No "board meeting" bullets found automatically. Add items manually below or check the raw notes.</div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: T.text, marginBottom: 6 }}>📋 Board Meeting Agenda Items — from Jack & Kayla 1:1</div>
+            <div style={{ display: "flex", gap: 10, marginBottom: 10, alignItems: "center", flexWrap: "wrap" }}>
+              {jack1on1Url && (
+                <a href={jack1on1Url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: T.emailBlue }}>Open Jack & Kayla 1:1 doc →</a>
+              )}
+              {results.agendaDocUrl && (
+                <>
+                  {jack1on1Url && <span style={{ fontSize: 12, color: T.textMuted }}>·</span>}
+                  <a href={results.agendaDocUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: T.emailBlue }}>Open Agenda Doc →</a>
+                </>
+              )}
+            </div>
+            {agendaItems.length === 0 && (
+              <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 10 }}>No "board meeting" bullets found automatically. Add items below or check the 1:1 doc.</div>
             )}
             <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 8 }}>Are these right? Edit, add, or remove items — then add them to the agenda doc.</div>
             {agendaItems.map((item, i) => (
@@ -1820,30 +1976,53 @@ function BoardPrepPanel({ meeting, latestBoardReport, onClose, showToast }) {
                 <span style={{ color: T.textDim, fontSize: 13, minWidth: 16 }}>•</span>
                 <input value={item} onChange={e => setAgendaItems(prev => prev.map((it, idx) => idx === i ? e.target.value : it))}
                   style={{ flex: 1, padding: "6px 10px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, background: T.surface, color: T.text, outline: "none" }} />
-                <button onClick={() => setAgendaItems(prev => prev.filter((_, idx) => idx !== i))} style={{ background: "none", border: "none", color: T.danger, cursor: "pointer", fontSize: 16, padding: "0 4px" }}>×</button>
+                <button onClick={() => setAgendaItems(prev => prev.filter((_, idx) => idx !== i))}
+                  style={{ background: "none", border: "none", color: T.danger, cursor: "pointer", fontSize: 16, padding: "0 4px" }}>×</button>
               </div>
             ))}
-            <button onClick={() => setAgendaItems(prev => [...prev, ''])} style={{ fontSize: 12, padding: "5px 12px", background: T.bg, color: T.textMuted, border: `1px dashed ${T.border}`, borderRadius: 6, cursor: "pointer", marginTop: 4 }}>+ Add item</button>
-            <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 12, color: T.textMuted, whiteSpace: "nowrap" }}>Note-taker:</span>
-                <input value={noteTaker} onChange={e => setNoteTaker(e.target.value)} placeholder="Name (from rotation)" style={{ padding: "6px 10px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, background: T.surface, color: T.text, outline: "none", width: 180 }} />
+            <button onClick={() => setAgendaItems(prev => [...prev, ''])}
+              style={{ fontSize: 12, padding: "5px 12px", background: T.bg, color: T.textMuted, border: `1px dashed ${T.border}`, borderRadius: 6, cursor: "pointer", marginTop: 4 }}>
+              + Add item
+            </button>
+            <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: "block", marginBottom: 3 }}>
+                  Note-taker {results?.suggestedNoteTaker && <span style={{ fontWeight: 400, color: T.calGreen }}>(auto-detected)</span>}
+                </label>
+                <input value={noteTaker} onChange={e => setNoteTaker(e.target.value)} placeholder="Name (from rotation)"
+                  style={{ padding: "6px 10px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, background: T.surface, color: T.text, outline: "none", width: 180 }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: "block", marginBottom: 3 }}>
+                  Intro person {results?.suggestedIntroPerson && <span style={{ fontWeight: 400, color: T.calGreen }}>(auto-detected)</span>}
+                </label>
+                <input value={introPerson} onChange={e => setIntroPerson(e.target.value)} placeholder="Name (from cycle)"
+                  style={{ padding: "6px 10px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, background: T.surface, color: T.text, outline: "none", width: 180 }} />
               </div>
               {results.agendaDocId && agendaInsertStep !== 'done' && (
                 <button disabled={agendaInsertStep === 'inserting'} onClick={async () => {
                   setAgendaInsertStep('inserting');
                   try {
-                    const r = await fetch('/api/board-prep', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ action: 'insertAgendaSection', agendaDocId: results.agendaDocId, boardMeetingDate: meetingStart, noteTaker, agendaItems: agendaItems.filter(Boolean) }) });
+                    const r = await fetch('/api/board-prep', {
+                      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ action: 'insertAgendaSection', agendaDocId: results.agendaDocId, boardMeetingDate: meetingStart, noteTaker, introPerson, agendaItems: agendaItems.filter(Boolean) }),
+                    });
                     const d = await r.json();
                     if (d.success) { setAgendaInsertStep('done'); showToast('Agenda section added to doc!'); }
                     else { showToast('Failed: ' + (d.error || 'unknown')); setAgendaInsertStep('idle'); }
                   } catch (e) { showToast('Failed to insert agenda section'); setAgendaInsertStep('idle'); }
-                }} style={{ padding: "8px 18px", background: T.emailBlue, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: agendaInsertStep === 'inserting' ? "not-allowed" : "pointer", opacity: agendaInsertStep === 'inserting' ? 0.7 : 1 }}>
+                }} style={{ padding: "8px 18px", background: T.emailBlue, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: agendaInsertStep === 'inserting' ? "not-allowed" : "pointer", opacity: agendaInsertStep === 'inserting' ? 0.7 : 1, alignSelf: "flex-end" }}>
                   {agendaInsertStep === 'inserting' ? 'Adding…' : '📄 Add to Agenda Doc'}
                 </button>
               )}
-              {agendaInsertStep === 'done' && <span style={{ fontSize: 13, color: T.calGreen, fontWeight: 700 }}>✓ Added to agenda doc</span>}
+              {agendaInsertStep === 'done' && (
+                <div style={{ alignSelf: "flex-end" }}>
+                  <span style={{ fontSize: 13, color: T.calGreen, fontWeight: 700 }}>✓ Added to agenda doc</span>
+                  {results.agendaDocUrl && (
+                    <a href={results.agendaDocUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: T.emailBlue, marginLeft: 10 }}>Open to review →</a>
+                  )}
+                </div>
+              )}
             </div>
             {results.agendaRotationText && (
               <details style={{ marginTop: 12 }}>
@@ -1858,25 +2037,18 @@ function BoardPrepPanel({ meeting, latestBoardReport, onClose, showToast }) {
             <div style={{ fontWeight: 700, fontSize: 14, color: T.text, marginBottom: 6 }}>💰 Financial Statements</div>
             {results.financialsUrl
               ? <a href={results.financialsUrl} target="_blank" rel="noreferrer" style={{ color: T.emailBlue, fontSize: 13 }}>Feb 2026 Financials →</a>
-              : <div style={{ fontSize: 13, color: T.textMuted }}>Not found — search Drive manually for "Feb 2026 Financials"</div>}
+              : <div style={{ fontSize: 13, color: T.textMuted }}>Not found — search Drive manually</div>}
           </div>
 
           {/* Board Draft */}
           <div style={{ background: T.bg, borderRadius: 10, padding: 14 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-              <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>✉️ Board Email Draft Created</div>
-              {results.boardDraftId && (
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => setShowBoardDraft(v => !v)} style={{ fontSize: 12, padding: "4px 10px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>{showBoardDraft ? "Hide" : "View draft"}</button>
-                  <a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noreferrer" style={{ fontSize: 12, padding: "4px 10px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, textDecoration: "none" }}>Gmail →</a>
-                </div>
-              )}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>✉️ Board Email Draft</div>
+              {results.boardDraftId
+                ? <a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noreferrer" style={{ fontSize: 12, padding: "4px 10px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, textDecoration: "none" }}>Open in Gmail →</a>
+                : <div style={{ color: T.danger, fontSize: 13 }}>Draft not created</div>}
             </div>
-            <div style={{ fontSize: 12, color: T.textMuted, marginBottom: showBoardDraft ? 8 : 0 }}>Review and update links before sending.</div>
-            {!results.boardDraftId && <div style={{ color: T.danger, fontSize: 13 }}>Draft not created</div>}
-            {showBoardDraft && results.boardDraftBody && (
-              <pre style={{ fontSize: 13, color: T.text, whiteSpace: "pre-wrap", margin: 0, fontFamily: "inherit", background: T.surface, padding: "12px 14px", borderRadius: 8, border: `1px solid ${T.border}`, lineHeight: 1.6 }}>{results.boardDraftBody}</pre>
-            )}
+            <div style={{ fontSize: 12, color: T.textMuted }}>Has hyperlinks to all docs. Review and send when ready.</div>
           </div>
 
           {/* Errors */}
@@ -2054,7 +2226,10 @@ export default function Home() {
   // Reading localStorage inside useState causes server/client hydration mismatch → crash.
   const [darkMode, setDarkMode] = useState(false);
   // Reassign module-level T so all sub-components (ComposeForm, EventForm, etc.) see the current theme.
-  T = darkMode ? DARK_T : LIGHT_T;
+  // Use selected color scheme from user settings (read after hydration, falls back to fresh).
+  const [activeScheme, setActiveScheme] = useState("fresh");
+  const schemeThemes = getSchemeThemes(activeScheme);
+  T = darkMode ? schemeThemes.dark : schemeThemes.light;
   // BUCKETS defined here so it picks up the current T values
   const BUCKETS = {
     "needs-response": { label: "Important / Not Addressed", icon: "✉️", color: T.urgentCoral, bg: T.urgentCoralBg, border: T.urgentCoralBorder, priority: 1 },
@@ -2304,6 +2479,12 @@ export default function Home() {
   useEffect(() => {
     try { if (localStorage.getItem('ffc_dark_mode') === 'true') setDarkMode(true); } catch {}
   }, []);
+  // Sync color scheme from userSettings after hydration
+  useEffect(() => {
+    if (userSettings.colorScheme && COLOR_SCHEMES[userSettings.colorScheme]) {
+      setActiveScheme(userSettings.colorScheme);
+    }
+  }, [userSettings.colorScheme]);
   useEffect(() => {
     try { localStorage.setItem('ffc_dark_mode', darkMode ? 'true' : 'false'); } catch {}
   }, [darkMode]);
@@ -3159,7 +3340,7 @@ export default function Home() {
 
         {/* Board Prep Panel */}
         {boardPrepPanel && (
-          <BoardPrepPanel meeting={boardPrepInfo?.meeting} latestBoardReport={boardPrepInfo?.latestBoardReport} onClose={() => setBoardPrepPanel(false)} showToast={showToast} />
+          <BoardPrepPanel meeting={boardPrepInfo?.meeting} latestBoardReport={boardPrepInfo?.latestBoardReport} jack1on1={boardPrepInfo?.jack1on1} initialAgendaItems={boardPrepInfo?.boardAgendaItems || []} onClose={() => setBoardPrepPanel(false)} showToast={showToast} />
         )}
 
         {/* Birthday alert */}
@@ -4489,6 +4670,37 @@ export default function Home() {
                   <input value={userSettings.orgName} onChange={e => setUserSettings(s => ({ ...s, orgName: e.target.value }))}
                     placeholder="Organization name" style={{ width: "100%", padding: "11px 14px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 15, background: T.bg, color: T.text, outline: "none", boxSizing: "border-box" }} />
                   <div style={{ fontSize: 12, color: T.textMuted, marginTop: 5 }}>Your nonprofit or company name</div>
+                </div>
+              </div>
+
+              {/* Color Scheme */}
+              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "24px 28px", marginBottom: 20 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 6 }}>🎨 Color Scheme</div>
+                <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 18 }}>Choose a look that fits your style. Works with both light and dark mode.</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  {Object.entries(COLOR_SCHEMES).map(([id, scheme]) => {
+                    const isActive = userSettings.colorScheme === id || (!userSettings.colorScheme && id === "fresh");
+                    return (
+                      <button key={id} onClick={() => setUserSettings(s => ({ ...s, colorScheme: id }))}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 12, padding: "14px 16px",
+                          background: isActive ? T.accentBg : T.bg,
+                          border: `2px solid ${isActive ? T.accent : T.border}`,
+                          borderRadius: 10, cursor: "pointer", textAlign: "left", transition: "border-color 0.15s",
+                        }}>
+                        <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+                          {scheme.swatch.map((color, i) => (
+                            <div key={i} style={{ width: 16, height: 16, borderRadius: 4, background: color, border: "1px solid rgba(0,0,0,0.1)" }} />
+                          ))}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{scheme.label}</div>
+                          <div style={{ fontSize: 12, color: T.textMuted }}>{scheme.description}</div>
+                        </div>
+                        {isActive && <span style={{ marginLeft: "auto", fontSize: 16, color: T.accent }}>✓</span>}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
