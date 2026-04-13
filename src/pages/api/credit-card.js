@@ -272,6 +272,7 @@ async function draftReplyToDebbie(token, { threadId, messageId, to, cc, subject,
  */
 async function reviewAllocations(token, spreadsheetId, sheetName) {
   try {
+    // Fetch the main data sheet
     const range = `'${sheetName}'!A:J`;
     const resp = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`,
@@ -283,6 +284,22 @@ async function reviewAllocations(token, spreadsheetId, sheetName) {
     }
     const data = await resp.json();
     const rows = data.values || [];
+
+    // Fetch valid category names from "Chart of Accounts Names" tab
+    let validCategories = [];
+    try {
+      const catRange = encodeURIComponent("'Chart of Accounts Names'!A:A");
+      const catResp = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${catRange}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (catResp.ok) {
+        const catData = await catResp.json();
+        validCategories = (catData.values || []).map(r => (r[0] || '').trim()).filter(v => v && v.toLowerCase() !== 'category' && v.toLowerCase() !== 'chart of accounts');
+      }
+    } catch (e) {
+      console.error('credit-card:fetchCategories', { message: e.message });
+    }
 
     // Build a pattern map from filled-in rows: merchant keyword → all fields
     const patterns = {};
@@ -338,7 +355,7 @@ async function reviewAllocations(token, spreadsheetId, sheetName) {
       if (!category || !receiptLoc) {
         const amount = (row[3] || '').trim();
         const date = (row[1] || '').trim();
-        const suggestion = suggestFromPatterns(merchant, patterns);
+        const suggestion = suggestFromPatterns(merchant, patterns, validCategories);
         emptyRows.push({
           rowIndex: i,
           rowNumber: i + 1,
@@ -393,7 +410,21 @@ function normalizeMerchant(merchant) {
     .trim();
 }
 
-function suggestFromPatterns(merchant, patterns) {
+/**
+ * Find the best matching category from the valid list based on keywords.
+ */
+function findBestCategory(keywords, validCategories) {
+  if (!validCategories.length) return null;
+  for (const cat of validCategories) {
+    const cl = cat.toLowerCase();
+    for (const kw of keywords) {
+      if (cl.includes(kw)) return cat;
+    }
+  }
+  return null;
+}
+
+function suggestFromPatterns(merchant, patterns, validCategories) {
   const key = normalizeMerchant(merchant);
   if (!key) return { confidence: 'none' };
 
@@ -415,20 +446,24 @@ function suggestFromPatterns(merchant, patterns) {
     }
   }
 
-  // Common merchant heuristics
+  // Common merchant → category keyword heuristics
+  // Map merchant keywords to likely category keywords, then find the best match in validCategories
   const lm = merchant.toLowerCase();
-  const empty = { description: '', allocation: '', grantSource: '', grantDetail: '' };
-  if (lm.includes('restaurant') || lm.includes('grill') || lm.includes('creamery') || lm.includes('cafe') || lm.includes('coffee') || lm.includes('bar ') || lm.includes('kitchen') || lm.includes('pizza') || lm.includes('taco') || lm.includes('brew')) {
-    return { ...empty, category: 'Meals & Entertainment', confidence: 'heuristic', source: 'merchant name' };
-  }
-  if (lm.includes('amazon') || lm.includes('amzn')) {
-    return { ...empty, category: 'Office Supplies', confidence: 'heuristic', source: 'merchant name' };
-  }
-  if (lm.includes('usps') || lm.includes('ups') || lm.includes('fedex')) {
-    return { ...empty, category: 'Postage & Shipping', confidence: 'heuristic', source: 'merchant name' };
-  }
-  if (lm.includes('google') || lm.includes('adobe') || lm.includes('microsoft') || lm.includes('zoom') || lm.includes('canva')) {
-    return { ...empty, category: 'Software & Subscriptions', confidence: 'heuristic', source: 'merchant name' };
+  const empty = { description: '', receiptLoc: '', grantSource: '', grantDetail: '' };
+  const heuristics = [
+    { test: () => lm.includes('restaurant') || lm.includes('grill') || lm.includes('creamery') || lm.includes('cafe') || lm.includes('coffee') || lm.includes('bar ') || lm.includes('kitchen') || lm.includes('pizza') || lm.includes('taco') || lm.includes('brew'), keywords: ['meal', 'entertainment', 'food', 'dining'] },
+    { test: () => lm.includes('amazon') || lm.includes('amzn'), keywords: ['office', 'supplies', 'amazon'] },
+    { test: () => lm.includes('usps') || lm.includes('ups') || lm.includes('fedex'), keywords: ['postage', 'shipping', 'mail'] },
+    { test: () => lm.includes('google') || lm.includes('adobe') || lm.includes('microsoft') || lm.includes('zoom') || lm.includes('canva') || lm.includes('paddle'), keywords: ['software', 'subscription', 'cloud', 'promotion'] },
+    { test: () => lm.includes('sticker') || lm.includes('print') || lm.includes('vista'), keywords: ['marketing', 'material', 'print'] },
+  ];
+
+  for (const h of heuristics) {
+    if (h.test()) {
+      // Find the best matching valid category
+      const match = findBestCategory(h.keywords, validCategories);
+      if (match) return { ...empty, category: match, confidence: 'heuristic', source: 'merchant name' };
+    }
   }
 
   return { confidence: 'none' };
