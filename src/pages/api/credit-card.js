@@ -253,6 +253,180 @@ async function draftReplyToDebbie(token, { threadId, messageId, to, cc, subject,
   }
 }
 
+/**
+ * Read the sheet, find KB rows with empty fields, and suggest fills
+ * based on merchant patterns from other filled-in rows (any person).
+ */
+async function reviewAllocations(token, spreadsheetId, sheetName) {
+  try {
+    const range = `'${sheetName}'!A:H`;
+    const resp = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!resp.ok) {
+      console.error('credit-card:reviewAllocations', { spreadsheetId, sheetName, status: resp.status });
+      return { error: 'Failed to read sheet' };
+    }
+    const data = await resp.json();
+    const rows = data.values || [];
+
+    // Build a pattern map from filled-in rows: merchant keyword → { category, description, allocation }
+    const patterns = {};
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const merchant = (row[2] || '').trim();
+      const category = (row[4] || '').trim();
+      if (!merchant || !category) continue;
+      // Extract merchant keywords (first meaningful words, ignore numbers/state codes)
+      const key = normalizeMerchant(merchant);
+      if (key) {
+        patterns[key] = {
+          category,
+          description: (row[5] || '').trim(),
+          allocation: (row[6] || '').trim(),
+          source: `${row[0] || '?'} - row ${i + 1}`,
+        };
+      }
+    }
+
+    // Find KB rows with empty fields
+    const emptyRows = [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const name = (row[0] || '').trim().toUpperCase();
+      if (name !== 'KB' && name !== 'KAYLA') continue;
+      const category = (row[4] || '').trim();
+      const description = (row[5] || '').trim();
+      const allocation = (row[6] || '').trim();
+      // If category is empty, this row needs filling
+      if (!category) {
+        const merchant = (row[2] || '').trim();
+        const amount = (row[3] || '').trim();
+        const date = (row[1] || '').trim();
+        const suggestion = suggestFromPatterns(merchant, patterns);
+        emptyRows.push({
+          rowIndex: i,
+          rowNumber: i + 1, // 1-based for display
+          date,
+          merchant,
+          amount,
+          currentCategory: category,
+          currentDescription: description,
+          currentAllocation: allocation,
+          suggestedCategory: suggestion.category || '',
+          suggestedDescription: suggestion.description || '',
+          suggestedAllocation: suggestion.allocation || '',
+          confidence: suggestion.confidence || 'none',
+          matchedFrom: suggestion.source || '',
+        });
+      }
+    }
+
+    return { emptyRows, totalRows: rows.length, patternCount: Object.keys(patterns).length };
+  } catch (e) {
+    console.error('credit-card:reviewAllocations', { spreadsheetId, message: e.message });
+    return { error: e.message };
+  }
+}
+
+/**
+ * Normalize a merchant string to a matchable key.
+ * "SQ *HIGHLANDS CORK AND CADenver CO" → "highlands cork"
+ * "AMAZON MKTPL*BD18G1RD0 Amzn.com/billWA" → "amazon"
+ * "DASH PPC DASH-PPC.COM PA" → "dash ppc"
+ */
+function normalizeMerchant(merchant) {
+  return merchant
+    .toLowerCase()
+    .replace(/sq \*|sq\*/g, '') // Strip Square prefix
+    .replace(/amzn\.com\/\S+/g, '') // Strip Amazon bill URLs
+    .replace(/mktpl\*\S+/g, '') // Strip Amazon marketplace IDs
+    .replace(/\d{3,}/g, '') // Strip long numbers (phone, ID)
+    .replace(/\b[a-z]{2}\b$/g, '') // Strip trailing state codes
+    .replace(/[^a-z\s]/g, ' ') // Keep only letters
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .slice(0, 3) // First 3 words
+    .join(' ')
+    .trim();
+}
+
+function suggestFromPatterns(merchant, patterns) {
+  const key = normalizeMerchant(merchant);
+  if (!key) return { confidence: 'none' };
+
+  // Exact match
+  if (patterns[key]) {
+    return { ...patterns[key], confidence: 'high' };
+  }
+
+  // Partial match — check if any pattern key is contained in or contains this key
+  for (const [pKey, pVal] of Object.entries(patterns)) {
+    if (key.includes(pKey) || pKey.includes(key)) {
+      return { ...pVal, confidence: 'medium' };
+    }
+    // Check first word match (e.g., "amazon" matches any amazon entry)
+    const firstWord = key.split(' ')[0];
+    const pFirstWord = pKey.split(' ')[0];
+    if (firstWord.length > 3 && firstWord === pFirstWord) {
+      return { ...pVal, confidence: 'low' };
+    }
+  }
+
+  // Common merchant heuristics
+  const lm = merchant.toLowerCase();
+  if (lm.includes('restaurant') || lm.includes('grill') || lm.includes('creamery') || lm.includes('cafe') || lm.includes('coffee') || lm.includes('bar ') || lm.includes('kitchen') || lm.includes('pizza') || lm.includes('taco') || lm.includes('brew')) {
+    return { category: 'Meals & Entertainment', description: '', allocation: '', confidence: 'heuristic', source: 'merchant name' };
+  }
+  if (lm.includes('amazon') || lm.includes('amzn')) {
+    return { category: 'Office Supplies', description: '', allocation: '', confidence: 'heuristic', source: 'merchant name' };
+  }
+  if (lm.includes('usps') || lm.includes('ups') || lm.includes('fedex')) {
+    return { category: 'Postage & Shipping', description: '', allocation: '', confidence: 'heuristic', source: 'merchant name' };
+  }
+  if (lm.includes('google') || lm.includes('adobe') || lm.includes('microsoft') || lm.includes('zoom') || lm.includes('canva')) {
+    return { category: 'Software & Subscriptions', description: '', allocation: '', confidence: 'heuristic', source: 'merchant name' };
+  }
+
+  return { confidence: 'none' };
+}
+
+/**
+ * Write approved allocations back to the sheet.
+ * Body: { spreadsheetId, sheetName, updates: [{ rowNumber, category, description, allocation }] }
+ */
+async function writeAllocations(token, { spreadsheetId, sheetName, updates }) {
+  try {
+    const data = updates.map(u => ({
+      range: `'${sheetName}'!E${u.rowNumber}:G${u.rowNumber}`,
+      values: [[u.category, u.description, u.allocation]],
+    }));
+
+    const resp = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          valueInputOption: 'USER_ENTERED',
+          data,
+        }),
+      }
+    );
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      console.error('credit-card:writeAllocations', { spreadsheetId, status: resp.status, message: err.error?.message });
+      return { error: err.error?.message || 'Failed to write to sheet' };
+    }
+    return { success: true, updatedRows: updates.length };
+  } catch (e) {
+    console.error('credit-card:writeAllocations', { spreadsheetId, message: e.message });
+    return { error: e.message };
+  }
+}
+
 export default async function handler(req, res) {
   const token = await getToken(req, res);
   if (!token) {
@@ -293,8 +467,22 @@ export default async function handler(req, res) {
         return res.status(200).json(await draftReplyToDebbie(token, body));
       }
 
+      case 'reviewAllocations':
+        if (!spreadsheetId || !sheetName) {
+          return res.status(400).json({ error: 'spreadsheetId and sheetName required' });
+        }
+        return res.status(200).json(await reviewAllocations(token, spreadsheetId, sheetName));
+
+      case 'writeAllocations': {
+        const wBody = req.method === 'POST' ? req.body : {};
+        if (!wBody.spreadsheetId || !wBody.updates) {
+          return res.status(400).json({ error: 'spreadsheetId and updates required in POST body' });
+        }
+        return res.status(200).json(await writeAllocations(token, wBody));
+      }
+
       default:
-        return res.status(400).json({ error: 'Unknown action. Valid: checkSheet, checkTeamCompletion, findAllocationEmail, draftNudge, draftReplyToDebbie' });
+        return res.status(400).json({ error: 'Unknown action' });
     }
   } catch (e) {
     console.error('credit-card:handler', { action, method: req.method, message: e.message });

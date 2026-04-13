@@ -1848,6 +1848,9 @@ function CreditCardPanel({ emailInfo, onClose, showToast }) {
   const [teamStatus, setTeamStatus] = useState(null); // { completed: [], pending: [] }
   const [nudgedNames, setNudgedNames] = useState(new Set());
   const [reviewDone, setReviewDone] = useState(false);
+  const [reviewRows, setReviewRows] = useState(null); // [{ rowNumber, merchant, amount, suggestedCategory, ... }]
+  const [editedRows, setEditedRows] = useState({}); // rowNumber → { category, description, allocation }
+  const [writingAllocations, setWritingAllocations] = useState(false);
   const [replyDrafted, setReplyDrafted] = useState(false);
   const [error, setError] = useState(null);
 
@@ -1887,6 +1890,55 @@ function CreditCardPanel({ emailInfo, onClose, showToast }) {
         showToast(`Draft created for ${member.name.split(' ')[0]}`);
       } else { showToast(d.error || 'Failed to create draft'); }
     } catch (e) { showToast(e.message); }
+  };
+
+  const fetchReview = async () => {
+    if (!spreadsheetId) { setError('No spreadsheet found'); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({ action: 'reviewAllocations', spreadsheetId, sheetName: '2026 CC Purchases' });
+      const r = await fetch(`/api/credit-card?${params}`, { credentials: 'include' });
+      const d = await r.json();
+      if (d.error) { setError(d.error); }
+      else {
+        setReviewRows(d.emptyRows || []);
+        // Pre-fill edited rows with suggestions
+        const edits = {};
+        (d.emptyRows || []).forEach(row => {
+          edits[row.rowNumber] = {
+            category: row.suggestedCategory || '',
+            description: row.suggestedDescription || '',
+            allocation: row.suggestedAllocation || '',
+          };
+        });
+        setEditedRows(edits);
+        setStep('review');
+      }
+    } catch (e) { setError(e.message); }
+    setLoading(false);
+  };
+
+  const writeReview = async () => {
+    if (!spreadsheetId) return;
+    setWritingAllocations(true);
+    setError(null);
+    try {
+      const updates = Object.entries(editedRows)
+        .filter(([_, v]) => v.category.trim())
+        .map(([rowNum, v]) => ({ rowNumber: parseInt(rowNum), category: v.category, description: v.description, allocation: v.allocation }));
+      if (updates.length === 0) { setError('No rows to update'); setWritingAllocations(false); return; }
+      const r = await fetch('/api/credit-card?action=writeAllocations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ spreadsheetId, sheetName: '2026 CC Purchases', updates }),
+      });
+      const d = await r.json();
+      if (d.success) { setReviewDone(true); showToast(`Updated ${d.updatedRows} rows in the spreadsheet`); }
+      else { setError(d.error || 'Failed to write'); }
+    } catch (e) { setError(e.message); }
+    setWritingAllocations(false);
   };
 
   const draftReply = async () => {
@@ -1999,7 +2051,7 @@ function CreditCardPanel({ emailInfo, onClose, showToast }) {
               <button onClick={() => setStep('nudge')} style={btnPrimary}>Send Reminders →</button>
             )}
             {teamStatus.pending.length === 0 && (
-              <button onClick={() => setStep('review')} style={btnPrimary}>Everyone's done — Review →</button>
+              <button onClick={fetchReview} disabled={loading} style={btnPrimary}>{loading ? 'Loading...' : "Everyone's done — Review →"}</button>
             )}
           </div>
         </div>
@@ -2027,7 +2079,7 @@ function CreditCardPanel({ emailInfo, onClose, showToast }) {
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={() => { setStep('status'); checkStatus(); }} style={btnSecondary}>← Back to Status</button>
-            <button onClick={() => setStep('review')} style={btnPrimary}>Move to Review →</button>
+            <button onClick={fetchReview} disabled={loading} style={btnPrimary}>{loading ? 'Loading...' : 'Move to Review →'}</button>
           </div>
         </div>
       )}
@@ -2035,19 +2087,71 @@ function CreditCardPanel({ emailInfo, onClose, showToast }) {
       {/* Step 4: Kayla's review */}
       {step === 'review' && (
         <div style={cardStyle}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 12 }}>✅ Your Review</div>
-          <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 16 }}>Open the spreadsheet, review all allocations, then mark as done.</div>
-          {spreadsheetUrl && (
-            <a href={spreadsheetUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '10px 22px', background: T.calGreenBg, color: T.calGreen, border: `1px solid ${T.calGreenBorder}`, borderRadius: 8, textDecoration: 'none', fontSize: 14, fontWeight: 600, marginBottom: 16 }}>📊 Open Spreadsheet for Review</a>
+          <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 6 }}>✅ Your Allocations</div>
+          <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 14 }}>
+            {reviewRows === null ? 'Loading your rows from the spreadsheet...' :
+             reviewRows.length === 0 ? 'All your rows are already filled in!' :
+             `${reviewRows.length} row${reviewRows.length !== 1 ? 's' : ''} need${reviewRows.length === 1 ? 's' : ''} categorizing. Edit the suggestions below, then write them back.`}
+          </div>
+          {reviewRows === null && !loading && (
+            <button onClick={fetchReview} style={btnPrimary}>Load My Rows</button>
           )}
-          <div style={{ display: 'flex', gap: 10 }}>
-            {!reviewDone ? (
-              <button onClick={() => { setReviewDone(true); showToast('Review marked complete!'); }} style={btnPrimary}>✓ Mark Review Done</button>
-            ) : (
+          {reviewRows && reviewRows.length > 0 && !reviewDone && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+              {reviewRows.map(row => {
+                const edited = editedRows[row.rowNumber] || {};
+                const confColor = row.confidence === 'high' ? T.calGreen : row.confidence === 'medium' ? T.taskAmber : row.confidence === 'low' ? T.info : row.confidence === 'heuristic' ? T.textMuted : T.textDim;
+                return (
+                  <div key={row.rowNumber} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: '14px 16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <div>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{row.merchant}</span>
+                        <span style={{ fontSize: 13, color: T.textMuted, marginLeft: 10 }}>{row.date}</span>
+                      </div>
+                      <span style={{ fontSize: 15, fontWeight: 700, color: T.text }}>${row.amount}</span>
+                    </div>
+                    {row.confidence !== 'none' && (
+                      <div style={{ fontSize: 11, color: confColor, marginBottom: 8, fontWeight: 600 }}>
+                        {row.confidence === 'high' ? '✓ High confidence' : row.confidence === 'medium' ? '~ Medium match' : row.confidence === 'heuristic' ? '? Best guess' : '? Partial match'}
+                        {row.matchedFrom ? ` — based on ${row.matchedFrom}` : ''}
+                      </div>
+                    )}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                      <div>
+                        <label style={{ fontSize: 11, color: T.textMuted, fontWeight: 600 }}>Category</label>
+                        <input value={edited.category || ''} onChange={e => setEditedRows(prev => ({ ...prev, [row.rowNumber]: { ...prev[row.rowNumber], category: e.target.value } }))}
+                          style={{ width: '100%', padding: '6px 8px', border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, color: T.text, background: T.surface, boxSizing: 'border-box' }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 11, color: T.textMuted, fontWeight: 600 }}>Description</label>
+                        <input value={edited.description || ''} onChange={e => setEditedRows(prev => ({ ...prev, [row.rowNumber]: { ...prev[row.rowNumber], description: e.target.value } }))}
+                          style={{ width: '100%', padding: '6px 8px', border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, color: T.text, background: T.surface, boxSizing: 'border-box' }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 11, color: T.textMuted, fontWeight: 600 }}>Allocation</label>
+                        <input value={edited.allocation || ''} onChange={e => setEditedRows(prev => ({ ...prev, [row.rowNumber]: { ...prev[row.rowNumber], allocation: e.target.value } }))}
+                          style={{ width: '100%', padding: '6px 8px', border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, color: T.text, background: T.surface, boxSizing: 'border-box' }} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {spreadsheetUrl && (
+              <a href={spreadsheetUrl} target="_blank" rel="noopener noreferrer" style={{ padding: '8px 16px', background: T.calGreenBg, color: T.calGreen, border: `1px solid ${T.calGreenBorder}`, borderRadius: 8, textDecoration: 'none', fontSize: 13, fontWeight: 600 }}>📊 Open Sheet</a>
+            )}
+            {reviewRows && reviewRows.length > 0 && !reviewDone && (
+              <button onClick={writeReview} disabled={writingAllocations} style={btnPrimary}>
+                {writingAllocations ? 'Writing...' : `✓ Write ${Object.values(editedRows).filter(v => v.category?.trim()).length} rows to sheet`}
+              </button>
+            )}
+            {(reviewDone || (reviewRows && reviewRows.length === 0)) && (
               <button onClick={() => setStep('reply')} style={btnPrimary}>Draft Reply to Debbie →</button>
             )}
           </div>
-          {reviewDone && <div style={{ marginTop: 12, fontSize: 14, color: T.accent, fontWeight: 600 }}>✅ Review complete — ready to reply to Debbie</div>}
+          {reviewDone && <div style={{ marginTop: 12, fontSize: 14, color: T.accent, fontWeight: 600 }}>✅ Allocations written to spreadsheet — ready to reply to Debbie</div>}
         </div>
       )}
 

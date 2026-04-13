@@ -10,7 +10,7 @@ export default function handler(req, res) {
       'https://www.googleapis.com/auth/drive',
       'https://www.googleapis.com/auth/documents',
       'https://www.googleapis.com/auth/chat.messages.readonly',
-      'https://www.googleapis.com/auth/spreadsheets.readonly',
+      'https://www.googleapis.com/auth/spreadsheets',
     ].join(' '),
     access_type: 'offline',
     prompt: 'consent',
