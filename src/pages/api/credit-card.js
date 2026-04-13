@@ -315,9 +315,25 @@ async function reviewAllocations(token, spreadsheetId, sheetName) {
     }
 
     // Build a pattern map from filled-in rows: merchant keyword → all fields
+    // Include historical data from previous year's sheet for better matching
+    const allRows = [...rows];
+    try {
+      const histRange = encodeURIComponent("'2025 CC Purchases'!A:J");
+      const histResp = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${histRange}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (histResp.ok) {
+        const histData = await histResp.json();
+        allRows.push(...(histData.values || []));
+      }
+    } catch (e) {
+      console.error('credit-card:fetchHistory', { message: e.message });
+    }
+
     const patterns = {};
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
+    for (let i = 0; i < allRows.length; i++) {
+      const row = allRows[i];
       const merchant = (row[2] || '').trim();
       const category = (row[4] || '').trim(); // E
       if (!merchant || !category) continue;
@@ -326,11 +342,11 @@ async function reviewAllocations(token, spreadsheetId, sheetName) {
         patterns[key] = {
           category,
           description: (row[5] || '').trim(),     // F
-          receiptLoc: (row[6] || '').trim(),       // G — "Where is receipt saved?"
+          receiptLoc: (row[6] || '').trim(),       // G
           grantSource: (row[7] || '').trim(),      // H
           grantDetail: (row[8] || '').trim(),      // I
           additionalDetails: (row[9] || '').trim(),// J
-          source: `${row[0] || '?'} - row ${i + 1}`,
+          source: `${row[0] || '?'}`,
         };
       }
     }
