@@ -295,7 +295,20 @@ async function reviewAllocations(token, spreadsheetId, sheetName) {
       );
       if (catResp.ok) {
         const catData = await catResp.json();
-        validCategories = (catData.values || []).map(r => (r[0] || '').trim()).filter(v => v && v.toLowerCase() !== 'category' && v.toLowerCase() !== 'chart of accounts');
+        validCategories = (catData.values || [])
+          .map(r => (r[0] || '').trim())
+          .filter(v => v
+            && !v.toLowerCase().startsWith('total')
+            && !v.toLowerCase().startsWith('net ')
+            && !v.toLowerCase().startsWith('gross ')
+            && v.toLowerCase() !== 'category'
+            && v.toLowerCase() !== 'chart of accounts'
+            && v.toLowerCase() !== 'revenue'
+            && v.toLowerCase() !== 'expenditures'
+            && v.toLowerCase() !== 'other income'
+            && v.toLowerCase() !== 'other expenditures'
+            && v.toLowerCase() !== 'operational revenue'
+          );
       }
     } catch (e) {
       console.error('credit-card:fetchCategories', { message: e.message });
@@ -412,13 +425,26 @@ function normalizeMerchant(merchant) {
 
 /**
  * Find the best matching category from the valid list based on keywords.
+ * Keywords are tried in priority order — first match wins.
  */
 function findBestCategory(keywords, validCategories) {
   if (!validCategories.length) return null;
-  for (const cat of validCategories) {
-    const cl = cat.toLowerCase();
-    for (const kw of keywords) {
-      if (cl.includes(kw)) return cat;
+  // Try each keyword in priority order
+  for (const kw of keywords) {
+    const kwl = kw.toLowerCase();
+    // Exact match first
+    for (const cat of validCategories) {
+      if (cat.toLowerCase() === kwl) return cat;
+    }
+    // Contains match
+    for (const cat of validCategories) {
+      if (cat.toLowerCase().includes(kwl)) return cat;
+    }
+    // Partial word match — any word in the keyword appears in the category
+    const kwWords = kwl.split(/[\s,]+/).filter(w => w.length > 3);
+    for (const cat of validCategories) {
+      const cl = cat.toLowerCase();
+      if (kwWords.some(w => cl.includes(w))) return cat;
     }
   }
   return null;
@@ -446,21 +472,37 @@ function suggestFromPatterns(merchant, patterns, validCategories) {
     }
   }
 
-  // Common merchant → category keyword heuristics
-  // Map merchant keywords to likely category keywords, then find the best match in validCategories
+  // Common merchant → category heuristics using actual Chart of Accounts names
   const lm = merchant.toLowerCase();
   const empty = { description: '', receiptLoc: '', grantSource: '', grantDetail: '' };
+
+  // Direct category name mapping based on merchant type
   const heuristics = [
-    { test: () => lm.includes('restaurant') || lm.includes('grill') || lm.includes('creamery') || lm.includes('cafe') || lm.includes('coffee') || lm.includes('bar ') || lm.includes('kitchen') || lm.includes('pizza') || lm.includes('taco') || lm.includes('brew'), keywords: ['meal', 'entertainment', 'food', 'dining'] },
-    { test: () => lm.includes('amazon') || lm.includes('amzn'), keywords: ['office', 'supplies', 'amazon'] },
-    { test: () => lm.includes('usps') || lm.includes('ups') || lm.includes('fedex'), keywords: ['postage', 'shipping', 'mail'] },
-    { test: () => lm.includes('google') || lm.includes('adobe') || lm.includes('microsoft') || lm.includes('zoom') || lm.includes('canva') || lm.includes('paddle'), keywords: ['software', 'subscription', 'cloud', 'promotion'] },
-    { test: () => lm.includes('sticker') || lm.includes('print') || lm.includes('vista'), keywords: ['marketing', 'material', 'print'] },
+    // Restaurants, bars, cafes → could be donor meeting or staff meal
+    { test: () => lm.includes('restaurant') || lm.includes('grill') || lm.includes('creamery') || lm.includes('cafe') || lm.includes('coffee') || lm.includes('bar ') || lm.includes('cork') || lm.includes('kitchen') || lm.includes('pizza') || lm.includes('taco') || lm.includes('brew') || lm.includes('bistro') || lm.includes('diner'),
+      keywords: ['travel, conference, meetings', 'employee gifts', 'donor cultivation'] },
+    // Amazon, office supplies
+    { test: () => lm.includes('amazon') || lm.includes('amzn'),
+      keywords: ['supplies & equipment', 'office'] },
+    // Shipping
+    { test: () => lm.includes('usps') || lm.includes('ups store') || lm.includes('fedex') || lm.includes('po box'),
+      keywords: ['memberships, dues & subscriptions', 'supplies & equipment', 'office'] },
+    // Software, cloud services
+    { test: () => lm.includes('google') || lm.includes('adobe') || lm.includes('microsoft') || lm.includes('zoom') || lm.includes('canva') || lm.includes('paddle') || lm.includes('mailchimp'),
+      keywords: ['cloud, promotion, software', 'marketing subscriptions', 'memberships'] },
+    // Marketing materials
+    { test: () => lm.includes('sticker') || lm.includes('print') || lm.includes('vista') || lm.includes('ace '),
+      keywords: ['marketing materials'] },
+    // PPC / ads
+    { test: () => lm.includes('ppc') || lm.includes('dash-ppc') || lm.includes('facebook ads') || lm.includes('google ads'),
+      keywords: ['contract marketing', 'online marketing'] },
+    // PDF, documents
+    { test: () => lm.includes('pdf') || lm.includes('files-editor') || lm.includes('docusign'),
+      keywords: ['cloud, promotion, software', 'supplies & equipment'] },
   ];
 
   for (const h of heuristics) {
     if (h.test()) {
-      // Find the best matching valid category
       const match = findBestCategory(h.keywords, validCategories);
       if (match) return { ...empty, category: match, confidence: 'heuristic', source: 'merchant name' };
     }
