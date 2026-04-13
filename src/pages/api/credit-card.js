@@ -380,8 +380,8 @@ async function reviewAllocations(token, spreadsheetId, sheetName) {
       const grantSource = (row[7] || '').trim();   // H
       const grantDetail = (row[8] || '').trim();   // I
       const additionalDetails = (row[9] || '').trim(); // J
-      // Row needs attention if category OR receipt location is empty
-      if (!category || !receiptLoc) {
+      // Row needs attention if category (E), receipt location (G), or grant source (H) is empty
+      if (!category || !receiptLoc || !grantSource) {
         const amount = (row[3] || '').trim();
         const date = (row[1] || '').trim();
         const suggestion = suggestFromPatterns(merchant, patterns, validCategories);
@@ -480,10 +480,22 @@ function suggestFromPatterns(merchant, patterns, validCategories) {
     if (key.includes(pKey) || pKey.includes(key)) {
       return { ...pVal, confidence: 'medium' };
     }
-    // Check first word match (e.g., "amazon" matches any amazon entry)
-    const firstWord = key.split(' ')[0];
-    const pFirstWord = pKey.split(' ')[0];
-    if (firstWord.length > 3 && firstWord === pFirstWord) {
+  }
+  // First word match (e.g., "amazon" matches any amazon entry, "highlands" matches)
+  const firstWord = key.split(' ')[0];
+  if (firstWord.length > 3) {
+    for (const [pKey, pVal] of Object.entries(patterns)) {
+      const pFirstWord = pKey.split(' ')[0];
+      if (firstWord === pFirstWord) {
+        return { ...pVal, confidence: 'low' };
+      }
+    }
+  }
+  // Any significant word overlap (e.g., "creamery" in one matches "creamery" in another)
+  const keyWords = key.split(' ').filter(w => w.length > 4);
+  for (const [pKey, pVal] of Object.entries(patterns)) {
+    const pWords = pKey.split(' ').filter(w => w.length > 4);
+    if (keyWords.some(w => pWords.includes(w))) {
       return { ...pVal, confidence: 'low' };
     }
   }
@@ -493,28 +505,43 @@ function suggestFromPatterns(merchant, patterns, validCategories) {
   const empty = { description: '', receiptLoc: '', grantSource: '', grantDetail: '' };
 
   // Direct category name mapping based on merchant type
+  // Uses broad pattern recognition — not just exact merchant names but
+  // characteristics like "SQ *" prefix (Square POS = food/retail),
+  // location words, industry patterns, etc.
   const heuristics = [
-    // Restaurants, bars, cafes → could be donor meeting or staff meal
-    { test: () => lm.includes('restaurant') || lm.includes('grill') || lm.includes('creamery') || lm.includes('cafe') || lm.includes('coffee') || lm.includes('bar ') || lm.includes('cork') || lm.includes('kitchen') || lm.includes('pizza') || lm.includes('taco') || lm.includes('brew') || lm.includes('bistro') || lm.includes('diner'),
+    // Restaurants, bars, cafes, food — SQ * prefix is usually food/retail
+    { test: () => lm.includes('restaurant') || lm.includes('grill') || lm.includes('creamery') || lm.includes('cafe') || lm.includes('coffee') || lm.includes('bar ') || lm.includes('cork') || lm.includes('kitchen') || lm.includes('pizza') || lm.includes('taco') || lm.includes('brew') || lm.includes('bistro') || lm.includes('diner') || lm.includes('bakery') || lm.includes('tavern') || lm.includes('pub ') || lm.includes('eatery') || lm.includes('sushi') || lm.includes('thai') || lm.includes('burrito') || lm.includes('wing') || lm.includes('bbq') || lm.includes('steakhouse') || lm.includes('seafood') || lm.includes('brunch') || lm.includes('deli') || lm.includes('food') || lm.includes('catering') || lm.includes('doordash') || lm.includes('grubhub') || lm.includes('uber eats') || lm.includes('mattison'),
       keywords: ['travel, conference, meetings', 'employee gifts', 'donor cultivation'] },
+    // SQ * (Square POS) that didn't match above — likely food/retail
+    { test: () => lm.startsWith('sq *') || lm.startsWith('sq*'),
+      keywords: ['travel, conference, meetings', 'employee gifts', 'supplies'] },
     // Amazon, office supplies
-    { test: () => lm.includes('amazon') || lm.includes('amzn'),
+    { test: () => lm.includes('amazon') || lm.includes('amzn') || lm.includes('staples') || lm.includes('office depot'),
       keywords: ['supplies & equipment', 'office'] },
-    // Shipping
-    { test: () => lm.includes('usps') || lm.includes('ups store') || lm.includes('fedex') || lm.includes('po box'),
+    // Shipping, postage, mail
+    { test: () => lm.includes('usps') || lm.includes('ups store') || lm.includes('fedex') || lm.includes('po box') || lm.includes('stamps.com') || lm.includes('pirate ship'),
       keywords: ['memberships, dues & subscriptions', 'supplies & equipment', 'office'] },
-    // Software, cloud services
-    { test: () => lm.includes('google') || lm.includes('adobe') || lm.includes('microsoft') || lm.includes('zoom') || lm.includes('canva') || lm.includes('paddle') || lm.includes('mailchimp'),
+    // Software, cloud services, subscriptions
+    { test: () => lm.includes('google') || lm.includes('adobe') || lm.includes('microsoft') || lm.includes('zoom') || lm.includes('canva') || lm.includes('paddle') || lm.includes('mailchimp') || lm.includes('slack') || lm.includes('dropbox') || lm.includes('notion') || lm.includes('asana') || lm.includes('monday.com') || lm.includes('hubspot') || lm.includes('salesforce') || lm.includes('.com') && (lm.includes('net') || lm.includes('app') || lm.includes('cloud')),
       keywords: ['cloud, promotion, software', 'marketing subscriptions', 'memberships'] },
-    // Marketing materials
-    { test: () => lm.includes('sticker') || lm.includes('print') || lm.includes('vista') || lm.includes('ace '),
+    // Marketing materials, printing
+    { test: () => lm.includes('sticker') || lm.includes('print') || lm.includes('vista') || lm.includes('ace ') || lm.includes('banner') || lm.includes('sign ') || lm.includes('promo'),
       keywords: ['marketing materials'] },
-    // PPC / ads
-    { test: () => lm.includes('ppc') || lm.includes('dash-ppc') || lm.includes('facebook ads') || lm.includes('google ads'),
+    // PPC / digital ads
+    { test: () => lm.includes('ppc') || lm.includes('dash-ppc') || lm.includes('facebook ads') || lm.includes('google ads') || lm.includes('meta ads'),
       keywords: ['contract marketing', 'online marketing'] },
-    // PDF, documents
-    { test: () => lm.includes('pdf') || lm.includes('files-editor') || lm.includes('docusign'),
+    // PDF, documents, tools
+    { test: () => lm.includes('pdf') || lm.includes('files-editor') || lm.includes('docusign') || lm.includes('hellosign'),
       keywords: ['cloud, promotion, software', 'supplies & equipment'] },
+    // Travel, hotels, airlines, car rental
+    { test: () => lm.includes('airline') || lm.includes('united') || lm.includes('delta') || lm.includes('southwest') || lm.includes('frontier') || lm.includes('hotel') || lm.includes('marriott') || lm.includes('hilton') || lm.includes('airbnb') || lm.includes('hertz') || lm.includes('enterprise') || lm.includes('lyft') || lm.includes('uber') || lm.includes('parking') || lm.includes('toll'),
+      keywords: ['travel, conference, meetings', 'mileage'] },
+    // Gas stations
+    { test: () => lm.includes('shell') || lm.includes('chevron') || lm.includes('exxon') || lm.includes('bp ') || lm.includes('gas') || lm.includes('fuel') || lm.includes('circle k') || lm.includes('7-eleven') || lm.includes('kum & go'),
+      keywords: ['mileage reimbursement', 'travel'] },
+    // Insurance
+    { test: () => lm.includes('insurance') || lm.includes('geico') || lm.includes('state farm'),
+      keywords: ['insurance'] },
   ];
 
   for (const h of heuristics) {
