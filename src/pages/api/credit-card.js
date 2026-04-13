@@ -426,6 +426,63 @@ async function reviewAllocations(token, spreadsheetId, sheetName) {
       }
     }
 
+    // Calendar lookup for meal/restaurant transactions — find what meeting it was for
+    const mealCategories = new Set(['travel, conference, meetings', 'employee gifts / meals', 'donor cultivation', 'employee gifts/ meals']);
+    const mealRows = emptyRows.filter(r => {
+      const cat = (r.currentCategory || r.suggestedCategory || '').toLowerCase();
+      return !r.currentDescription && mealCategories.has(cat);
+    });
+    if (mealRows.length > 0) {
+      try {
+        // Batch calendar lookups — group by date range
+        for (const row of mealRows) {
+          const txDate = new Date(row.date);
+          if (isNaN(txDate.getTime())) continue;
+          // Search from 4 days before through the transaction date
+          const startDate = new Date(txDate);
+          startDate.setDate(startDate.getDate() - 4);
+          const endDate = new Date(txDate);
+          endDate.setDate(endDate.getDate() + 1); // include the full day
+          const timeMin = startDate.toISOString();
+          const timeMax = endDate.toISOString();
+
+          const calResp = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime&maxResults=20`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (!calResp.ok) continue;
+          const calData = await calResp.json();
+          const events = (calData.items || []).filter(ev => {
+            const title = (ev.summary || '').toLowerCase();
+            // Look for meetings with people — skip solo blocks, focus time, etc.
+            if (title.includes('focus') || title.includes('ooo') || title.includes('hold') || title.includes('gym') || title.includes('commute') || title.includes('lunch block')) return false;
+            // Prefer events with attendees or meeting-like titles
+            return (ev.attendees && ev.attendees.length > 0) || title.includes('meeting') || title.includes('1:1') || title.includes('call') || title.includes('coffee') || title.includes('lunch') || title.includes('dinner') || title.includes('happy hour');
+          });
+
+          if (events.length > 0) {
+            // Pick the most likely meeting — prefer events on the same day, with attendees
+            const sameDayEvents = events.filter(ev => {
+              const evDate = (ev.start?.date || ev.start?.dateTime || '').slice(0, 10);
+              return evDate === row.date?.slice(0, 10) || evDate === txDate.toISOString().slice(0, 10);
+            });
+            const best = sameDayEvents.length > 0 ? sameDayEvents[0] : events[events.length - 1];
+            const attendeeNames = (best.attendees || [])
+              .filter(a => !a.self)
+              .map(a => a.displayName || a.email?.split('@')[0] || '')
+              .filter(Boolean)
+              .slice(0, 3);
+            const desc = attendeeNames.length > 0
+              ? `${best.summary || 'Meeting'} w/ ${attendeeNames.join(', ')}`
+              : best.summary || '';
+            if (desc) row.suggestedDescription = desc;
+          }
+        }
+      } catch (e) {
+        console.error('credit-card:calendarLookup', { message: e.message });
+      }
+    }
+
     // Second pass: for rows still missing grant source, look up by category
     // Build a map of category → most common grant source from all filled rows
     const categoryGrants = {};
