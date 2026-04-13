@@ -426,6 +426,42 @@ async function reviewAllocations(token, spreadsheetId, sheetName) {
       }
     }
 
+    // Second pass: for rows still missing grant source, look up by category
+    // Build a map of category → most common grant source from all filled rows
+    const categoryGrants = {};
+    for (const row of allRows) {
+      const cat = (row[4] || '').trim();
+      const gs = (row[7] || '').trim();
+      const gd = (row[8] || '').trim();
+      if (!cat || !gs) continue;
+      if (!categoryGrants[cat]) categoryGrants[cat] = {};
+      const key = `${gs}|||${gd}`;
+      categoryGrants[cat][key] = (categoryGrants[cat][key] || 0) + 1;
+    }
+    // For each category, find the most frequent grant source
+    const categoryTopGrant = {};
+    for (const [cat, counts] of Object.entries(categoryGrants)) {
+      let best = null, bestCount = 0;
+      for (const [key, count] of Object.entries(counts)) {
+        if (count > bestCount) { best = key; bestCount = count; }
+      }
+      if (best) {
+        const [gs, gd] = best.split('|||');
+        categoryTopGrant[cat] = { grantSource: gs, grantDetail: gd, count: bestCount };
+      }
+    }
+
+    // Fill in missing grant source from category patterns
+    for (const row of emptyRows) {
+      if (!row.suggestedGrantSource) {
+        const cat = row.currentCategory || row.suggestedCategory;
+        if (cat && categoryTopGrant[cat]) {
+          row.suggestedGrantSource = categoryTopGrant[cat].grantSource;
+          row.suggestedGrantDetail = row.suggestedGrantDetail || categoryTopGrant[cat].grantDetail;
+        }
+      }
+    }
+
     return { emptyRows, totalRows: rows.length, patternCount: Object.keys(patterns).length, month: lastMonthName || 'Unknown' };
   } catch (e) {
     console.error('credit-card:reviewAllocations', { spreadsheetId, message: e.message });
