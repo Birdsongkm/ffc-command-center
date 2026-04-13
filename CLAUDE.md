@@ -166,6 +166,9 @@ index.js load
   → GET /api/drafts        draft list (batched 10 at a time)
   → GET /api/monday-digest weekly briefing (parallel fetches)
   → GET /api/signature     email signature HTML
+  → GET /api/board-prep    check for upcoming board meeting (21-day window)
+  → GET /api/birthday      check for today's birthdays in calendar
+  → GET /api/credit-card?action=findAllocationEmail   check for CC allocation email from @dnatsi.com
 
 user action
   → POST /api/email-actions   archive / label / snooze
@@ -174,6 +177,10 @@ user action
   → DELETE /api/drafts?id=    delete draft
   → GET /api/email-body?id=   full message body (on expand)
   → GET /api/contact-history  per-contact thread list
+  → POST /api/drive-note      add bullet to 1:1 Google Doc (smart insertion)
+  → GET /api/credit-card?action=checkTeamCompletion   check who filled in CC allocations
+  → GET /api/credit-card?action=draftNudge            create reminder draft for team member
+  → POST /api/credit-card?action=draftReplyToDebbie   create threaded reply draft
 ```
 
 All fetches use `credentials: 'include'` so cookies flow with every request.
@@ -275,12 +282,50 @@ Fix any flags before considering the work complete.
 ## Key constants (do not rename without updating all references)
 
 ```js
-TEAM        // six FFC staff members with name, initials, email
+TEAM        // six FFC staff members with name, initials, email, meetingStyle, docName
+            //   meetingStyle: "notes" (→ Google Doc), "email", "email-chat", "email-doc" (email + doc)
+            //   docName: exact Google Doc name for drive-note API (e.g. "Laura & Kayla 1:1")
+COLOR_SCHEMES // five theme presets (fresh, ocean, sunset, lavender, slate) with light/dark variants
 CATEGORIES  // Fundraising, Finance, Board, Programs, Admin, External, Marketing
 URGENCY     // Critical, High, Medium, Low
 BUCKETS     // email classification display config (label, icon, color, priority)
 QUOTES      // daily motivational quotes, rotated by day-of-month
 ```
+
+---
+
+## Spam/sales learning
+
+The classifier has a two-layer learning system:
+1. **Hardcoded rules** in `classifyEmail()` — salesFromDomains list + salesSignals keyword scan
+2. **Learned overrides** in `learnedBuckets` (localStorage `ffc_learned_buckets`) — per-sender and per-domain
+
+**🚫 Spam button** (on all non-sales emails): deletes email + saves `sender@domain` and `domain` → `"sales"` in learnedBuckets. Future emails from that domain auto-route to sales bucket.
+
+**✅ Not Spam button** (on sales-bucketed emails): moves to inbox + removes sender/domain from learnedBuckets.
+
+The learned overrides are checked in `emailsByBucket` derivation (line ~3205) before the static classifier runs.
+
+---
+
+## Credit card allocation flow
+
+**Trigger:** Email from `@dnatsi.com` with subject containing "credit card", "CC", "transactions", or "allocation" (within 30 days).
+
+**API:** `/api/credit-card` with actions: `findAllocationEmail`, `checkTeamCompletion`, `draftNudge`, `draftReplyToDebbie`, `checkSheet`.
+
+**Panel:** 5-step flow — Email → Team Status → Nudge → Review → Reply to Debbie. All actions create drafts (never auto-send).
+
+---
+
+## Team This Week — drive-note smart insertion
+
+The `POST /api/drive-note` endpoint:
+1. Finds the Google Doc by exact `docName` (from TEAM constant) or falls back to `"1:1 {firstName}"`
+2. Reads the doc content via Google Docs API
+3. Scans for a section with a **future date** (parses various date formats)
+4. If found → appends bullet to that section
+5. If not found → creates a new dated section matching existing heading style + bullet format
 
 ---
 

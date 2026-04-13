@@ -727,3 +727,34 @@ CRO vote: RSVP status (6/6), location maps link (5/6), calendar badge (4/6)
 
 **Pure functions added:** `formatDuration`, `getAttendeeRsvpIcon`, `getAttendeeRsvpColor`, `calendarEmptyStateMessage`, `countTodayMeetings`, `buildMapsUrl`, `isVideoCallLocation`, `summarizeAttendeeRsvp`
 **Tests added:** 64 new tests (sprint9.test.js) — **539 total passing**
+
+---
+
+## Sprint 10 — Kayla-directed features (April 2026) ✅ COMPLETE
+*Shipped: 2026-04-13 | Direct implementation by Kayla + Claude*
+
+These features were implemented in a hands-on session with Kayla, not via the autonomous sprint loop.
+
+### Infrastructure
+
+| Feature | What shipped |
+|---|---|
+| New Railway deployment | Migrated to new Railway account (hobby plan). Old deployment deleted. `railway.toml` added for Nixpacks builder compatibility. |
+| Auth debug + fix | Diagnosed `GOOGLE_CLIENT_SECRET` env var issue (Railpack treated "SECRET" vars as Docker build secrets; invisible `=` prefix in value). Fixed via Nixpacks and clean re-entry. |
+
+### Features shipped
+
+| Feature | What shipped |
+|---|---|
+| Color scheme settings | 5 presets (Fresh, Ocean, Sunset, Lavender, Slate) with light + dark variants. Picker in Settings tab with visual swatches. `pageBg` token separates page background from element backgrounds. |
+| Birthday To/CC fix (#111) | Birthday person now goes in To field, everyone else in CC. Previously inverted. Matches by name from calendar event. 5 new tests. |
+| Credit card allocation flow | Auto-detects Debbie's email from @dnatsi.com. Amber banner + 5-step panel (Email → Status → Nudge → Review → Reply). API: `findAllocationEmail`, `draftReplyToDebbie`, fixed `checkTeamCompletion` single-fetch bug. |
+| Spam/Not-spam learning | 🚫 Spam button on all emails: deletes + learns sender domain → sales bucket. ✅ Not Spam on sales-bucketed emails: moves to inbox + removes from learned list. |
+| Team This Week doc linking | Exact doc names per team member (Laura & Kayla 1:1, Gretchen & Kayla 1:1, Kayla & Adjoa 1:1 Meetings). Brittany gets email + doc (FFC & PE Grants Meeting Notes). |
+| Smart doc insertion | drive-note API reads doc content, finds future-dated sections, appends bullets there. If no future section, creates one matching existing heading style + bullet format. |
+
+### Product direction established
+
+**Self-configurable UI:** All hardcoded config (TEAM, CATEGORIES, workflows, doc names) should be editable from the CC Settings. This is the foundation for productization — any nonprofit ED should be able to set up their own version without touching code. Next priority: editable Team This Week (add/remove/reorder members, edit names/emails/doc destinations from Settings).
+
+**Tests:** 831 total passing. Test-to-code ratio maintained.
