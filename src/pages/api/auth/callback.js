@@ -5,15 +5,6 @@ export default async function handler(req, res) {
   if (!code) return res.status(400).send('Missing authorization code');
 
   try {
-    // TEMP DEBUG — remove after auth is working
-    const secret = process.env.GOOGLE_CLIENT_SECRET || '';
-    console.log('auth:debug', {
-      clientIdPrefix: (process.env.GOOGLE_CLIENT_ID || '').slice(0, 10),
-      secretPrefix: secret.slice(0, 8),
-      secretSuffix: secret.slice(-4),
-      secretLen: secret.length,
-      redirectUri: `${process.env.APP_URL}/api/auth/callback`,
-    });
     const r = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
