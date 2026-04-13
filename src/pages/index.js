@@ -1903,13 +1903,16 @@ function CreditCardPanel({ emailInfo, onClose, showToast }) {
       if (d.error) { setError(d.error); }
       else {
         setReviewRows(d.emptyRows || []);
-        // Pre-fill edited rows with suggestions
+        // Pre-fill edited rows with suggestions (use current values if already filled)
         const edits = {};
         (d.emptyRows || []).forEach(row => {
           edits[row.rowNumber] = {
-            category: row.suggestedCategory || '',
-            description: row.suggestedDescription || '',
-            allocation: row.suggestedAllocation || '',
+            category: row.currentCategory || row.suggestedCategory || '',
+            description: row.currentDescription || row.suggestedDescription || '',
+            receiptLoc: row.currentReceiptLoc || row.suggestedReceiptLoc || '',
+            grantSource: row.currentGrantSource || row.suggestedGrantSource || '',
+            grantDetail: row.currentGrantDetail || row.suggestedGrantDetail || '',
+            additionalDetails: row.currentAdditionalDetails || '',
           };
         });
         setEditedRows(edits);
@@ -1925,8 +1928,8 @@ function CreditCardPanel({ emailInfo, onClose, showToast }) {
     setError(null);
     try {
       const updates = Object.entries(editedRows)
-        .filter(([_, v]) => v.category.trim())
-        .map(([rowNum, v]) => ({ rowNumber: parseInt(rowNum), category: v.category, description: v.description, allocation: v.allocation }));
+        .filter(([_, v]) => v.category?.trim())
+        .map(([rowNum, v]) => ({ rowNumber: parseInt(rowNum), category: v.category, description: v.description, receiptLoc: v.receiptLoc, grantSource: v.grantSource, grantDetail: v.grantDetail, additionalDetails: v.additionalDetails }));
       if (updates.length === 0) { setError('No rows to update'); setWritingAllocations(false); return; }
       const r = await fetch('/api/credit-card?action=writeAllocations', {
         method: 'POST',
@@ -2105,6 +2108,7 @@ function CreditCardPanel({ emailInfo, onClose, showToast }) {
                   <div key={row.rowNumber} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: '14px 16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <div>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: T.accent, marginRight: 8, background: T.accentBg, padding: '2px 7px', borderRadius: 4 }}>{row.staffName}</span>
                         <span style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{row.merchant}</span>
                         <span style={{ fontSize: 13, color: T.textMuted, marginLeft: 10 }}>{row.date}</span>
                       </div>
@@ -2116,22 +2120,21 @@ function CreditCardPanel({ emailInfo, onClose, showToast }) {
                         {row.matchedFrom ? ` — based on ${row.matchedFrom}` : ''}
                       </div>
                     )}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-                      <div>
-                        <label style={{ fontSize: 11, color: T.textMuted, fontWeight: 600 }}>Category</label>
-                        <input value={edited.category || ''} onChange={e => setEditedRows(prev => ({ ...prev, [row.rowNumber]: { ...prev[row.rowNumber], category: e.target.value } }))}
-                          style={{ width: '100%', padding: '6px 8px', border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, color: T.text, background: T.surface, boxSizing: 'border-box' }} />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: 11, color: T.textMuted, fontWeight: 600 }}>Description</label>
-                        <input value={edited.description || ''} onChange={e => setEditedRows(prev => ({ ...prev, [row.rowNumber]: { ...prev[row.rowNumber], description: e.target.value } }))}
-                          style={{ width: '100%', padding: '6px 8px', border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, color: T.text, background: T.surface, boxSizing: 'border-box' }} />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: 11, color: T.textMuted, fontWeight: 600 }}>Allocation</label>
-                        <input value={edited.allocation || ''} onChange={e => setEditedRows(prev => ({ ...prev, [row.rowNumber]: { ...prev[row.rowNumber], allocation: e.target.value } }))}
-                          style={{ width: '100%', padding: '6px 8px', border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, color: T.text, background: T.surface, boxSizing: 'border-box' }} />
-                      </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                      {[
+                        { key: 'category', label: 'Category' },
+                        { key: 'description', label: 'Description/Notes' },
+                        { key: 'receiptLoc', label: 'Receipt saved?' },
+                        { key: 'grantSource', label: 'Grant Source' },
+                        { key: 'grantDetail', label: 'Grant Detail' },
+                        { key: 'additionalDetails', label: 'Additional Details' },
+                      ].map(f => (
+                        <div key={f.key}>
+                          <label style={{ fontSize: 11, color: T.textMuted, fontWeight: 600 }}>{f.label}</label>
+                          <input value={edited[f.key] || ''} onChange={e => setEditedRows(prev => ({ ...prev, [row.rowNumber]: { ...prev[row.rowNumber], [f.key]: e.target.value } }))}
+                            style={{ width: '100%', padding: '6px 8px', border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, color: T.text, background: T.surface, boxSizing: 'border-box' }} />
+                        </div>
+                      ))}
                     </div>
                   </div>
                 );

@@ -257,9 +257,22 @@ async function draftReplyToDebbie(token, { threadId, messageId, to, cc, subject,
  * Read the sheet, find KB rows with empty fields, and suggest fills
  * based on merchant patterns from other filled-in rows (any person).
  */
+/**
+ * Columns:
+ *   A: Staff Credit Card (name/initials)
+ *   B: Date of Purchase
+ *   C: Vendor Name / Card Description
+ *   D: Amount
+ *   E: Official Category (Chart of Accounts)
+ *   F: Description/Notes
+ *   G: Where is receipt saved? (e.g. "Mar 2026 LL", "Mar 2026 - AK")
+ *   H: Grant Source (if applicable) or DENVER GENERAL
+ *   I: Grant detail if applicable
+ *   J: Additional Details if needed
+ */
 async function reviewAllocations(token, spreadsheetId, sheetName) {
   try {
-    const range = `'${sheetName}'!A:H`;
+    const range = `'${sheetName}'!A:J`;
     const resp = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`,
       { headers: { Authorization: `Bearer ${token}` } }
@@ -271,52 +284,67 @@ async function reviewAllocations(token, spreadsheetId, sheetName) {
     const data = await resp.json();
     const rows = data.values || [];
 
-    // Build a pattern map from filled-in rows: merchant keyword → { category, description, allocation }
+    // Build a pattern map from filled-in rows: merchant keyword → all fields
     const patterns = {};
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const merchant = (row[2] || '').trim();
-      const category = (row[4] || '').trim();
+      const category = (row[4] || '').trim(); // E
       if (!merchant || !category) continue;
-      // Extract merchant keywords (first meaningful words, ignore numbers/state codes)
       const key = normalizeMerchant(merchant);
       if (key) {
         patterns[key] = {
           category,
-          description: (row[5] || '').trim(),
-          allocation: (row[6] || '').trim(),
+          description: (row[5] || '').trim(),     // F
+          receiptLoc: (row[6] || '').trim(),       // G — "Where is receipt saved?"
+          grantSource: (row[7] || '').trim(),      // H
+          grantDetail: (row[8] || '').trim(),      // I
+          additionalDetails: (row[9] || '').trim(),// J
           source: `${row[0] || '?'} - row ${i + 1}`,
         };
       }
     }
 
-    // Find KB rows with empty fields
+    // Skip known header/label rows
+    const skipNames = new Set(['staff credit', 'staff credit card', 'naming:', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december', 'january', 'february']);
+
+    // Find ALL rows with empty category or receipt location (any staff member)
     const emptyRows = [];
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      const name = (row[0] || '').trim().toUpperCase();
-      if (name !== 'KB' && name !== 'KAYLA') continue;
-      const category = (row[4] || '').trim();
-      const description = (row[5] || '').trim();
-      const allocation = (row[6] || '').trim();
-      // If category is empty, this row needs filling
-      if (!category) {
-        const merchant = (row[2] || '').trim();
+      const name = (row[0] || '').trim();
+      if (!name || skipNames.has(name.toLowerCase())) continue;
+      const merchant = (row[2] || '').trim();
+      if (!merchant) continue;
+      const category = (row[4] || '').trim();     // E
+      const description = (row[5] || '').trim();   // F
+      const receiptLoc = (row[6] || '').trim();    // G
+      const grantSource = (row[7] || '').trim();   // H
+      const grantDetail = (row[8] || '').trim();   // I
+      const additionalDetails = (row[9] || '').trim(); // J
+      // Row needs attention if category OR receipt location is empty
+      if (!category || !receiptLoc) {
         const amount = (row[3] || '').trim();
         const date = (row[1] || '').trim();
         const suggestion = suggestFromPatterns(merchant, patterns);
         emptyRows.push({
           rowIndex: i,
-          rowNumber: i + 1, // 1-based for display
+          rowNumber: i + 1,
+          staffName: name,
           date,
           merchant,
           amount,
           currentCategory: category,
           currentDescription: description,
-          currentAllocation: allocation,
+          currentReceiptLoc: receiptLoc,
+          currentGrantSource: grantSource,
+          currentGrantDetail: grantDetail,
+          currentAdditionalDetails: additionalDetails,
           suggestedCategory: suggestion.category || '',
           suggestedDescription: suggestion.description || '',
-          suggestedAllocation: suggestion.allocation || '',
+          suggestedReceiptLoc: suggestion.receiptLoc || '',
+          suggestedGrantSource: suggestion.grantSource || '',
+          suggestedGrantDetail: suggestion.grantDetail || '',
           confidence: suggestion.confidence || 'none',
           matchedFrom: suggestion.source || '',
         });
@@ -377,17 +405,18 @@ function suggestFromPatterns(merchant, patterns) {
 
   // Common merchant heuristics
   const lm = merchant.toLowerCase();
+  const empty = { description: '', allocation: '', grantSource: '', grantDetail: '' };
   if (lm.includes('restaurant') || lm.includes('grill') || lm.includes('creamery') || lm.includes('cafe') || lm.includes('coffee') || lm.includes('bar ') || lm.includes('kitchen') || lm.includes('pizza') || lm.includes('taco') || lm.includes('brew')) {
-    return { category: 'Meals & Entertainment', description: '', allocation: '', confidence: 'heuristic', source: 'merchant name' };
+    return { ...empty, category: 'Meals & Entertainment', confidence: 'heuristic', source: 'merchant name' };
   }
   if (lm.includes('amazon') || lm.includes('amzn')) {
-    return { category: 'Office Supplies', description: '', allocation: '', confidence: 'heuristic', source: 'merchant name' };
+    return { ...empty, category: 'Office Supplies', confidence: 'heuristic', source: 'merchant name' };
   }
   if (lm.includes('usps') || lm.includes('ups') || lm.includes('fedex')) {
-    return { category: 'Postage & Shipping', description: '', allocation: '', confidence: 'heuristic', source: 'merchant name' };
+    return { ...empty, category: 'Postage & Shipping', confidence: 'heuristic', source: 'merchant name' };
   }
   if (lm.includes('google') || lm.includes('adobe') || lm.includes('microsoft') || lm.includes('zoom') || lm.includes('canva')) {
-    return { category: 'Software & Subscriptions', description: '', allocation: '', confidence: 'heuristic', source: 'merchant name' };
+    return { ...empty, category: 'Software & Subscriptions', confidence: 'heuristic', source: 'merchant name' };
   }
 
   return { confidence: 'none' };
@@ -399,9 +428,10 @@ function suggestFromPatterns(merchant, patterns) {
  */
 async function writeAllocations(token, { spreadsheetId, sheetName, updates }) {
   try {
+    // Write columns E through J for each row
     const data = updates.map(u => ({
-      range: `'${sheetName}'!E${u.rowNumber}:G${u.rowNumber}`,
-      values: [[u.category, u.description, u.allocation]],
+      range: `'${sheetName}'!E${u.rowNumber}:J${u.rowNumber}`,
+      values: [[u.category || '', u.description || '', u.receiptLoc || '', u.grantSource || '', u.grantDetail || '', u.additionalDetails || '']],
     }));
 
     const resp = await fetch(
