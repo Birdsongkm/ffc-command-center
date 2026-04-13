@@ -202,10 +202,10 @@ const CATEGORIES = [
 
 // Fill in real email addresses here
 const TEAM = [
-  { name: "Laura Lavid", initials: "LL", email: "laura@freshfoodconnect.org", meetingStyle: "notes" },
-  { name: "Gretchen Roberts", initials: "GR", email: "gretchen@freshfoodconnect.org", meetingStyle: "notes" },
+  { name: "Laura Lavid", initials: "LL", email: "laura@freshfoodconnect.org", meetingStyle: "notes", docName: "Laura & Kayla 1:1" },
+  { name: "Gretchen Roberts", initials: "GR", email: "gretchen@freshfoodconnect.org", meetingStyle: "notes", docName: "Gretchen & Kayla 1:1" },
   { name: "Carmen Alcantara", initials: "CA", email: "carmen@freshfoodconnect.org", meetingStyle: "email-chat" },
-  { name: "Adjoa Kittoe", initials: "AK", email: "adjoa@freshfoodconnect.org", meetingStyle: "notes" },
+  { name: "Adjoa Kittoe", initials: "AK", email: "adjoa@freshfoodconnect.org", meetingStyle: "notes", docName: "Kayla & Adjoa 1:1 Meetings" },
   { name: "Debbie Nash", initials: "DN", email: "dnash@freshfoodconnect.org", meetingStyle: "email" },
   { name: "Brittany", initials: "BR", email: "brittany@freshfoodconnect.org", meetingStyle: "notes" },
 ];
@@ -4176,7 +4176,8 @@ export default function Home() {
                               <button disabled={!noteText.trim() || isSaving} onClick={async () => {
                                 setTeamNoteSaving(m.email);
                                 try {
-                                  const r = await fetch('/api/drive-note', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ personName: m.name, note: noteText }) });
+                                  const teamMemberDoc = TEAM.find(t => t.email === m.email);
+                                  const r = await fetch('/api/drive-note', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ personName: m.name, note: noteText, docName: teamMemberDoc?.docName || null }) });
                                   const d = await r.json();
                                   if (r.ok) { showToast(`Added to ${d.docName}`); setTeamNoteTexts(prev => ({ ...prev, [m.email]: '' })); }
                                   else { showToast('Failed: ' + (d.error || 'Unknown error')); }

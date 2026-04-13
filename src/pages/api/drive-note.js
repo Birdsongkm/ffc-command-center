@@ -52,15 +52,17 @@ export default async function handler(req, res) {
   const token = await getToken(req, res);
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { personName, note } = req.body;
+  const { personName, note, docName } = req.body;
   if (!personName || !note) return res.status(400).json({ error: 'Missing personName or note' });
 
   const h = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
   const firstName = personName.split(' ')[0];
 
   try {
-    // Search Drive for 1:1 doc
-    const query = encodeURIComponent(`name contains "1:1 ${firstName}" and mimeType='application/vnd.google-apps.document' and trashed=false`);
+    // Search Drive for 1:1 doc — use exact docName if provided, otherwise fall back to name search
+    const searchTerm = docName || `1:1 ${firstName}`;
+    const nameFilter = docName ? `name = "${docName}"` : `name contains "1:1 ${firstName}"`;
+    const query = encodeURIComponent(`${nameFilter} and mimeType='application/vnd.google-apps.document' and trashed=false`);
     const searchRes = await fetch(
       `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)&pageSize=5`,
       { headers: h }
@@ -73,7 +75,7 @@ export default async function handler(req, res) {
     }
     const searchData = await searchRes.json();
     const file = searchData.files?.[0];
-    if (!file) return res.status(404).json({ error: `No 1:1 doc found for "${firstName}" — make sure a Google Doc named "1:1 ${firstName}" exists in your Drive` });
+    if (!file) return res.status(404).json({ error: `No 1:1 doc found for "${firstName}" — looked for "${searchTerm}" in your Drive` });
 
     // Prepend note at top of document (after title, index 1)
     const dateStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
