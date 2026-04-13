@@ -3385,6 +3385,21 @@ export default function Home() {
                 {isEmailActionVisible("trash", emailActionConfig) && <button onClick={() => emailAction("trash", email.id)} style={abtn(T.danger, T.dangerBg)}>🗑 Delete</button>}
                 {isEmailActionVisible("markRead", emailActionConfig) && <button onClick={() => emailAction("markRead", email.id)} style={abtn(T.textMuted, T.bg)}>✓ Read</button>}
                 {isEmailActionVisible("star", emailActionConfig) && <button onClick={() => emailAction("star", email.id)} style={abtn(T.gold, T.goldBg)}>⭐ Star</button>}
+                {effectiveBucket !== "sales" && <button onClick={() => {
+                  const addr = (email.from || "").toLowerCase().match(/[\w.-]+@[\w.-]+/)?.[0] || "";
+                  const domain = addr.split("@")[1] || "";
+                  emailAction("trash", email.id);
+                  if (addr || domain) {
+                    setLearnedBuckets(prev => {
+                      const updated = { ...prev };
+                      if (addr) updated[addr] = "sales";
+                      if (domain) updated[domain] = "sales";
+                      try { localStorage.setItem("ffc_learned_buckets", JSON.stringify(updated)); } catch {}
+                      return updated;
+                    });
+                  }
+                  showToast(`Spam — future emails from ${domain || addr} → sales bucket`);
+                }} style={abtn(T.danger, T.dangerBg)} title="Delete and learn: future emails from this sender go to Sales/Spam">🚫 Spam</button>}
                 {isEmailActionVisible("makeTask", emailActionConfig) && <button onClick={() => setShowTaskForm({ prefillFromEmail: email })} style={abtn(T.taskAmber, T.taskAmberBg)}>📋 Make Task</button>}
                 {isEmailActionVisible("toDo", emailActionConfig) && (effectiveBucket === "to-do"
                   ? <button onClick={() => setToDoEmailIds(prev => { const n = new Set(prev); n.delete(email.id); return n; })} style={abtn(T.calGreen, T.calGreenBg)}>✓ Done</button>
@@ -3471,6 +3486,38 @@ export default function Home() {
                 {isEmailActionVisible("markRead", emailActionConfig) && <button onClick={() => emailAction("markRead", email.id)} style={abtn(T.textMuted, T.bg)}>✓ Mark Read</button>}
                 {isEmailActionVisible("trash", emailActionConfig) && <button onClick={() => emailAction("trash", email.id)} style={abtn(T.danger, T.dangerBg)}>🗑 Delete</button>}
                 {isEmailActionVisible("star", emailActionConfig) && <button onClick={() => emailAction("star", email.id)} style={abtn(T.gold, T.goldBg)}>⭐ Star</button>}
+                {effectiveBucket !== "sales" && <button onClick={() => {
+                  const addr = (email.from || "").toLowerCase().match(/[\w.-]+@[\w.-]+/)?.[0] || "";
+                  const domain = addr.split("@")[1] || "";
+                  emailAction("trash", email.id);
+                  if (addr || domain) {
+                    setLearnedBuckets(prev => {
+                      const updated = { ...prev };
+                      if (addr) updated[addr] = "sales";
+                      if (domain) updated[domain] = "sales";
+                      try { localStorage.setItem("ffc_learned_buckets", JSON.stringify(updated)); } catch {}
+                      return updated;
+                    });
+                  }
+                  setExpandedEmail(null);
+                  showToast(`Spam — future emails from ${domain || addr} → sales bucket`);
+                }} style={abtn(T.danger, T.dangerBg)} title="Delete and learn: future emails from this sender go to Sales/Spam">🚫 Spam</button>}
+                {effectiveBucket === "sales" && <button onClick={() => {
+                  const addr = (email.from || "").toLowerCase().match(/[\w.-]+@[\w.-]+/)?.[0] || "";
+                  const domain = addr.split("@")[1] || "";
+                  setEmailBucketOverrides(prev => ({ ...prev, [email.id]: "needs-response" }));
+                  if (addr || domain) {
+                    setLearnedBuckets(prev => {
+                      const updated = { ...prev };
+                      if (addr) delete updated[addr];
+                      if (domain) delete updated[domain];
+                      try { localStorage.setItem("ffc_learned_buckets", JSON.stringify(updated)); } catch {}
+                      return updated;
+                    });
+                  }
+                  setExpandedEmail(null);
+                  showToast(`Not spam — future emails from ${domain || addr} back to inbox`);
+                }} style={abtn(T.calGreen, T.calGreenBg)}>✅ Not Spam</button>}
                 {isEmailActionVisible("snooze", emailActionConfig) && (
                   <div style={{ position: "relative" }}>
                     <button onClick={() => setShowSnooze(showSnooze === email.id ? null : email.id)} style={abtn(T.info, T.infoBg)}>⏰ Snooze</button>
