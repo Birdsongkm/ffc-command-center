@@ -385,6 +385,23 @@ async function reviewAllocations(token, spreadsheetId, sheetName) {
         const amount = (row[3] || '').trim();
         const date = (row[1] || '').trim();
         const suggestion = suggestFromPatterns(merchant, patterns, validCategories);
+
+        // Auto-generate receipt location (G) from the pattern: "Mon YYYY Initials"
+        // e.g., "Mar 2026 KB", "Mar 2026 - AK"
+        let autoReceiptLoc = '';
+        if (!receiptLoc && date) {
+          const parsed = new Date(date);
+          if (!isNaN(parsed.getTime())) {
+            const mon = parsed.toLocaleDateString('en-US', { month: 'short' });
+            const yr = parsed.getFullYear();
+            // Check if this person uses "Mon YYYY XX" or "Mon YYYY - XX" format
+            // by looking at other filled rows for the same person
+            const initials = name.length <= 3 ? name : name.split(/\s+/).map(w => w[0]).join('').toUpperCase();
+            const separator = rows.some(r => (r[6] || '').includes(' - ')) ? ' - ' : ' ';
+            autoReceiptLoc = `${mon} ${yr}${separator}${initials}`;
+          }
+        }
+
         emptyRows.push({
           rowIndex: i,
           rowNumber: i + 1,
@@ -400,7 +417,7 @@ async function reviewAllocations(token, spreadsheetId, sheetName) {
           currentAdditionalDetails: additionalDetails,
           suggestedCategory: suggestion.category || '',
           suggestedDescription: suggestion.description || '',
-          suggestedReceiptLoc: suggestion.receiptLoc || '',
+          suggestedReceiptLoc: autoReceiptLoc || suggestion.receiptLoc || '',
           suggestedGrantSource: suggestion.grantSource || '',
           suggestedGrantDetail: suggestion.grantDetail || '',
           confidence: suggestion.confidence || 'none',

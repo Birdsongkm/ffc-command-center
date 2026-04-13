@@ -1904,19 +1904,20 @@ function CreditCardPanel({ emailInfo, onClose, showToast }) {
       if (d.error) { setError(d.error); setLoading(false); return; }
 
       const rows = d.emptyRows || [];
-      // 2. Auto-write confident suggestions directly to the sheet (high/medium/heuristic)
+      // 2. Auto-write any row where we can fill at least one empty field
       const updates = rows
-        .filter(row => row.confidence === 'high' || row.confidence === 'medium' || row.confidence === 'heuristic')
-        .filter(row => row.suggestedCategory)
-        .map(row => ({
-          rowNumber: row.rowNumber,
-          category: row.currentCategory || row.suggestedCategory,
-          description: row.currentDescription || row.suggestedDescription,
-          receiptLoc: row.currentReceiptLoc || row.suggestedReceiptLoc,
-          grantSource: row.currentGrantSource || row.suggestedGrantSource,
-          grantDetail: row.currentGrantDetail || row.suggestedGrantDetail,
-          additionalDetails: row.currentAdditionalDetails || '',
-        }));
+        .map(row => {
+          const cat = row.currentCategory || row.suggestedCategory || '';
+          const desc = row.currentDescription || row.suggestedDescription || '';
+          const receipt = row.currentReceiptLoc || row.suggestedReceiptLoc || '';
+          const grant = row.currentGrantSource || row.suggestedGrantSource || '';
+          const grantDet = row.currentGrantDetail || row.suggestedGrantDetail || '';
+          const addl = row.currentAdditionalDetails || '';
+          // Only include if we're actually filling something new
+          const filling = (!row.currentCategory && cat) || (!row.currentReceiptLoc && receipt) || (!row.currentGrantSource && grant);
+          return filling ? { rowNumber: row.rowNumber, category: cat, description: desc, receiptLoc: receipt, grantSource: grant, grantDetail: grantDet, additionalDetails: addl } : null;
+        })
+        .filter(Boolean);
 
       let filled = 0;
       let remaining = rows.length;
@@ -2096,7 +2097,7 @@ function CreditCardPanel({ emailInfo, onClose, showToast }) {
         <div style={cardStyle}>
           <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 12 }}>✅ Review in Spreadsheet</div>
           {reviewRows && (() => {
-            const filled = reviewRows.filter(r => r.confidence === 'high' || r.confidence === 'medium' || r.confidence === 'heuristic').length;
+            const filled = reviewRows.filter(r => (!r.currentCategory && r.suggestedCategory) || (!r.currentReceiptLoc && r.suggestedReceiptLoc) || (!r.currentGrantSource && r.suggestedGrantSource)).length;
             const remaining = reviewRows.length - filled;
             return (
               <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 16, lineHeight: 1.8 }}>
