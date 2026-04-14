@@ -200,8 +200,8 @@ const CATEGORIES = [
   { id: "marketing", label: "Marketing", color: "#C44A8B", bg: "#FBE8F3" },
 ];
 
-// Fill in real email addresses here
-const TEAM = [
+// Default team — overridden by user-configured team in localStorage
+const DEFAULT_TEAM = [
   { name: "Laura Lavid", initials: "LL", email: "laura@freshfoodconnect.org", meetingStyle: "notes", docName: "Laura & Kayla 1:1" },
   { name: "Gretchen Roberts", initials: "GR", email: "gretchen@freshfoodconnect.org", meetingStyle: "notes", docName: "Gretchen & Kayla 1:1" },
   { name: "Carmen Alcantara", initials: "CA", email: "carmen@freshfoodconnect.org", meetingStyle: "email-chat" },
@@ -209,6 +209,8 @@ const TEAM = [
   { name: "Debbie Nash", initials: "DN", email: "dnash@freshfoodconnect.org", meetingStyle: "email" },
   { name: "Brittany", initials: "BR", email: "brittany@freshfoodconnect.org", meetingStyle: "email-doc", docName: "FFC & PE Grants Meeting Notes" },
 ];
+// Mutable reference — set from state in the main component
+let TEAM = DEFAULT_TEAM;
 
 // ── Email action button configuration (#90) ────────────────────────────────────
 const EMAIL_ACTION_BUTTONS = [
@@ -2723,6 +2725,39 @@ export default function Home() {
   const [ccAllocPanel, setCcAllocPanel] = useState(false);
   const [ccAllocDismissed, setCcAllocDismissed] = useState(false);
   const [aiPrep, setAiPrep] = useState({}); // eventId → { loading, text, error }
+
+  // ── Dashboard layout — configurable sections ──────────────────────────────────
+  const DEFAULT_TODAY_SECTIONS = [
+    { id: "morning-briefing", label: "Morning Briefing", icon: "🌱", width: "full" },
+    { id: "weekly-intelligence", label: "Weekly Intelligence", icon: "📊", width: "full" },
+    { id: "automation-banners", label: "Automation Banners", icon: "⚡", width: "full" },
+    { id: "donation-alerts", label: "Donation Alerts", icon: "💚", width: "full" },
+    { id: "needs-reply-schedule", label: "Email + Schedule", icon: "📧", width: "full" },
+    { id: "grant-deadlines", label: "Grant Deadlines", icon: "🎯", width: "full" },
+    { id: "pipeline-donations", label: "Pipeline + Donations", icon: "💰", width: "full" },
+    { id: "team-this-week", label: "Team This Week", icon: "👥", width: "full" },
+    { id: "team-meeting-agenda", label: "Team Meeting Agenda", icon: "📋", width: "full" },
+    { id: "end-of-day", label: "End of Day", icon: "🌅", width: "full" },
+  ];
+  const [dashLayout, setDashLayout] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('ffc_dashboard_layout'));
+      if (saved?.todaySections) return saved;
+    } catch {}
+    return { todaySections: DEFAULT_TODAY_SECTIONS, teamMembers: null, emailBucketWidths: {} };
+  });
+  const [editMode, setEditMode] = useState(false);
+  const [dragSection, setDragSection] = useState(null);
+  const [dragOverSection, setDragOverSection] = useState(null);
+  useEffect(() => {
+    try { localStorage.setItem('ffc_dashboard_layout', JSON.stringify(dashLayout)); } catch {}
+  }, [dashLayout]);
+  // Team members — use saved or default
+  const activeTeam = dashLayout.teamMembers || DEFAULT_TEAM;
+  TEAM = activeTeam;
+  const [editingTeamMember, setEditingTeamMember] = useState(null); // index or null
+  const [editingTeamData, setEditingTeamData] = useState(null);
+
   const [editingDraft, setEditingDraft] = useState(null); // { id, to, subject, body } or null
   const [draftSaving, setDraftSaving] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -3876,9 +3911,95 @@ export default function Home() {
         {showEventForm && <EventForm event={showEventForm.event || null} prefillFromEmail={showEventForm.prefillFromEmail} contacts={contacts} onSave={(data) => { if (data.eventId) { calendarAction("update", { eventId: data.eventId, event: data }); } else { calendarAction("create", { event: data }); } setShowEventForm(null); }} onCancel={() => setShowEventForm(null)} />}
 
         {/* ═══════════ TODAY TAB ═══════════ */}
-        {tab === "today" && (
+        {tab === "today" && (() => {
+          // Section wrapper — adds drag handles and resize controls in edit mode
+          const SectionWrap = ({ id, children, width }) => {
+            const sectionInfo = dashLayout.todaySections.find(s => s.id === id) || {};
+            const isOver = dragOverSection === id;
+            const isDragging = dragSection === id;
+            return (
+              <div
+                draggable={editMode}
+                onDragStart={e => { if (!editMode) return; setDragSection(id); e.dataTransfer.effectAllowed = 'move'; }}
+                onDragEnd={() => { setDragSection(null); setDragOverSection(null); }}
+                onDragOver={e => { if (!editMode || !dragSection) return; e.preventDefault(); setDragOverSection(id); }}
+                onDrop={() => {
+                  if (!editMode || !dragSection || dragSection === id) return;
+                  setDashLayout(prev => {
+                    const order = [...prev.todaySections];
+                    const fromIdx = order.findIndex(s => s.id === dragSection);
+                    const toIdx = order.findIndex(s => s.id === id);
+                    if (fromIdx === -1 || toIdx === -1) return prev;
+                    const [moved] = order.splice(fromIdx, 1);
+                    order.splice(toIdx, 0, moved);
+                    return { ...prev, todaySections: order };
+                  });
+                  setDragSection(null); setDragOverSection(null);
+                }}
+                style={{
+                  gridColumn: (width || sectionInfo.width || 'full') === 'full' ? '1 / -1' : 'span 1',
+                  opacity: isDragging ? 0.4 : 1,
+                  border: isOver && editMode ? `2px dashed ${T.accent}` : '2px solid transparent',
+                  borderRadius: isOver ? 14 : 0,
+                  transition: 'opacity 0.15s, border 0.15s',
+                  position: 'relative',
+                  cursor: editMode ? 'grab' : 'default',
+                }}>
+                {editMode && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, padding: '4px 8px', background: T.accentBg, borderRadius: 8, border: `1px solid ${T.accent}30` }}>
+                    <span style={{ cursor: 'grab', fontSize: 14 }}>⠿</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: T.accent, flex: 1 }}>{sectionInfo.icon} {sectionInfo.label || id}</span>
+                    <button onClick={() => setDashLayout(prev => ({
+                      ...prev, todaySections: prev.todaySections.map(s => s.id === id ? { ...s, width: s.width === 'half' ? 'full' : 'half' } : s)
+                    }))} style={{ fontSize: 11, padding: '2px 8px', background: T.bg, border: `1px solid ${T.border}`, borderRadius: 4, cursor: 'pointer', color: T.textMuted }}>
+                      {(sectionInfo.width || 'full') === 'full' ? '↔ Half' : '↔ Full'}
+                    </button>
+                    <button onClick={() => setDashLayout(prev => ({
+                      ...prev, todaySections: prev.todaySections.filter(s => s.id !== id)
+                    }))} style={{ fontSize: 11, padding: '2px 8px', background: T.dangerBg, border: `1px solid ${T.danger}30`, borderRadius: 4, cursor: 'pointer', color: T.danger }}>Hide</button>
+                  </div>
+                )}
+                {children}
+              </div>
+            );
+          };
+
+          // Build section content lookup
+          const sectionContent = {};
+          const renderSections = (content) => { content.forEach(([id, jsx]) => { sectionContent[id] = jsx; }); };
+
+          return (
           <div className="tab-content">
-            {/* Morning Briefing */}
+            {/* Edit mode toggle */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: editMode ? 12 : 0 }}>
+              <button onClick={() => setEditMode(e => !e)} style={{
+                padding: '6px 14px', fontSize: 12, fontWeight: 600, borderRadius: 6, cursor: 'pointer',
+                background: editMode ? T.accent : T.bg, color: editMode ? '#fff' : T.textMuted,
+                border: `1px solid ${editMode ? T.accent : T.border}`,
+              }}>{editMode ? '✓ Done Customizing' : '⚙ Customize Layout'}</button>
+            </div>
+            {editMode && (() => {
+              // Show hidden sections that can be re-added
+              const visibleIds = new Set(dashLayout.todaySections.map(s => s.id));
+              const hidden = DEFAULT_TODAY_SECTIONS.filter(s => !visibleIds.has(s.id));
+              return hidden.length > 0 ? (
+                <div style={{ marginBottom: 12, padding: '10px 14px', background: T.bg, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                  <span style={{ fontSize: 12, color: T.textMuted, marginRight: 8 }}>Hidden sections:</span>
+                  {hidden.map(s => (
+                    <button key={s.id} onClick={() => setDashLayout(prev => ({ ...prev, todaySections: [...prev.todaySections, s] }))}
+                      style={{ fontSize: 11, padding: '3px 10px', background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 5, cursor: 'pointer', marginRight: 6 }}>+ {s.icon} {s.label}</button>
+                  ))}
+                </div>
+              ) : null;
+            })()}
+            {/* Render sections in configured order */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 24px' }}>
+            {dashLayout.todaySections.map(section => {
+              const id = section.id;
+              return (
+                <SectionWrap key={id} id={id}>
+            {id === "morning-briefing" && (
+            /* Morning Briefing */
             <div style={{ background: T.accentBg, border: `1px solid ${T.accent}30`, borderLeft: `5px solid ${T.accent}`, borderRadius: 14, padding: "28px 32px", marginBottom: 28 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
                 <LeafIcon size={26} />
@@ -3895,10 +4016,8 @@ export default function Home() {
               </div>
               {digest && <div style={{ marginTop: 12, padding: "12px 16px", background: "rgba(255,255,255,0.7)", borderRadius: 8, fontSize: 15, color: T.text }}>{digest.digest}</div>}
             </div>
-
-            {/* Urgent Box removed per issue #76 */}
-
-            {/* ── Weekly Brief Generator ── */}
+            )}
+            {id === "weekly-intelligence" && (
             <div style={{ background: T.card, border: `1px solid ${T.accentBg}`, borderRadius: 14, padding: "20px 24px", marginBottom: 26 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: weeklyBrief ? 16 : 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -3935,6 +4054,8 @@ export default function Home() {
               )}
             </div>
 
+            )}
+            {id === "automation-banners" && (<>
             {/* Finance review banner — shows when Debbie's details email is in inbox */}
             {debbieDetailsEmail && !financePanel && !dismissedFinanceIds.has(debbieDetailsEmail.id) && (
               <div style={{ background: T.taskAmberBg, border: `2px solid ${T.taskAmberBorder}`, borderRadius: 12, padding: "16px 22px", marginBottom: 22, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
@@ -4007,8 +4128,9 @@ export default function Home() {
               </div>
             )}
 
-            {/* Donation Alerts */}
-            {donationAlerts.length > 0 && (
+            </>)}
+            {id === "donation-alerts" && (
+            donationAlerts.length > 0 ? (
               <div style={{ background: T.calGreenBg, border: `1px solid ${T.calGreenBorder}`, borderLeft: `5px solid ${T.calGreen}`, borderRadius: 14, padding: "20px 26px", marginBottom: 26 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                   <span style={{ fontSize: 22 }}>💚</span>
@@ -4029,9 +4151,9 @@ export default function Home() {
                   );
                 })}
               </div>
+            ) : null
             )}
-
-            {/* Needs Your Reply + Today's Schedule — 2 equal columns (#66: urgent section removed) */}
+            {id === "needs-reply-schedule" && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24 }}>
 
               {/* Needs Your Reply — 1/2 */}
@@ -4140,8 +4262,9 @@ export default function Home() {
 
             </div>
 
-            {/* Grant Deadlines — condensed horizontal bar */}
-            {(() => {
+            )}
+            {id === "grant-deadlines" &&
+            (() => {
               const allGrants = [...grants, ...calendarGrants.filter(cg => !grants.some(g => g.name === cg.name && g.deadline === cg.deadline))].sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
               return (
                 <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "16px 22px", marginBottom: 26 }}>
@@ -4178,8 +4301,7 @@ export default function Home() {
                 </div>
               );
             })()}
-
-            {/* ── Pipeline + Classy side by side ── */}
+            {id === "pipeline-donations" && (
             <div style={{ display: "flex", gap: 20, marginBottom: 26, flexWrap: "wrap" }}>
               {(pipeline.length > 0 || pipelineLoading) && (
                 <div style={{ flex: "1 1 320px", background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "20px 24px" }}>
@@ -4233,8 +4355,9 @@ export default function Home() {
               </div>
             </div>
 
-            {/* ── Team Activity Digest ── */}
-            {(() => {
+            )}
+            {id === "team-this-week" &&
+            (() => {
               const teamActivity = buildTeamActivity(emails, tasks, TEAM);
               const activeUnsorted = teamActivity; // show all team members always
               const active = teamOrder.length
@@ -4374,9 +4497,8 @@ export default function Home() {
                 </div>
               );
             })()}
-
-            {/* ── Team Meeting Agenda ── */}
-            {(() => {
+            {id === "team-meeting-agenda" &&
+            (() => {
               const grouped = groupAgendaItems(agendaItems.filter(a => !a.done));
               const doneItems = agendaItems.filter(a => a.done);
               const teamFirstNames = TEAM.map(t => t.name.split(' ')[0]);
@@ -4445,9 +4567,8 @@ export default function Home() {
                 </div>
               );
             })()}
-
-            {/* End of Day */}
-            {new Date().getHours() >= 16 && (
+            {id === "end-of-day" && (
+            new Date().getHours() >= 16 ? (
               <div style={{ background: T.goldBg, border: `1px solid ${T.taskAmberBorder}`, borderRadius: 12, padding: "20px 24px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                   <span style={{ fontSize: 18 }}>🌅</span><span style={{ fontSize: 17, fontWeight: 700, color: T.taskAmber }}>End of Day Wrap-Up</span>
@@ -4459,9 +4580,14 @@ export default function Home() {
                   <div>⚠️ Overdue: <strong style={{ color: overdueTasks.length > 0 ? T.danger : T.calGreen }}>{overdueTasks.length}</strong></div>
                 </div>
               </div>
+            ) : null
             )}
+                </SectionWrap>
+              );
+            })}
+            </div>
           </div>
-        )}
+        )})()}
 
         {/* ═══════════ EMAILS TAB ═══════════ */}
         {tab === "emails" && (
@@ -4522,6 +4648,7 @@ export default function Home() {
                 const info = BUCKETS[bucket] || { label: bucket, icon: "📧", color: T.textMuted, bg: T.bg, border: T.border };
                 const isOver = dragOverEmailBucket === bucket;
                 const canBatchDelete = ["automated", "calendar-notif", "docs-activity", "classy-recurring", "newsletter", "sales", "fyi-mass"].includes(bucket);
+                const bucketWidth = dashLayout.emailBucketWidths?.[bucket] || 'auto';
                 const filteredBucketEmails = emailFilter.trim() ? searchEmails(bucketEmails, emailFilter) : bucketEmails;
                 const page = bucketPages[bucket] || 0;
                 const totalPages = Math.ceil(filteredBucketEmails.length / PAGE_SIZE);
@@ -4555,6 +4682,7 @@ export default function Home() {
                       borderTop: `4px solid ${info.color}`,
                       borderRadius: 14, padding: 18, minHeight: 120,
                       transition: "all 0.15s",
+                      gridColumn: bucketWidth === 'full' ? '1 / -1' : undefined,
                     }}>
                     {/* Bucket header */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
@@ -4588,6 +4716,8 @@ export default function Home() {
                         </button>
                         <button onClick={() => batchAction("markRead", bucketEmails.map(e => e.id))} style={{ padding: "4px 10px", background: "transparent", color: T.textDim, border: `1px solid ${T.border}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>Read all</button>
                         {canBatchDelete && <button onClick={() => batchAction("trash", visibleEmails.map(e => e.id))} style={{ padding: "4px 10px", background: "transparent", color: T.danger, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>Delete {totalPages > 1 ? "page" : "all"}</button>}
+                        <button onClick={() => setDashLayout(prev => ({ ...prev, emailBucketWidths: { ...prev.emailBucketWidths, [bucket]: bucketWidth === 'full' ? 'auto' : 'full' } }))}
+                          style={{ padding: "4px 10px", background: "transparent", color: T.textDim, border: `1px solid ${T.border}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>{bucketWidth === 'full' ? '↕' : '↔'}</button>
                       </div>
                     </div>
                     {/* Email cards */}
@@ -5212,6 +5342,83 @@ export default function Home() {
                   style={{ marginTop: 14, padding: "8px 16px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
                   ↺ Reset to defaults
                 </button>
+              </div>
+
+              {/* Team Members */}
+              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "24px 28px", marginBottom: 20 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 6 }}>👥 Team Members</div>
+                <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 18 }}>Manage your team for the "Team This Week" section and automations.</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+                  {activeTeam.map((m, idx) => (
+                    <div key={m.email || idx}>
+                      {editingTeamMember === idx ? (
+                        <div style={{ padding: '12px 14px', background: T.bg, borderRadius: 8, border: `1px solid ${T.accent}`, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                            <div>
+                              <label style={{ fontSize: 11, color: T.textMuted, fontWeight: 600 }}>Name</label>
+                              <input value={editingTeamData?.name || ''} onChange={e => setEditingTeamData(d => ({ ...d, name: e.target.value }))}
+                                style={{ width: '100%', padding: '6px 8px', border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, color: T.text, background: T.surface, boxSizing: 'border-box' }} />
+                            </div>
+                            <div>
+                              <label style={{ fontSize: 11, color: T.textMuted, fontWeight: 600 }}>Email</label>
+                              <input value={editingTeamData?.email || ''} onChange={e => setEditingTeamData(d => ({ ...d, email: e.target.value }))}
+                                style={{ width: '100%', padding: '6px 8px', border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, color: T.text, background: T.surface, boxSizing: 'border-box' }} />
+                            </div>
+                            <div>
+                              <label style={{ fontSize: 11, color: T.textMuted, fontWeight: 600 }}>Initials</label>
+                              <input value={editingTeamData?.initials || ''} onChange={e => setEditingTeamData(d => ({ ...d, initials: e.target.value }))}
+                                style={{ width: '100%', padding: '6px 8px', border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, color: T.text, background: T.surface, boxSizing: 'border-box' }} />
+                            </div>
+                            <div>
+                              <label style={{ fontSize: 11, color: T.textMuted, fontWeight: 600 }}>Style</label>
+                              <select value={editingTeamData?.meetingStyle || 'email'} onChange={e => setEditingTeamData(d => ({ ...d, meetingStyle: e.target.value }))}
+                                style={{ width: '100%', padding: '6px 8px', border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, color: T.text, background: T.surface, boxSizing: 'border-box' }}>
+                                <option value="notes">Notes (Google Doc)</option>
+                                <option value="email">Email only</option>
+                                <option value="email-chat">Email + Chat</option>
+                                <option value="email-doc">Email + Doc</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button onClick={() => {
+                              if (!editingTeamData?.name || !editingTeamData?.email) return;
+                              const updated = [...activeTeam];
+                              updated[idx] = { ...editingTeamData, initials: editingTeamData.initials || editingTeamData.name.split(/\s+/).map(w => w[0]).join('').toUpperCase() };
+                              setDashLayout(prev => ({ ...prev, teamMembers: updated }));
+                              setEditingTeamMember(null); setEditingTeamData(null);
+                            }} style={{ padding: '6px 14px', background: T.accent, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Save</button>
+                            <button onClick={() => { setEditingTeamMember(null); setEditingTeamData(null); }} style={{ padding: '6px 14px', background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: T.bg, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: senderAvatar(m.name).color, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 11, flexShrink: 0 }}>{m.initials}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{m.name}</div>
+                            <div style={{ fontSize: 12, color: T.textMuted }}>{m.email} · {m.meetingStyle}</div>
+                          </div>
+                          <button onClick={() => { setEditingTeamMember(idx); setEditingTeamData({ ...m }); }} style={{ padding: '4px 10px', background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 5, cursor: 'pointer', fontSize: 12 }}>Edit</button>
+                          <button onClick={() => { if (!confirm(`Remove ${m.name}?`)) return; const updated = activeTeam.filter((_, i) => i !== idx); setDashLayout(prev => ({ ...prev, teamMembers: updated })); }}
+                            style={{ padding: '4px 10px', background: T.dangerBg, color: T.danger, border: `1px solid ${T.danger}30`, borderRadius: 5, cursor: 'pointer', fontSize: 12 }}>Remove</button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => {
+                    const newMember = { name: '', email: '', initials: '', meetingStyle: 'email' };
+                    const updated = [...activeTeam, newMember];
+                    setDashLayout(prev => ({ ...prev, teamMembers: updated }));
+                    setEditingTeamMember(updated.length - 1);
+                    setEditingTeamData(newMember);
+                  }} style={{ padding: '8px 16px', background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 7, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>+ Add Team Member</button>
+                  {dashLayout.teamMembers && (
+                    <button onClick={() => { setDashLayout(prev => ({ ...prev, teamMembers: null })); showToast('Reset to defaults'); }}
+                      style={{ padding: '8px 16px', background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: 'pointer', fontSize: 13 }}>↺ Reset to defaults</button>
+                  )}
+                </div>
               </div>
 
               {/* Data */}
