@@ -758,3 +758,21 @@ These features were implemented in a hands-on session with Kayla, not via the au
 **Self-configurable UI:** All hardcoded config (TEAM, CATEGORIES, workflows, doc names) should be editable from the CC Settings. This is the foundation for productization — any nonprofit ED should be able to set up their own version without touching code. Next priority: editable Team This Week (add/remove/reorder members, edit names/emails/doc destinations from Settings).
 
 **Tests:** 831 total passing. Test-to-code ratio maintained.
+
+---
+
+## Sprint 11 — Customizable Dashboard (April 2026) ✅ COMPLETE
+*Shipped: 2026-04-14 | Direct implementation by Kayla + Claude*
+
+### What shipped
+
+| Feature | What shipped |
+|---|---|
+| Dashboard layout engine | Configurable section order via drag-and-drop on the today tab. "Customize Layout" edit mode toggle. Sections can be hidden and re-added. |
+| Section resize | Full/half width toggle per section. Half-width sections sit side by side in a 2-column CSS grid. |
+| Team member editor | Full CRUD for team members in Settings: add, edit, remove, change name/email/initials/meetingStyle. Overrides DEFAULT_TEAM via localStorage. |
+| Email bucket resize | ↔/↕ toggle on each email bucket header to go full-width or auto-width. |
+| Doc search + link | Team member cards have "Link Google Doc" with inline Drive search. Linked docs persist in localStorage, notes go by doc ID (no search). |
+| All persisted to localStorage | `ffc_dashboard_layout` stores section order, widths, team members, email bucket widths. |
+
+**Architecture:** SectionWrap component wraps each today-tab section with drag/resize/hide controls in edit mode. Sections rendered via `.map()` over `dashLayout.todaySections` with `{id === "xxx" && (...)}` pattern — existing JSX stays intact, just wrapped.
