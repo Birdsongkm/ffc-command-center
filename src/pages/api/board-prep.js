@@ -154,26 +154,87 @@ function extractBoardAgendaItems(text) {
   return items;
 }
 
-function buildBoardEmailBody(meetingDateStr, meetingTimeStr, boardReportUrl, financialsUrl, agendaUrl) {
+// Read the agenda doc's full text and determine who's next in both rotations.
+// Rotation lists look like: "Note-taker rotation: Jack, Terrance, James, ..."
+// Past meeting entries look like: "Note-taker: Jack Fritzinger   |   Intro: Terrance Grady"
+// Since new sections are prepended, the most recent past meeting is the first match found.
+function detectNextInRotation(fullText) {
+  if (!fullText) return { noteTaker: null, introPerson: null };
+
+  // Step 1: extract rotation lists (lines with commas after the colon, 2+ names)
+  let noteTakerList = [];
+  let introList = [];
+  for (const line of fullText.split('\n')) {
+    const trimmed = line.trim();
+    const colonIdx = trimmed.indexOf(':');
+    if (colonIdx === -1 || !trimmed.includes(',')) continue;
+    const label = trimmed.slice(0, colonIdx).toLowerCase();
+    const names = trimmed.slice(colonIdx + 1).split(',').map(s => s.trim()).filter(Boolean);
+    if (names.length < 2) continue;
+    if (/note.?taker|notetaker/.test(label)) noteTakerList = names;
+    else if (/^intro/.test(label)) introList = names;
+  }
+
+  // Step 2: find the most recent single-name past entry (first match = most recent due to prepend order)
+  let lastNoteTaker = null;
+  let lastIntroPerson = null;
+  for (const m of fullText.matchAll(/note-?taker:\s*([^,|\n\r]+)/gi)) {
+    const val = m[1].trim();
+    if (val && !val.includes(',')) { lastNoteTaker = val; break; }
+  }
+  for (const m of fullText.matchAll(/intro:\s*([^,|\n\r]+)/gi)) {
+    const val = m[1].trim();
+    if (val && !val.includes(',')) { lastIntroPerson = val; break; }
+  }
+
+  function nextAfter(list, last) {
+    if (!list.length) return null;
+    if (!last) return list[0];
+    const lastFirst = last.split(' ')[0].toLowerCase();
+    let idx = list.findIndex(n => n.toLowerCase() === last.toLowerCase());
+    if (idx === -1) idx = list.findIndex(n => n.split(' ')[0].toLowerCase() === lastFirst);
+    if (idx === -1) return null;
+    return list[(idx + 1) % list.length];
+  }
+
+  return {
+    noteTaker: nextAfter(noteTakerList, lastNoteTaker),
+    introPerson: nextAfter(introList, lastIntroPerson),
+  };
+}
+
+function buildBoardEmailHtml(meetingDateStr, meetingTimeStr, boardReportUrl, financialsUrl, agendaUrl, noteTaker, introPerson) {
   const d = parseDateLocal(meetingDateStr);
   const dayName = DAY_NAMES[d.getDay()];
   const month = MONTH_NAMES[d.getMonth()];
   const date = d.getDate();
-  return `Dear board members,
 
-I am looking forward to our meeting this ${dayName}, ${month} ${date} at ${meetingTimeStr}. Please review all materials in advance.
+  const reportLink = boardReportUrl
+    ? `<a href="${boardReportUrl}">Board Report</a>`
+    : 'Board Report (link to follow)';
+  const financialsLink = financialsUrl
+    ? `<a href="${financialsUrl}">Financial Statements</a>`
+    : 'Financial Statements (link to follow)';
+  const agendaLink = agendaUrl
+    ? `<a href="${agendaUrl}">Meeting Agenda</a>`
+    : 'Meeting Agenda (link to follow)';
 
-   - Board Report
-   ${boardReportUrl}
+  const noteFirst = noteTaker ? noteTaker.split(' ')[0] : null;
+  const introFirst = introPerson ? introPerson.split(' ')[0] : null;
+  const assignLine = (noteFirst && introFirst)
+    ? `<p>${noteFirst}, can you take notes, and ${introFirst} can you lead our intro?</p>`
+    : (noteFirst ? `<p>${noteFirst}, can you take notes?</p>` : '');
 
-   - Financial Statements
-   ${financialsUrl}
-
-   - Meeting Agenda
-   ${agendaUrl}
-
-Thank you all for everything you do!
-Kayla`;
+  return `<p>Dear board members,</p>
+<p>I am looking forward to our meeting this ${dayName}, ${month} ${date} at ${meetingTimeStr}. Please review all materials in advance.</p>
+<ul>
+<li>📄 ${reportLink}</li>
+<li>📊 ${financialsLink}</li>
+<li>📋 ${agendaLink}</li>
+</ul>
+${assignLine}
+<p>Thank you all for everything you do!</p>
+<p>Kayla</p>`;
 }
 
 // Search Drive for a file by name (supports all drives including shared)
@@ -233,31 +294,13 @@ async function highlightDocGrey(token, docId) {
   const endIndex = (lastEl.endIndex || 2) - 1; // exclude final newline
   if (endIndex <= 1) return;
 
-  const r = await fetch(
-    `https://docs.googleapis.com/v1/documents/${docId}:batchUpdate`,
-    {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        requests: [{
-          updateTextStyle: {
-            range: { startIndex: 1, endIndex },
-            textStyle: {
-              backgroundColor: {
-                color: { rgbColor: { red: 0.851, green: 0.851, blue: 0.851 } },
-              },
-            },
-            fields: 'backgroundColor',
-          },
-        }],
-      }),
-    }
-  );
-  if (!r.ok) {
-    const err = await r.json().catch(() => ({}));
-    console.error('board-prep:highlightDocGrey', { docId, status: r.status, message: err.error?.message });
-    throw new Error(`Failed to highlight doc: ${err.error?.message || r.status}`);
-  }
+  await docsApiUpdate(token, docId, [{
+    updateTextStyle: {
+      range: { startIndex: 1, endIndex },
+      textStyle: { backgroundColor: { color: { rgbColor: { red: 0.851, green: 0.851, blue: 0.851 } } } },
+      fields: 'backgroundColor',
+    },
+  }]);
 }
 
 // Extract plain text from Google Docs body
@@ -281,23 +324,78 @@ function extractDocPlainText(body) {
   return parts.join('');
 }
 
-// Insert text at the beginning of a Google Doc (index 1)
-async function prependDocText(token, docId, text) {
+// Shared Docs batchUpdate helper
+async function docsApiUpdate(token, docId, requests) {
   const r = await fetch(
     `https://docs.googleapis.com/v1/documents/${docId}:batchUpdate`,
     {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        requests: [{ insertText: { location: { index: 1 }, text } }],
-      }),
+      body: JSON.stringify({ requests }),
     }
   );
   if (!r.ok) {
     const err = await r.json().catch(() => ({}));
-    console.error('board-prep:prependDocText', { docId, status: r.status, message: err.error?.message });
-    throw new Error(`Failed to prepend to doc: ${err.error?.message || r.status}`);
+    console.error('board-prep:docsApiUpdate', { docId, status: r.status, message: err.error?.message });
+    throw new Error(`Docs batchUpdate failed: ${err.error?.message || r.status}`);
   }
+}
+
+// Find the last table element in a doc body content array
+function findLastTable(bodyContent) {
+  let last = null;
+  for (const el of bodyContent || []) { if (el.table) last = el; }
+  return last;
+}
+
+// Find the first table element in a doc body content array
+function findFirstTable(bodyContent) {
+  for (const el of bodyContent || []) { if (el.table) return el; }
+  return null;
+}
+
+// Extract column count from a table element
+function getTableColumnCount(tableEl) {
+  return tableEl?.table?.tableRows?.[0]?.tableCells?.length || 3;
+}
+
+// Extract the header row strings from a table element's first row
+function getTableHeaderRow(tableEl) {
+  const firstRow = tableEl?.table?.tableRows?.[0];
+  if (!firstRow) return ['Agenda Item', 'Time', 'Presenter'];
+  return (firstRow.tableCells || []).map(cell => {
+    const texts = [];
+    (cell.content || []).forEach(el => {
+      (el.paragraph?.elements || []).forEach(e => {
+        if (e.textRun?.content) texts.push(e.textRun.content);
+      });
+    });
+    return texts.join('').replace(/\n/g, '').trim();
+  });
+}
+
+// Build cell-population batchUpdate requests in reverse doc order so index shifts don't collide.
+// tableObj is the raw table element from the Docs API response.
+// tableData is a 2D array of strings indexed [row][col].
+function buildTablePopulateRequests(tableObj, tableData) {
+  const requests = [];
+  const rows = tableObj?.table?.tableRows || [];
+  for (let r = rows.length - 1; r >= 0; r--) {
+    const cells = rows[r]?.tableCells || [];
+    for (let c = cells.length - 1; c >= 0; c--) {
+      const text = tableData[r]?.[c] || '';
+      if (!text) continue;
+      const startIndex = cells[c]?.content?.[0]?.startIndex;
+      if (startIndex == null) continue;
+      requests.push({ insertText: { location: { index: startIndex }, text } });
+    }
+  }
+  return requests;
+}
+
+// Insert text at the beginning of a Google Doc (index 1)
+async function prependDocText(token, docId, text) {
+  await docsApiUpdate(token, docId, [{ insertText: { location: { index: 1 }, text } }]);
 }
 
 // Create a Gmail draft (html overrides body for HTML emails)
@@ -343,15 +441,27 @@ async function handleGet(token) {
     driveSearch(token, 'FFC National Board Meeting Agenda', 2),
   ]);
 
-  // Most recent board report = first result (sorted by modifiedTime desc)
   const latestBoardReport = boardReports[0] || null;
   const jack1on1 = jack1on1Files[0] || null;
   const agendaDoc = agendaFiles[0] || null;
 
-  return { meeting, latestBoardReport, jack1on1, agendaDoc };
+  // Also read 1:1 doc now so the panel can show items immediately
+  let boardAgendaItems = [];
+  if (jack1on1) {
+    try {
+      const doc = await readDoc(token, jack1on1.id);
+      const fullText = extractDocPlainText(doc.body);
+      const recentText = fullText.length > 3000 ? fullText.slice(-3000) : fullText;
+      boardAgendaItems = extractBoardAgendaItems(recentText);
+    } catch (e) {
+      console.error('board-prep:get:read1on1', { message: e.message });
+    }
+  }
+
+  return { meeting, latestBoardReport, jack1on1, agendaDoc, boardAgendaItems };
 }
 
-async function handlePost(token, { meetingLabel, year, boardMeetingDate, financialsQuery }) {
+async function handlePost(token, { meetingLabel, year, boardMeetingDate, financialsQuery, noteTaker, introPerson, agendaItems }) {
   if (!meetingLabel || !year || !boardMeetingDate) {
     throw new Error('Missing required fields: meetingLabel, year, boardMeetingDate');
   }
@@ -361,21 +471,19 @@ async function handlePost(token, { meetingLabel, year, boardMeetingDate, financi
   const deadlineDay = deadline.getDate();
   const deadlineStr = `Thursday, ${deadlineMonth} ${deadlineDay}`;
   const m = deadline.getMonth() + 1;
-  const d = deadline.getDate();
-  const staffSubject = `${meetingLabel} Board Report (Due ${m}/${d})`;
+  const d2 = deadline.getDate();
+  const staffSubject = `${meetingLabel} Board Report (Due ${m}/${d2})`;
 
   const results = {
     boardReportUrl: null,
     boardReportName: null,
     staffDraftId: null,
-    staffDraftBody: null,  // plain text for inline preview
     boardDraftId: null,
-    boardDraftBody: null,
-    jack1on1Text: null,
-    boardAgendaItems: [],  // extracted bullet items for confirmation
     agendaDocUrl: null,
     agendaDocId: null,
     agendaRotationText: null,
+    suggestedNoteTaker: null,
+    suggestedIntroPerson: null,
     financialsUrl: null,
     errors: [],
   };
@@ -390,31 +498,13 @@ async function handlePost(token, { meetingLabel, year, boardMeetingDate, financi
     const newDocId = copied.id;
     results.boardReportUrl = `https://docs.google.com/document/d/${newDocId}/edit`;
     results.boardReportName = newName;
-    // Highlight all text grey
     await highlightDocGrey(token, newDocId);
   } catch (e) {
     console.error('board-prep:copyReport', { message: e.message });
     results.errors.push(`Board report copy failed: ${e.message}`);
   }
 
-  // 2. Read Jack 1:1 doc — extract board-meeting agenda items
-  try {
-    const files = await driveSearch(token, 'Jack & Kayla 1:1s 2026', 2);
-    if (files.length) {
-      const doc = await readDoc(token, files[0].id);
-      const fullText = extractDocPlainText(doc.body);
-      // Keep last ~3000 chars (most recent meetings) for context display
-      results.jack1on1Text = fullText.length > 3000 ? fullText.slice(-3000) : fullText;
-      // Extract board-meeting bullet items from the most recent meeting section
-      const recentText = fullText.length > 3000 ? fullText.slice(-3000) : fullText;
-      results.boardAgendaItems = extractBoardAgendaItems(recentText);
-    }
-  } catch (e) {
-    console.error('board-prep:read1on1', { message: e.message });
-    results.errors.push(`Jack 1:1 read failed: ${e.message}`);
-  }
-
-  // 3. Read agenda doc — return rotation section for review
+  // 2. Read agenda doc — detect rotation, return ID + rotation text for the "Add to Agenda Doc" step
   try {
     const files = await driveSearch(token, 'FFC National Board Meeting Agenda', 2);
     if (files.length) {
@@ -422,7 +512,10 @@ async function handlePost(token, { meetingLabel, year, boardMeetingDate, financi
       results.agendaDocId = files[0].id;
       const doc = await readDoc(token, files[0].id);
       const fullText = extractDocPlainText(doc.body);
-      // Return first 1500 chars — rotation is typically at the top
+      // Use full text for rotation detection; cap display text for the UI collapsible
+      const rotation = detectNextInRotation(fullText);
+      results.suggestedNoteTaker = rotation.noteTaker;
+      results.suggestedIntroPerson = rotation.introPerson;
       results.agendaRotationText = fullText.length > 1500 ? fullText.slice(0, 1500) : fullText;
     }
   } catch (e) {
@@ -430,11 +523,10 @@ async function handlePost(token, { meetingLabel, year, boardMeetingDate, financi
     results.errors.push(`Agenda doc read failed: ${e.message}`);
   }
 
-  // 4. Find financials file
+  // 3. Find financials file
   try {
     const query = financialsQuery || 'Financials';
     const files = await driveSearch(token, query, 10);
-    // Exclude "Details" files per user instruction
     const match = files.find(f => !f.name.toLowerCase().includes('detail'));
     if (match) results.financialsUrl = match.webViewLink;
   } catch (e) {
@@ -442,36 +534,34 @@ async function handlePost(token, { meetingLabel, year, boardMeetingDate, financi
     results.errors.push(`Financials search failed: ${e.message}`);
   }
 
-  // 5. Create staff email draft (HTML so doc link is clickable, not a bare URL)
+  // 4. Create staff email draft
   if (results.boardReportUrl) {
     try {
       const staffTo = 'Laura Lavid <laura@freshfoodconnect.org>, Carmen Alcantara <carmen@freshfoodconnect.org>, Gretchen Roberts <gretchen@freshfoodconnect.org>, Adjoa Kittoe <adjoa@freshfoodconnect.org>';
       const docName = results.boardReportName || `${meetingLabel} ${year}- Board Report- FFC`;
       const staffHtml = buildStaffEmailHtml(meetingLabel, results.boardReportUrl, docName, deadlineStr);
-      const staffPlain = buildStaffEmailPlainText(meetingLabel, results.boardReportUrl, docName, deadlineStr);
       results.staffDraftId = await createDraft(token, { to: staffTo, subject: staffSubject, html: staffHtml });
-      results.staffDraftBody = staffPlain; // for inline preview in CC
     } catch (e) {
       console.error('board-prep:staffDraft', { message: e.message });
       results.errors.push(`Staff draft failed: ${e.message}`);
     }
   }
 
-  // 6. Create board email draft (placeholder URLs — Kayla fills in after reviewing)
+  // 5. Create board email draft (HTML with hyperlinks + note-taker/intro assignment)
   try {
     const boardTo = 'Jack Fritzinger <jackfritzinger@gmail.com>, Terrance Grady <tbgrady21@gmail.com>, Terrance Grady <tgrady@chfainfo.com>, James Iacino <James.iacino@gmail.com>, Bill Johnson <dubrie@gmail.com>, Benjamin Weinberg <bweinberg1222@gmail.com>, Kim-Ashleigh Mostert-Freiberg <kimash.mostert@gmail.com>, Jada Mclean <shanice.jada@gmail.com>, Jada McLean <jada@groflo.io>';
     const boardMeetingTime = '2:30 PM MT';
-    const d = new Date(boardMeetingDate);
-    const boardSubject = `Materials to Review- Board Meeting ${DAY_NAMES[d.getDay()]}`;
-    const boardBody = buildBoardEmailBody(
+    const boardSubject = `Materials to Review- Board Meeting ${DAY_NAMES[parseDateLocal(boardMeetingDate).getDay()]}`;
+    const boardHtml = buildBoardEmailHtml(
       boardMeetingDate,
       boardMeetingTime,
-      results.boardReportUrl || '[Board Report URL — add after staff completes]',
-      results.financialsUrl || '[Financials URL — add link]',
-      results.agendaDocUrl || '[Agenda URL — add after updating agenda doc]'
+      results.boardReportUrl,
+      results.financialsUrl,
+      results.agendaDocUrl,
+      noteTaker || '',
+      introPerson || ''
     );
-    results.boardDraftId = await createDraft(token, { to: boardTo, subject: boardSubject, body: boardBody });
-    results.boardDraftBody = boardBody;
+    results.boardDraftId = await createDraft(token, { to: boardTo, subject: boardSubject, html: boardHtml });
   } catch (e) {
     console.error('board-prep:boardDraft', { message: e.message });
     results.errors.push(`Board draft failed: ${e.message}`);
@@ -480,7 +570,7 @@ async function handlePost(token, { meetingLabel, year, boardMeetingDate, financi
   return results;
 }
 
-async function handleInsertAgendaSection(token, { agendaDocId, boardMeetingDate, noteTaker, agendaItems }) {
+async function handleInsertAgendaSection(token, { agendaDocId, boardMeetingDate, noteTaker, introPerson, agendaItems }) {
   if (!agendaDocId || !boardMeetingDate) {
     throw new Error('Missing required fields: agendaDocId, boardMeetingDate');
   }
@@ -489,23 +579,58 @@ async function handleInsertAgendaSection(token, { agendaDocId, boardMeetingDate,
   const day = d.getDate();
   const year = d.getFullYear();
   const dayName = DAY_NAMES[d.getDay()];
+  const confirmedItems = (agendaItems || []).filter(Boolean);
 
-  const itemLines = (agendaItems || []).map(item => `• ${item}`).join('\n');
-  const separator = '─'.repeat(48);
-  const sectionText = [
-    `${separator}`,
-    `${month} ${year} FFC Board Meeting — ${dayName}, ${month} ${day}, ${year}`,
-    `Note-taker: ${noteTaker || 'TBD'}`,
-    '',
-    'AGENDA ITEMS:',
-    itemLines || '• (none confirmed)',
-    '',
-    separator,
-    '',
-  ].join('\n');
+  // Step 1: Read doc to copy last table's column structure
+  const doc = await readDoc(token, agendaDocId);
+  const bodyContent = doc.body?.content || [];
+  const lastTable = findLastTable(bodyContent);
+  const numCols = getTableColumnCount(lastTable);
+  const headerRow = lastTable ? getTableHeaderRow(lastTable) : ['Agenda Item', 'Time', 'Presenter'];
 
-  await prependDocText(token, agendaDocId, sectionText);
-  return { success: true };
+  // Build data rows: standard bookends + confirmed items (10 min each)
+  const dataRows = [
+    ['Welcome & Introductions', '5 min', introPerson || ''],
+    ['Call to Order & Approval of Minutes', '5 min', ''],
+    ...confirmedItems.map(item => [item, '10 min', '']),
+    ['Financial Update', '10 min', ''],
+    ['Other Business', '5 min', ''],
+    ['Adjourn', '', ''],
+  ].map(row => row.slice(0, numCols));
+
+  const numRows = 1 + dataRows.length; // header + data
+  const tableData = [headerRow.slice(0, numCols), ...dataRows];
+
+  // Step 2: Build header text (separator + date + rotation line)
+  const rotationLine = [
+    noteTaker ? `Note-taker: ${noteTaker}` : '',
+    introPerson ? `Intro: ${introPerson}` : '',
+  ].filter(Boolean).join('   |   ');
+  const separator = '─'.repeat(50);
+  const headerText = `${separator}\n${month} ${year} FFC Board Meeting — ${dayName}, ${month} ${day}, ${year}\n${rotationLine}\n\n`;
+
+  // Step 3: Insert table at index 1, then insert header text at index 1 (goes before table).
+  // The Docs API applies requests in order — inserting text at 1 after the table pushes the table down.
+  await docsApiUpdate(token, agendaDocId, [
+    { insertTable: { rows: numRows, columns: numCols, location: { index: 1 } } },
+    { insertText: { location: { index: 1 }, text: headerText } },
+  ]);
+
+  // Step 4: Re-read to get actual cell indices of the new table (now the first table in the doc)
+  const doc2 = await readDoc(token, agendaDocId);
+  const newTableEl = findFirstTable(doc2.body?.content || []);
+  if (!newTableEl) {
+    console.error('board-prep:insertAgendaSection', { message: 'New table not found after insert' });
+    return { success: true, agendaDocUrl: `https://docs.google.com/document/d/${agendaDocId}/edit` };
+  }
+
+  // Step 5: Populate cells in reverse order to avoid index shifts
+  const populateRequests = buildTablePopulateRequests(newTableEl, tableData);
+  if (populateRequests.length) {
+    await docsApiUpdate(token, agendaDocId, populateRequests);
+  }
+
+  return { success: true, agendaDocUrl: `https://docs.google.com/document/d/${agendaDocId}/edit` };
 }
 
 export default async function handler(req, res) {
@@ -519,11 +644,11 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const { action } = req.body;
       if (action === 'insertAgendaSection') {
-        const { agendaDocId, boardMeetingDate, noteTaker, agendaItems } = req.body;
-        return res.status(200).json(await handleInsertAgendaSection(token, { agendaDocId, boardMeetingDate, noteTaker, agendaItems }));
+        const { agendaDocId, boardMeetingDate, noteTaker, introPerson, agendaItems } = req.body;
+        return res.status(200).json(await handleInsertAgendaSection(token, { agendaDocId, boardMeetingDate, noteTaker, introPerson, agendaItems }));
       }
-      const { meetingLabel, year, boardMeetingDate, financialsQuery } = req.body;
-      return res.status(200).json(await handlePost(token, { meetingLabel, year, boardMeetingDate, financialsQuery }));
+      const { meetingLabel, year, boardMeetingDate, financialsQuery, noteTaker, introPerson, agendaItems } = req.body;
+      return res.status(200).json(await handlePost(token, { meetingLabel, year, boardMeetingDate, financialsQuery, noteTaker, introPerson, agendaItems }));
     }
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {
