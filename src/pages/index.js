@@ -2753,6 +2753,28 @@ export default function Home() {
   useEffect(() => {
     try { localStorage.setItem('ffc_dashboard_layout', JSON.stringify(dashLayout)); } catch {}
   }, [dashLayout]);
+
+  // Panel resize via drag handles — global mouse listeners
+  useEffect(() => {
+    const onMouseMove = (e) => {
+      const r = resizeRef.current;
+      if (!r) return;
+      e.preventDefault();
+      const dx = e.clientX - r.startX;
+      const dy = e.clientY - r.startY;
+      const newW = r.dir === 'right' || r.dir === 'both' ? Math.max(280, r.startW + dx) : r.startW;
+      const newH = r.dir === 'bottom' || r.dir === 'both' ? Math.max(100, r.startH + dy) : r.startH;
+      setDashLayout(prev => ({
+        ...prev,
+        panelSizes: { ...prev.panelSizes, [r.key]: { width: newW, height: newH } },
+      }));
+    };
+    const onMouseUp = () => { resizeRef.current = null; document.body.style.cursor = ''; document.body.style.userSelect = ''; };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => { window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp); };
+  }, []);
+
   // Team members — use saved or default
   const activeTeam = dashLayout.teamMembers || DEFAULT_TEAM;
   TEAM = activeTeam;
@@ -2767,6 +2789,7 @@ export default function Home() {
   const [dragOverEmailBucket, setDragOverEmailBucket] = useState(null);
   const [dragReorderBucket, setDragReorderBucket] = useState(null);
   const [dragOverReorderBucket, setDragOverReorderBucket] = useState(null);
+  const resizeRef = useRef(null); // { key, dir, startX, startY, startW, startH }
   const [emailBucketOverrides, setEmailBucketOverrides] = useState({});
   const [bucketLabels, setBucketLabels] = useState(() => {
     try { return JSON.parse(localStorage.getItem("ffc_bucket_labels") || "{}"); } catch { return {}; }
@@ -2896,6 +2919,15 @@ export default function Home() {
     try { localStorage.setItem('ffc_email_action_config', JSON.stringify(emailActionConfig)); } catch {}
   }, [emailActionConfig]);
   const showToast = useCallback((msg, onUndo) => setToast({ message: msg, onUndo: onUndo || null }), []);
+
+  // Start resizing a panel. `key` identifies the panel in dashLayout.panelSizes, `dir` is 'right', 'bottom', or 'both'.
+  const startResize = useCallback((e, key, dir, el) => {
+    e.preventDefault();
+    const rect = el.getBoundingClientRect();
+    resizeRef.current = { key, dir, startX: e.clientX, startY: e.clientY, startW: rect.width, startH: rect.height };
+    document.body.style.cursor = dir === 'right' ? 'col-resize' : dir === 'bottom' ? 'row-resize' : 'nwse-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
 
   // Check and send due scheduled emails every 60s
   useEffect(() => {
@@ -3919,6 +3951,7 @@ export default function Home() {
           // Section wrapper — adds drag handles and resize controls in edit mode
           const SectionWrap = ({ id, children, width }) => {
             const sectionInfo = dashLayout.todaySections.find(s => s.id === id) || {};
+            const sectionPanelSize = dashLayout.panelSizes?.['section-' + id];
             const isOver = dragOverSection === id;
             const isDragging = dragSection === id;
             return (
@@ -3945,9 +3978,11 @@ export default function Home() {
                   opacity: isDragging ? 0.4 : 1,
                   border: isOver && editMode ? `2px dashed ${T.accent}` : '2px solid transparent',
                   borderRadius: isOver ? 14 : 0,
-                  transition: 'opacity 0.15s, border 0.15s',
+                  transition: resizeRef.current ? 'none' : 'opacity 0.15s, border 0.15s',
                   position: 'relative',
                   cursor: editMode ? 'grab' : 'default',
+                  minHeight: sectionPanelSize?.height || undefined,
+                  overflow: 'hidden',
                 }}>
                 {editMode && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, padding: '4px 8px', background: T.accentBg, borderRadius: 8, border: `1px solid ${T.accent}30` }}>
@@ -3964,6 +3999,11 @@ export default function Home() {
                   </div>
                 )}
                 {children}
+                {/* Section resize handle */}
+                <div onMouseDown={e => startResize(e, 'section-' + id, 'bottom', e.currentTarget.parentElement)}
+                  style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 6, cursor: "row-resize", background: "transparent" }}
+                  onMouseEnter={e => e.currentTarget.style.background = T.accent + '40'}
+                  onMouseLeave={e => { if (!resizeRef.current) e.currentTarget.style.background = 'transparent'; }} />
               </div>
             );
           };
@@ -4659,8 +4699,9 @@ export default function Home() {
                 const visibleEmails = filteredBucketEmails.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
                 const isReorderOver = dragOverReorderBucket === bucket;
                 const isReorderDragging = dragReorderBucket === bucket;
+                const panelSize = dashLayout.panelSizes?.['email-' + bucket];
                 return (
-                  <div key={bucket}
+                  <div key={bucket} ref={el => { if (el) el._bucketEl = el; }}
                     onDragOver={e => {
                       e.preventDefault();
                       if (dragReorderBucket) setDragOverReorderBucket(bucket);
@@ -4703,10 +4744,11 @@ export default function Home() {
                       background: isOver ? info.bg : T.card,
                       border: `2px solid ${isReorderOver ? T.accent : isOver ? info.color : T.border}`,
                       borderTop: `4px solid ${info.color}`,
-                      borderRadius: 14, padding: 18, minHeight: 120,
-                      transition: "all 0.15s",
+                      borderRadius: 14, padding: 18, minHeight: panelSize?.height || 120,
+                      transition: resizeRef.current ? 'none' : "all 0.15s",
                       opacity: isReorderDragging ? 0.4 : 1,
                       gridColumn: bucketWidth === 'full' ? '1 / -1' : undefined,
+                      position: "relative", overflow: "hidden",
                     }}>
                     {/* Bucket header */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
@@ -4771,6 +4813,11 @@ export default function Home() {
                         <button onClick={() => setBucketPages(prev => ({ ...prev, [bucket]: Math.min(totalPages - 1, page + 1) }))} disabled={page >= totalPages - 1} style={{ padding: "4px 12px", background: page >= totalPages - 1 ? T.bg : T.emailBlueBg, color: page >= totalPages - 1 ? T.textDim : T.emailBlue, border: `1px solid ${page >= totalPages - 1 ? T.border : T.emailBlueBorder}`, borderRadius: 6, cursor: page >= totalPages - 1 ? "default" : "pointer", fontSize: 13, fontWeight: 600 }}>Next →</button>
                       </div>
                     )}
+                    {/* Resize handle */}
+                    <div onMouseDown={e => startResize(e, 'email-' + bucket, 'bottom', e.currentTarget.parentElement)}
+                      style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 6, cursor: "row-resize", background: "transparent" }}
+                      onMouseEnter={e => e.currentTarget.style.background = T.accent + '40'}
+                      onMouseLeave={e => { if (!resizeRef.current) e.currentTarget.style.background = 'transparent'; }} />
                   </div>
                 );
               })}
