@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Head from "next/head";
+import MeetingPrepDrawer from "../components/MeetingPrepDrawer";
 
 // ═══════════════════════════════════════════════
 //  THEME
@@ -2694,6 +2695,10 @@ export default function Home() {
   const [payrollCache, setPayrollCache] = useState({}); // keyed by email.id — avoids re-fetch
   const [boardPrepInfo, setBoardPrepInfo] = useState(null); // { meeting, latestBoardReport, ... }
   const [boardPrepPanel, setBoardPrepPanel] = useState(false);
+  const [meetingPrepEvent, setMeetingPrepEvent] = useState(null); // calendar event for prep drawer
+  const [meetingPrepOpened, setMeetingPrepOpened] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('ffc_prep_opened') || '{}'); } catch { return {}; }
+  });
   const [birthdayInfo, setBirthdayInfo] = useState(null); // { birthdays, recipients, pastSubject }
   const [birthdayPanel, setBirthdayPanel] = useState(false);
   const [dismissedPayrollIds, setDismissedPayrollIds] = useState(new Set());
@@ -4268,11 +4273,25 @@ export default function Home() {
                         <div style={{ display: "flex", gap: 5, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                           {ev.hangoutLink && <a href={ev.hangoutLink} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", background: T.calGreen, color: "#fff", borderRadius: 6, textDecoration: "none", fontSize: 13, fontWeight: 600 }}>Join</a>}
                           {linkedTask && <button onClick={() => { setTab("drive"); setDriveSearch(linkedTask.title); fetchDrive("search", linkedTask.title); }} style={{ padding: "6px 12px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Do it →</button>}
-                          {real && (
-                            <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "6px 10px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-                              {preppedEvents[ev.id] ? "✓" : "Prep"}
-                            </button>
-                          )}
+                          {real && (() => {
+                            const hasExternal = (ev.attendees || []).some(a => { const e = (a.email || '').toLowerCase(); return e && !e.endsWith('@freshfoodconnect.org') && !e.endsWith('@ffc.org'); });
+                            const prepSignal = meetingPrepOpened[ev.id] ? 'opened' : null;
+                            if (hasExternal) {
+                              return (
+                                <button onClick={() => {
+                                  setMeetingPrepEvent(ev);
+                                  setMeetingPrepOpened(prev => { const u = { ...prev, [ev.id]: true }; try { localStorage.setItem('ffc_prep_opened', JSON.stringify(u)); } catch {} return u; });
+                                }} style={{ padding: "6px 10px", background: prepSignal ? T.calGreenBg : T.accentBg, color: prepSignal ? T.calGreen : T.accent, border: `1px solid ${prepSignal ? T.calGreenBorder : T.accent}30`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                                  {prepSignal === 'opened' ? '📋 Opened' : '📋 Prep'}
+                                </button>
+                              );
+                            }
+                            return (
+                              <button onClick={() => setPreppedEvents(prev => { const n = { ...prev }; if (n[ev.id]) delete n[ev.id]; else n[ev.id] = true; return n; })} style={{ padding: "6px 10px", background: preppedEvents[ev.id] ? T.calGreenBg : T.bg, color: preppedEvents[ev.id] ? T.calGreen : T.textMuted, border: `1px solid ${preppedEvents[ev.id] ? T.calGreenBorder : T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                                {preppedEvents[ev.id] ? "✓" : "Prep"}
+                              </button>
+                            );
+                          })()}
                         </div>
                       </div>
                       {isExpanded && (
@@ -5716,6 +5735,7 @@ export default function Home() {
       </div>
 
       {toast && <Toast message={toast.message} onUndo={toast.onUndo} onDone={() => setToast(null)} />}
+      {meetingPrepEvent && <MeetingPrepDrawer event={meetingPrepEvent} T={T} onClose={() => setMeetingPrepEvent(null)} showToast={showToast} />}
 
       {/* ═══════════ CHAT NOTIFICATIONS ═══════════ */}
       {chatNotifs.slice(-3).map((notif, i) => (
