@@ -2682,6 +2682,8 @@ export default function Home() {
     return [];
   });
   const [newStickyText, setNewStickyText] = useState("");
+  const [voiceListening, setVoiceListening] = useState(false);
+  const voiceRecognitionRef = useRef(null);
   const [editingCaptureId, setEditingCaptureId] = useState(null);
   const [editingCaptureText, setEditingCaptureText] = useState("");
   const [showWeekPrep, setShowWeekPrep] = useState(false);
@@ -3765,6 +3767,7 @@ export default function Home() {
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: ${T.pageBg || T.bg}; color: ${T.text}; }
         @keyframes slideUp { from { transform: translateX(-50%) translateY(20px); opacity: 0; } to { transform: translateX(-50%) translateY(0); opacity: 1; } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
         .tab-content { animation: fadeIn 0.15s ease; }
         ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: ${T.border}; border-radius: 3px; }
         button:hover { filter: brightness(0.95); }
@@ -5639,6 +5642,39 @@ export default function Home() {
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && newStickyText.trim()) { e.preventDefault(); setStickyNotes(prev => [{ id: Date.now().toString(), text: newStickyText.trim(), createdAt: new Date().toISOString(), processed: false }, ...prev]); setNewStickyText(""); showToast("Captured!"); } }} />
               <button onClick={() => { if (!newStickyText.trim()) return; setStickyNotes(prev => [{ id: Date.now().toString(), text: newStickyText.trim(), createdAt: new Date().toISOString(), processed: false }, ...prev]); setNewStickyText(""); showToast("Captured!"); }}
                 style={{ padding: "14px 24px", background: "#B8A030", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 16, alignSelf: "flex-end" }}>Capture</button>
+              <button onClick={() => {
+                if (voiceListening) {
+                  if (voiceRecognitionRef.current) voiceRecognitionRef.current.stop();
+                  setVoiceListening(false);
+                  return;
+                }
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognition) { showToast("Voice input not supported in this browser"); return; }
+                const recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = 'en-US';
+                let finalTranscript = newStickyText;
+                recognition.onresult = (event) => {
+                  let interim = '';
+                  for (let i = event.resultIndex; i < event.results.length; i++) {
+                    if (event.results[i].isFinal) {
+                      finalTranscript += (finalTranscript ? ' ' : '') + event.results[i][0].transcript;
+                    } else {
+                      interim += event.results[i][0].transcript;
+                    }
+                  }
+                  setNewStickyText(finalTranscript + (interim ? ' ' + interim : ''));
+                };
+                recognition.onerror = (e) => { setVoiceListening(false); if (e.error !== 'aborted') showToast("Voice error: " + e.error); };
+                recognition.onend = () => { setVoiceListening(false); };
+                voiceRecognitionRef.current = recognition;
+                recognition.start();
+                setVoiceListening(true);
+              }} title={voiceListening ? "Stop listening" : "Voice capture"}
+                style={{ padding: "14px 18px", background: voiceListening ? T.danger : T.stickyYellowBg, color: voiceListening ? "#fff" : "#B8A030", border: `2px solid ${voiceListening ? T.danger : T.stickyYellowBorder}`, borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 20, alignSelf: "flex-end", animation: voiceListening ? "pulse 1.5s infinite" : "none" }}>
+                {voiceListening ? "⏹" : "🎤"}
+              </button>
             </div>
             {stickyNotes.length === 0 ? <div style={{ padding: "48px 32px", textAlign: "center", color: T.textMuted, background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, fontSize: 15 }}><div style={{ fontSize: 48, marginBottom: 12 }}>💭</div>Nothing here yet. Type something above to capture a quick thought.</div>
               : stickyNotes.map(note => (
