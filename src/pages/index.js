@@ -2671,6 +2671,7 @@ export default function Home() {
   const [driveView, setDriveView] = useState("recent");
   const [driveLayout, setDriveLayout] = useState(() => { try { return localStorage.getItem('ffc_drive_layout') || 'list'; } catch { return 'list'; } });
   const [driveFolderPath, setDriveFolderPath] = useState([]); // [{id, name}] breadcrumb stack
+  const [newDocForm, setNewDocForm] = useState(null); // null or { title, folderId, folderName, folderSearch, folderResults, creating }
   const [emailDensity, setEmailDensity] = useState(() => { try { return localStorage.getItem('ffc_email_density') || 'comfortable'; } catch { return 'comfortable'; } });
   const [emailFilter, setEmailFilter] = useState("");
   const [drafts, setDrafts] = useState([]);
@@ -5143,6 +5144,11 @@ export default function Home() {
               {[{ id: "recent", label: "🕐 Recent" }, { id: "starred", label: "⭐ Starred" }].map(v => (
                 <button key={v.id} onClick={() => { setDriveView(v.id); setDriveFolderPath([]); fetchDrive(v.id); }} style={{ padding: "8px 18px", background: driveView === v.id && driveFolderPath.length === 0 ? T.driveVioletBg : T.bg, color: driveView === v.id && driveFolderPath.length === 0 ? T.driveViolet : T.textMuted, border: `1px solid ${driveView === v.id && driveFolderPath.length === 0 ? T.driveVioletBorder : T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>{v.label}</button>
               ))}
+              <button onClick={() => {
+                const currentFolderId = driveFolderPath.length > 0 ? driveFolderPath[driveFolderPath.length - 1].id : null;
+                const currentFolderName = driveFolderPath.length > 0 ? driveFolderPath[driveFolderPath.length - 1].name : null;
+                setNewDocForm({ title: "", folderId: currentFolderId, folderName: currentFolderName, folderSearch: "", folderResults: [], creating: false });
+              }} style={{ padding: "8px 18px", background: T.driveViolet, color: "#fff", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 700 }}>+ New Doc</button>
               <div style={{ flex: 1 }} />
               {/* Layout toggle */}
               {[{ id: "list", icon: "☰" }, { id: "grid", icon: "⊞" }].map(l => (
@@ -5162,6 +5168,81 @@ export default function Home() {
                     }
                   </span>
                 ))}
+              </div>
+            )}
+            {/* New Doc form */}
+            {newDocForm && (
+              <div style={{ background: T.card, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 12, padding: 20, marginBottom: 18 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: T.driveViolet }}>Create New Document</span>
+                  <button onClick={() => setNewDocForm(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: T.textMuted }}>✕</button>
+                </div>
+                <input autoFocus placeholder="Document title..." value={newDocForm.title} onChange={e => setNewDocForm(prev => ({ ...prev, title: e.target.value }))}
+                  style={{ width: "100%", padding: "10px 14px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 15, background: T.surface, color: T.text, outline: "none", marginBottom: 12, boxSizing: "border-box" }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 13, color: T.textMuted }}>Folder:</span>
+                  {newDocForm.folderName ? (
+                    <span style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", background: T.driveVioletBg, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 6, fontSize: 13, color: T.driveViolet, fontWeight: 600 }}>
+                      📁 {newDocForm.folderName}
+                      <button onClick={() => setNewDocForm(prev => ({ ...prev, folderId: null, folderName: null }))} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: T.textMuted, padding: 0 }}>✕</button>
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 13, color: T.textDim }}>My Drive (root)</span>
+                  )}
+                  <div style={{ position: "relative", flex: 1, minWidth: 180 }}>
+                    <input placeholder="Search for folder..." value={newDocForm.folderSearch} onChange={async e => {
+                      const val = e.target.value;
+                      setNewDocForm(prev => ({ ...prev, folderSearch: val }));
+                      if (val.length >= 2) {
+                        const r = await fetch(`/api/drive?action=folders&q=${encodeURIComponent(val)}`, { credentials: "include" });
+                        const d = await r.json();
+                        setNewDocForm(prev => ({ ...prev, folderResults: d.files || [] }));
+                      } else {
+                        setNewDocForm(prev => ({ ...prev, folderResults: [] }));
+                      }
+                    }} style={{ width: "100%", padding: "6px 10px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, background: T.surface, color: T.text, outline: "none", boxSizing: "border-box" }} />
+                    {newDocForm.folderResults.length > 0 && (
+                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 20, maxHeight: 180, overflow: "auto", boxShadow: "0 4px 16px rgba(0,0,0,0.15)" }}>
+                        {newDocForm.folderResults.map(f => (
+                          <div key={f.id} onClick={() => setNewDocForm(prev => ({ ...prev, folderId: f.id, folderName: f.name, folderSearch: "", folderResults: [] }))}
+                            style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", gap: 8, borderBottom: `1px solid ${T.borderLight}` }}>
+                            <span>📁</span> {f.name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <button disabled={!newDocForm.title.trim() || newDocForm.creating} onClick={async () => {
+                  setNewDocForm(prev => ({ ...prev, creating: true }));
+                  try {
+                    const r = await fetch("/api/create-doc", {
+                      method: "POST", credentials: "include",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ title: newDocForm.title.trim(), content: " ", folderId: newDocForm.folderId || undefined }),
+                    });
+                    const d = await r.json();
+                    if (d.url) {
+                      window.open(d.url, "_blank");
+                      setNewDocForm(null);
+                      showToast("Document created!");
+                      if (driveFolderPath.length > 0) {
+                        const fId = driveFolderPath[driveFolderPath.length - 1].id;
+                        const rr = await fetch(`/api/drive?action=browse&q=${encodeURIComponent(fId)}`, { credentials: "include" });
+                        const dd = await rr.json();
+                        if (dd.files) setDriveFiles(dd.files);
+                      } else fetchDrive(driveView);
+                    } else {
+                      showToast(d.error || "Failed to create doc");
+                      setNewDocForm(prev => ({ ...prev, creating: false }));
+                    }
+                  } catch (e) {
+                    showToast("Error creating document");
+                    setNewDocForm(prev => ({ ...prev, creating: false }));
+                  }
+                }} style={{ padding: "10px 24px", background: newDocForm.title.trim() && !newDocForm.creating ? T.driveViolet : T.textDim, color: "#fff", border: "none", borderRadius: 8, cursor: newDocForm.title.trim() && !newDocForm.creating ? "pointer" : "default", fontWeight: 700, fontSize: 15 }}>
+                  {newDocForm.creating ? "Creating..." : "Create Document"}
+                </button>
               </div>
             )}
             {driveLayout === "list" ? (
