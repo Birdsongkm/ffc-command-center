@@ -177,3 +177,101 @@ describe("removeEmailSectionOverride", () => {
     expect(original).toHaveProperty("email1");
   });
 });
+
+// ── reorderBucketList — move a bucket to a new position (#108) ───────────────
+
+function reorderBucketList(order, fromKey, toKey) {
+  const arr = [...order];
+  const fromIdx = arr.indexOf(fromKey);
+  const toIdx = arr.indexOf(toKey);
+  if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return arr;
+  const [moved] = arr.splice(fromIdx, 1);
+  arr.splice(toIdx, 0, moved);
+  return arr;
+}
+
+function sortBucketsByCustomOrder(bucketEntries, customOrder, defaultOrder) {
+  const order = customOrder && customOrder.length > 0 ? customOrder : defaultOrder;
+  return [...bucketEntries].sort(([a], [b]) => {
+    const ia = order.indexOf(a);
+    const ib = order.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+}
+
+describe("reorderBucketList", () => {
+  const DEFAULT = ['needs-response', 'to-do', 'team', 'financial', 'fyi-mass', 'newsletter', 'sales'];
+
+  test("moves a bucket forward in the list", () => {
+    const result = reorderBucketList(DEFAULT, 'fyi-mass', 'to-do');
+    expect(result.indexOf('fyi-mass')).toBe(1);
+    expect(result.indexOf('to-do')).toBe(2);
+  });
+
+  test("moves a bucket backward in the list", () => {
+    const result = reorderBucketList(DEFAULT, 'to-do', 'newsletter');
+    expect(result.indexOf('to-do')).toBe(5);
+  });
+
+  test("no-op when from and to are the same", () => {
+    const result = reorderBucketList(DEFAULT, 'team', 'team');
+    expect(result).toEqual(DEFAULT);
+  });
+
+  test("no-op when from key does not exist", () => {
+    const result = reorderBucketList(DEFAULT, 'nonexistent', 'team');
+    expect(result).toEqual(DEFAULT);
+  });
+
+  test("no-op when to key does not exist", () => {
+    const result = reorderBucketList(DEFAULT, 'team', 'nonexistent');
+    expect(result).toEqual(DEFAULT);
+  });
+
+  test("does not mutate original array", () => {
+    const original = [...DEFAULT];
+    reorderBucketList(original, 'fyi-mass', 'to-do');
+    expect(original).toEqual(DEFAULT);
+  });
+
+  test("preserves all items after reorder", () => {
+    const result = reorderBucketList(DEFAULT, 'sales', 'needs-response');
+    expect(result.sort()).toEqual([...DEFAULT].sort());
+  });
+});
+
+describe("sortBucketsByCustomOrder", () => {
+  const DEFAULT_ORDER = ['needs-response', 'to-do', 'team', 'newsletter', 'sales'];
+
+  test("sorts by default order when no custom order", () => {
+    const entries = [['sales', []], ['needs-response', []], ['team', []]];
+    const result = sortBucketsByCustomOrder(entries, null, DEFAULT_ORDER);
+    expect(result.map(([k]) => k)).toEqual(['needs-response', 'team', 'sales']);
+  });
+
+  test("sorts by default order when custom order is empty", () => {
+    const entries = [['sales', []], ['needs-response', []], ['team', []]];
+    const result = sortBucketsByCustomOrder(entries, [], DEFAULT_ORDER);
+    expect(result.map(([k]) => k)).toEqual(['needs-response', 'team', 'sales']);
+  });
+
+  test("sorts by custom order when provided", () => {
+    const customOrder = ['sales', 'team', 'needs-response', 'newsletter', 'to-do'];
+    const entries = [['needs-response', []], ['team', []], ['sales', []]];
+    const result = sortBucketsByCustomOrder(entries, customOrder, DEFAULT_ORDER);
+    expect(result.map(([k]) => k)).toEqual(['sales', 'team', 'needs-response']);
+  });
+
+  test("unknown buckets sort to the end", () => {
+    const entries = [['unknown-bucket', []], ['needs-response', []]];
+    const result = sortBucketsByCustomOrder(entries, null, DEFAULT_ORDER);
+    expect(result.map(([k]) => k)).toEqual(['needs-response', 'unknown-bucket']);
+  });
+
+  test("does not mutate original entries", () => {
+    const entries = [['sales', []], ['needs-response', []]];
+    const original = [...entries];
+    sortBucketsByCustomOrder(entries, null, DEFAULT_ORDER);
+    expect(entries).toEqual(original);
+  });
+});

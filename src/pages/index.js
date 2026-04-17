@@ -2764,6 +2764,8 @@ export default function Home() {
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [draggingEmail, setDraggingEmail] = useState(null);
   const [dragOverEmailBucket, setDragOverEmailBucket] = useState(null);
+  const [dragReorderBucket, setDragReorderBucket] = useState(null);
+  const [dragOverReorderBucket, setDragOverReorderBucket] = useState(null);
   const [emailBucketOverrides, setEmailBucketOverrides] = useState({});
   const [bucketLabels, setBucketLabels] = useState(() => {
     try { return JSON.parse(localStorage.getItem("ffc_bucket_labels") || "{}"); } catch { return {}; }
@@ -3372,8 +3374,9 @@ export default function Home() {
   Object.keys(BUCKETS).filter(k => !FINANCIAL_KEYS.includes(k)).forEach(k => {
     if (!mergedBuckets[k]) mergedBuckets[k] = [];
   });
+  const effectiveBucketOrder = dashLayout.emailBucketOrder && dashLayout.emailBucketOrder.length > 0 ? dashLayout.emailBucketOrder : BUCKET_ORDER;
   const sortedBuckets = Object.entries(mergedBuckets).sort(([a], [b]) => {
-    const ia = BUCKET_ORDER.indexOf(a); const ib = BUCKET_ORDER.indexOf(b);
+    const ia = effectiveBucketOrder.indexOf(a); const ib = effectiveBucketOrder.indexOf(b);
     return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
   });
   const allCategories = [...CATEGORIES, ...customCategories];
@@ -4609,7 +4612,7 @@ export default function Home() {
               <button onClick={() => { const q = emailFilter.trim(); if (q) window.open(`https://mail.google.com/mail/u/0/#search/${encodeURIComponent(q)}`, "_blank"); }} disabled={!emailFilter.trim()} style={{ padding: "10px 16px", background: emailFilter.trim() ? T.emailBlueBg : T.bg, color: emailFilter.trim() ? T.emailBlue : T.textMuted, border: `1px solid ${emailFilter.trim() ? T.emailBlueBorder : T.border}`, borderRadius: 9, cursor: emailFilter.trim() ? "pointer" : "default", fontSize: 14, fontWeight: 600, whiteSpace: "nowrap" }}>Search Gmail →</button>
             </div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-              <div style={{ fontSize: 15, color: T.textMuted }}>{emailFilter ? `${searchEmails(emails, emailFilter).length} matching · ` : ""}{emails.length} unread · sorted by most recent · drag to reclassify</div>
+              <div style={{ fontSize: 15, color: T.textMuted }}>{emailFilter ? `${searchEmails(emails, emailFilter).length} matching · ` : ""}{emails.length} unread · drag ⠿ to reorder sections · drag emails to reclassify{dashLayout.emailBucketOrder?.length > 0 ? <button onClick={() => setDashLayout(prev => { const u = { ...prev }; delete u.emailBucketOrder; return u; })} style={{ marginLeft: 8, padding: "2px 8px", background: "transparent", color: T.textDim, border: `1px solid ${T.border}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>Reset order</button> : null}</div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 {/* Density toggle */}
                 {[{ id: "comfortable", icon: "≡", title: "Comfortable" }, { id: "compact", icon: "⊟", title: "Compact" }].map(d => (
@@ -4653,15 +4656,34 @@ export default function Home() {
                 const page = bucketPages[bucket] || 0;
                 const totalPages = Math.ceil(filteredBucketEmails.length / PAGE_SIZE);
                 const visibleEmails = filteredBucketEmails.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+                const isReorderOver = dragOverReorderBucket === bucket;
+                const isReorderDragging = dragReorderBucket === bucket;
                 return (
                   <div key={bucket}
-                    onDragOver={e => { e.preventDefault(); setDragOverEmailBucket(bucket); }}
-                    onDragLeave={() => setDragOverEmailBucket(null)}
+                    onDragOver={e => {
+                      e.preventDefault();
+                      if (dragReorderBucket) setDragOverReorderBucket(bucket);
+                      else setDragOverEmailBucket(bucket);
+                    }}
+                    onDragLeave={() => { setDragOverEmailBucket(null); setDragOverReorderBucket(null); }}
                     onDrop={e => {
                       e.preventDefault();
-                      if (draggingEmail && draggingEmail.id) {
+                      if (dragReorderBucket && dragReorderBucket !== bucket) {
+                        setDashLayout(prev => {
+                          const order = prev.emailBucketOrder && prev.emailBucketOrder.length > 0
+                            ? [...prev.emailBucketOrder]
+                            : [...BUCKET_ORDER];
+                          const fromIdx = order.indexOf(dragReorderBucket);
+                          const toIdx = order.indexOf(bucket);
+                          if (fromIdx === -1) { order.push(dragReorderBucket); return { ...prev, emailBucketOrder: order }; }
+                          if (toIdx === -1) return prev;
+                          const [moved] = order.splice(fromIdx, 1);
+                          order.splice(toIdx, 0, moved);
+                          return { ...prev, emailBucketOrder: order };
+                        });
+                        setDragReorderBucket(null); setDragOverReorderBucket(null);
+                      } else if (draggingEmail && draggingEmail.id) {
                         setEmailBucketOverrides(prev => ({ ...prev, [draggingEmail.id]: bucket }));
-                        // Learn: save sender email + domain → bucket for future emails
                         const senderEmail = (draggingEmail.from || "").toLowerCase().match(/[\w.-]+@[\w.-]+/)?.[0] || "";
                         const senderDomain = senderEmail.split("@")[1] || "";
                         if (senderEmail || senderDomain) {
@@ -4673,20 +4695,27 @@ export default function Home() {
                             return updated;
                           });
                         }
+                        setDraggingEmail(null); setDragOverEmailBucket(null);
                       }
-                      setDraggingEmail(null); setDragOverEmailBucket(null);
                     }}
                     style={{
                       background: isOver ? info.bg : T.card,
-                      border: `2px solid ${isOver ? info.color : T.border}`,
+                      border: `2px solid ${isReorderOver ? T.accent : isOver ? info.color : T.border}`,
                       borderTop: `4px solid ${info.color}`,
                       borderRadius: 14, padding: 18, minHeight: 120,
                       transition: "all 0.15s",
+                      opacity: isReorderDragging ? 0.4 : 1,
                       gridColumn: bucketWidth === 'full' ? '1 / -1' : undefined,
                     }}>
                     {/* Bucket header */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+                        <span
+                          draggable
+                          onDragStart={e => { e.stopPropagation(); setDragReorderBucket(bucket); e.dataTransfer.effectAllowed = 'move'; }}
+                          onDragEnd={() => { setDragReorderBucket(null); setDragOverReorderBucket(null); }}
+                          style={{ cursor: "grab", fontSize: 14, color: T.textDim, padding: "2px 4px", userSelect: "none" }}
+                          title="Drag to reorder">⠿</span>
                         <span style={{ fontSize: 17 }}>{info.icon}</span>
                         {editingBucketLabel === bucket ? (
                           <form onSubmit={e => { e.preventDefault(); setBucketLabels(prev => { const updated = { ...prev }; if (editingLabelValue.trim()) updated[bucket] = editingLabelValue.trim(); else delete updated[bucket]; return updated; }); setEditingBucketLabel(null); }} style={{ display: "flex", gap: 6, alignItems: "center", flex: 1 }}>
