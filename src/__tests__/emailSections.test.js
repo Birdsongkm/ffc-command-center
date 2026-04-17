@@ -240,6 +240,69 @@ describe("reorderBucketList", () => {
   });
 });
 
+// ── bucket descriptions (#99) ────────────────────────────────────────────────
+
+function setBucketDescription(descriptions, key, text) {
+  const updated = { ...descriptions };
+  if (!text || !text.trim()) {
+    delete updated[key];
+  } else {
+    updated[key] = text.trim();
+  }
+  return updated;
+}
+
+function getBucketDescription(descriptions, key) {
+  return (descriptions && descriptions[key]) || null;
+}
+
+describe("setBucketDescription", () => {
+  test("adds a new description", () => {
+    const r = setBucketDescription({}, "team", "Internal staff emails");
+    expect(r.team).toBe("Internal staff emails");
+  });
+
+  test("updates existing description", () => {
+    const r = setBucketDescription({ team: "Old" }, "team", "New desc");
+    expect(r.team).toBe("New desc");
+  });
+
+  test("removes description when empty", () => {
+    const r = setBucketDescription({ team: "Something" }, "team", "");
+    expect(r).not.toHaveProperty("team");
+  });
+
+  test("removes description when whitespace only", () => {
+    const r = setBucketDescription({ team: "Something" }, "team", "   ");
+    expect(r).not.toHaveProperty("team");
+  });
+
+  test("trims description", () => {
+    const r = setBucketDescription({}, "team", "  some text  ");
+    expect(r.team).toBe("some text");
+  });
+
+  test("does not mutate original", () => {
+    const original = { team: "Old" };
+    setBucketDescription(original, "newsletter", "News");
+    expect(original).not.toHaveProperty("newsletter");
+  });
+});
+
+describe("getBucketDescription", () => {
+  test("returns description when set", () => {
+    expect(getBucketDescription({ team: "Staff emails" }, "team")).toBe("Staff emails");
+  });
+
+  test("returns null when not set", () => {
+    expect(getBucketDescription({}, "team")).toBeNull();
+  });
+
+  test("returns null when descriptions is null", () => {
+    expect(getBucketDescription(null, "team")).toBeNull();
+  });
+});
+
 describe("sortBucketsByCustomOrder", () => {
   const DEFAULT_ORDER = ['needs-response', 'to-do', 'team', 'newsletter', 'sales'];
 

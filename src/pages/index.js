@@ -2796,6 +2796,10 @@ export default function Home() {
   });
   const [editingBucketLabel, setEditingBucketLabel] = useState(null); // bucketKey being renamed
   const [editingLabelValue, setEditingLabelValue] = useState("");
+  const [bucketDescriptions, setBucketDescriptions] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("ffc_bucket_descriptions") || "{}"); } catch { return {}; }
+  });
+  const [editingBucketDesc, setEditingBucketDesc] = useState(null); // bucketKey being described
   const [movingEmailId, setMovingEmailId] = useState(null); // email id with open "Move to…" dropdown
   const [learnedBuckets, setLearnedBuckets] = useState(() => {
     try { return JSON.parse(localStorage.getItem("ffc_learned_buckets") || "{}"); } catch { return {}; }
@@ -2912,6 +2916,9 @@ export default function Home() {
   useEffect(() => {
     try { localStorage.setItem('ffc_bucket_labels', JSON.stringify(bucketLabels)); } catch {}
   }, [bucketLabels]);
+  useEffect(() => {
+    try { localStorage.setItem('ffc_bucket_descriptions', JSON.stringify(bucketDescriptions)); } catch {}
+  }, [bucketDescriptions]);
   useEffect(() => {
     try { localStorage.setItem('ffc_scheduled_emails', JSON.stringify(scheduledEmails)); } catch {}
   }, [scheduledEmails]);
@@ -4792,6 +4799,28 @@ export default function Home() {
                           style={{ padding: "4px 10px", background: "transparent", color: T.textDim, border: `1px solid ${T.border}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>{bucketWidth === 'full' ? '↕' : '↔'}</button>
                       </div>
                     </div>
+                    {/* Bucket description (#99) */}
+                    {editingBucketDesc === bucket ? (
+                      <div style={{ marginBottom: 10 }}>
+                        <textarea autoFocus rows={2} value={bucketDescriptions[bucket] || ""} onChange={e => setBucketDescriptions(prev => ({ ...prev, [bucket]: e.target.value }))}
+                          placeholder="Describe what emails belong here (e.g., 'Emails from donors that need a personal reply')..."
+                          onBlur={() => {
+                            setBucketDescriptions(prev => {
+                              const u = { ...prev };
+                              if (!u[bucket]?.trim()) delete u[bucket];
+                              return u;
+                            });
+                            setEditingBucketDesc(null);
+                          }}
+                          style={{ width: "100%", padding: "8px 10px", border: `1px solid ${info.color}40`, borderRadius: 6, fontSize: 12, background: T.surface, color: T.text, outline: "none", resize: "vertical", boxSizing: "border-box", fontFamily: "inherit" }} />
+                      </div>
+                    ) : bucketDescriptions[bucket] ? (
+                      <div onClick={() => setEditingBucketDesc(bucket)} style={{ fontSize: 12, color: T.textDim, marginBottom: 10, padding: "4px 8px", background: info.bg, borderRadius: 6, cursor: "pointer", lineHeight: 1.4 }}>
+                        {bucketDescriptions[bucket]}
+                      </div>
+                    ) : (
+                      <button onClick={() => setEditingBucketDesc(bucket)} style={{ fontSize: 11, color: T.textDim, background: "none", border: "none", cursor: "pointer", padding: "2px 0", marginBottom: 6 }}>+ Add description</button>
+                    )}
                     {/* Email cards */}
                     {bucketEmails.length === 0 && (
                       <div style={{ fontSize: 14, color: T.textDim, textAlign: "center", padding: "16px 0" }}>Drop emails here</div>
