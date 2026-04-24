@@ -2733,6 +2733,8 @@ export default function Home() {
   const [ccAllocPanel, setCcAllocPanel] = useState(false);
   const [ccAllocDismissed, setCcAllocDismissed] = useState(false);
   const [aiPrep, setAiPrep] = useState({}); // eventId → { loading, text, error }
+  const [aiFocus, setAiFocus] = useState(null); // { loading, items, error }
+  const [aiTriage, setAiTriage] = useState(null); // { loading, recommendations: [{id, action, reason}] }
 
   // ── Dashboard layout — configurable sections ──────────────────────────────────
   const DEFAULT_TODAY_SECTIONS = [
@@ -3249,6 +3251,44 @@ export default function Home() {
     }
   };
 
+  const fetchAiFocus = async () => {
+    if (aiFocus?.loading) return;
+    setAiFocus({ loading: true, items: null, error: null });
+    try {
+      const emailData = emails.slice(0, 20).map(e => ({ from: e.from, subject: e.subject, bucket: emailBucketOverrides[e.id] || classifyEmail(e) }));
+      const eventData = events.map(e => ({ title: e.title || e.summary, start: fmtTime(e.start) }));
+      const taskData = tasks.filter(t => !t.done).map(t => ({ title: t.title, done: t.done, dueDate: t.dueDate }));
+      const r = await fetch("/api/ai-focus", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emails: emailData, events: eventData, tasks: taskData }),
+      });
+      const d = await r.json();
+      if (d.items) setAiFocus({ loading: false, items: d.items, error: null });
+      else setAiFocus({ loading: false, items: null, error: d.error || "Failed" });
+    } catch (e) {
+      setAiFocus({ loading: false, items: null, error: e.message });
+    }
+  };
+
+  const fetchAiTriage = async (emailsToTriage) => {
+    if (aiTriage?.loading) return;
+    setAiTriage({ loading: true, recommendations: null });
+    try {
+      const data = emailsToTriage.slice(0, 15).map(e => ({ id: e.id, from: e.from, subject: e.subject, snippet: e.snippet }));
+      const r = await fetch("/api/ai-triage", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emails: data }),
+      });
+      const d = await r.json();
+      setAiTriage({ loading: false, recommendations: d.recommendations || [] });
+    } catch (e) {
+      setAiTriage({ loading: false, recommendations: null });
+      showToast("Triage failed: " + e.message);
+    }
+  };
+
   const calendarAction = async (action, data) => {
     const r = await fetch("/api/calendar-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, ...data }) });
     const d = await r.json();
@@ -3553,6 +3593,10 @@ export default function Home() {
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
             {score !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: score >= 10 ? T.urgentCoralBg : score >= 5 ? T.taskAmberBg : T.bg, color: score >= 10 ? T.urgentCoral : score >= 5 ? T.taskAmber : T.textMuted, border: `1px solid ${score >= 10 ? T.urgentCoral : score >= 5 ? T.taskAmber : T.border}30` }} title="Priority score">P{score}</span>}
             {relBadge && <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 8, background: relBadge === "Lapsed" ? T.dangerBg : relBadge === "Frequent" ? T.accentBg : T.infoBg, color: relBadge === "Lapsed" ? T.danger : relBadge === "Frequent" ? T.accent : T.info }}>{relBadge}</span>}
+            {/* Donor intent signal */}
+            {(() => { const from = (email.from || '').toLowerCase(); const subj = (email.subject || '').toLowerCase(); if (/classy\.org/.test(from) && /donat|gift|contribut|pledge/.test(subj)) return <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 8, background: T.calGreenBg, color: T.calGreen }}>💚 Donor</span>; if (/major gift|planned giving|annual fund|capital campaign/.test(subj)) return <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 8, background: T.goldBg, color: T.gold }}>🎯 Prospect</span>; return null; })()}
+            {/* AI Triage recommendation */}
+            {aiTriage?.recommendations && (() => { const rec = aiTriage.recommendations.find(r => r.id === email.id); if (!rec) return null; const colors = { respond: { bg: T.urgentCoralBg, color: T.urgentCoral, icon: '↩' }, archive: { bg: T.bg, color: T.textDim, icon: '📥' }, defer: { bg: T.taskAmberBg, color: T.taskAmber, icon: '⏳' } }; const c = colors[rec.action] || colors.defer; return <span title={rec.reason} style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 8, background: c.bg, color: c.color }}>{c.icon} {rec.action}</span>; })()}
             {cInfo && !isExp && <div style={{ fontSize: 12, color: T.textDim, textAlign: "right", lineHeight: 1.4 }}><div>{cInfo.totalMessages} emails</div><div>Last: {fmtRel(cInfo.lastContact)}</div></div>}
           </div>
         </div>
@@ -3637,6 +3681,28 @@ export default function Home() {
             {cInfo && <div style={{ padding: "10px 0", fontSize: 14, color: T.textMuted, display: "flex", gap: 16, borderBottom: `1px solid ${T.borderLight}`, marginBottom: 12 }}>
               <span>📧 {cInfo.totalMessages} total messages</span><span>Last contact: {fmtRel(cInfo.lastContact)}</span>
             </div>}
+
+            {/* Classification explanation */}
+            <div style={{ padding: "6px 10px", background: T.bg, borderRadius: 6, marginBottom: 10, fontSize: 12, color: T.textDim }}>
+              <span style={{ fontWeight: 600 }}>Why here? </span>
+              {(() => {
+                const b = effectiveBucket;
+                const from = (email.from || '').toLowerCase();
+                if (b === 'needs-response' && /dropboxsign|hellosign/.test(from)) return 'DropboxSign/HelloSign emails always need response';
+                if (b === 'needs-response') return `${email.recipientCount || '≤3'} recipients — likely personal email needing reply`;
+                if (b === 'fyi-mass') return `Mass send (${email.recipientCount || '20+' } recipients)`;
+                if (b === 'team') return `Internal — sender is @freshfoodconnect.org`;
+                if (b === 'classy-onetime') return 'Classy donation notification';
+                if (b === 'newsletter') return 'Has List-Unsubscribe or List-Id header';
+                if (b === 'automated') return 'System/automated email — noreply sender';
+                if (b === 'calendar-notif') return 'Google Calendar notification';
+                if (b === 'docs-activity') return 'Google Drive/Docs activity email';
+                if (b === 'classy-recurring') return 'Classy platform notification';
+                if (b === 'sales') return 'Matched sales/spam signals';
+                if (b === 'invoices') return 'Invoice, receipt, or payment notification';
+                return `Classified as "${b}"`;
+              })()}
+            </div>
 
             {/* Calendar RSVP bar */}
             {isCalInvite && (
@@ -4074,6 +4140,23 @@ export default function Home() {
                 {oldestWaitingDays !== null && oldestWaitingDays > 0 && <div style={{ marginTop: 8, fontSize: 14, color: oldestWaitingDays > 7 ? T.danger : T.gold }}> Oldest reply waiting: <strong>{oldestWaitingDays} day{oldestWaitingDays !== 1 ? "s" : ""}</strong></div>}
               </div>
               {digest && <div style={{ marginTop: 12, padding: "12px 16px", background: "rgba(255,255,255,0.7)", borderRadius: 8, fontSize: 15, color: T.text }}>{digest.digest}</div>}
+              {/* AI Focus Briefing */}
+              <div style={{ marginTop: 16 }}>
+                {aiFocus?.items ? (
+                  <div style={{ padding: "14px 16px", background: "rgba(255,255,255,0.5)", borderRadius: 10, border: `1px solid ${T.accent}20` }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>AI Focus</div>
+                    {aiFocus.items.map((item, i) => (
+                      <div key={i} style={{ fontSize: 14, color: T.text, lineHeight: 1.6, marginBottom: 4, paddingLeft: 12, borderLeft: `3px solid ${T.accent}40` }}>{item}</div>
+                    ))}
+                  </div>
+                ) : aiFocus?.loading ? (
+                  <div style={{ padding: "14px 16px", textAlign: "center", color: T.textMuted, fontSize: 13 }}>✨ Generating focus briefing...</div>
+                ) : aiFocus?.error ? (
+                  <div style={{ padding: "10px 14px", background: T.dangerBg, borderRadius: 8, fontSize: 13, color: T.danger }}>{aiFocus.error}</div>
+                ) : (
+                  <button onClick={fetchAiFocus} style={{ padding: "8px 18px", background: "rgba(255,255,255,0.5)", color: T.accent, border: `1px solid ${T.accent}30`, borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>✨ AI Focus Briefing</button>
+                )}
+              </div>
             </div>
             )}
             {id === "weekly-intelligence" && (
@@ -4688,6 +4771,9 @@ export default function Home() {
                 {[{ id: "comfortable", icon: "≡", title: "Comfortable" }, { id: "compact", icon: "⊟", title: "Compact" }].map(d => (
                   <button key={d.id} onClick={() => { setEmailDensity(d.id); try { localStorage.setItem('ffc_email_density', d.id); } catch {} }} title={d.title} style={{ padding: "5px 10px", background: emailDensity === d.id ? T.emailBlueBg : T.bg, color: emailDensity === d.id ? T.emailBlue : T.textMuted, border: `1px solid ${emailDensity === d.id ? T.emailBlueBorder : T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 16 }}>{d.icon}</button>
                 ))}
+                <button onClick={() => { const needsResp = emails.filter(e => (emailBucketOverrides[e.id] || classifyEmail(e)) === 'needs-response'); fetchAiTriage(needsResp.length > 0 ? needsResp : emails.slice(0, 15)); }} disabled={aiTriage?.loading} style={{ padding: "6px 16px", background: aiTriage?.recommendations ? T.accentBg : T.bg, color: aiTriage?.recommendations ? T.accent : T.textMuted, border: `1px solid ${aiTriage?.recommendations ? T.accent + '30' : T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>
+                  {aiTriage?.loading ? "✨ Triaging..." : aiTriage?.recommendations ? `✨ ${aiTriage.recommendations.length} triaged` : "✨ AI Triage"}
+                </button>
                 {nextPage && <button onClick={() => fetchData(nextPage)} style={{ padding: "6px 16px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>Load More</button>}
               </div>
             </div>
