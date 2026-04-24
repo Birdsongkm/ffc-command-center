@@ -791,6 +791,7 @@ These features were implemented in a hands-on session with Kayla, not via the au
 ---
 
 ## Sprint 12 — User Issues + Meeting Prep + Drive Improvements (April 2026) ✅ COMPLETE
+*Last updated: 2026-04-24*
 *Shipped: 2026-04-17 through 2026-04-24 | 976 tests passing*
 
 ### User issues closed
@@ -826,3 +827,58 @@ Full implementation of the meeting prep spec with 3 locked decisions:
 
 **Tests:** 59 new tests across meetingPrep.test.js, emailSections.test.js, createDoc.test.js, resizePanels.test.js, whisperCapture.test.js
 **Total tests:** 976 passing across 36 test suites
+
+---
+
+## Sprint 13 — Follow-Up Intelligence & End-of-Day Recap
+*Status: PLANNED — next to execute*
+
+### Panel deliberation (post-Sprint 12 convening)
+
+**ED Users panel (6/6):**
+> "The AI triage and focus briefing are great for the *start* of the day. But I lose track of things by 4pm. I replied to 8 people this morning — did any of them reply back? I archived 5 emails but one of them was from a funder I meant to follow up on next week. I need a close-of-day summary and a way to flag things for follow-up."
+
+ED vote: end-of-day recap (6/6), follow-up flags with reminders (6/6), "reply tracking" — did they reply back? (5/6)
+
+**UX panel (6/6):**
+> "Follow-up is the biggest gap. She archives an email, the person never replies, and it falls into a black hole. Two features: (1) a 'Follow up' action on emails that creates a reminder, (2) an end-of-day section on Today that surfaces: emails sent without reply, meetings without notes, overdue tasks. No new tab — just a time-aware section on Today."
+
+UX vote: follow-up action on emails (6/6), end-of-day section on Today (6/6), no new tab (6/6 — "keep it contained")
+
+**Unicorn CEO panel (5/6):**
+> "The end-of-day summary is the accountability layer. Without it, the AI focus briefing is a to-do list that nobody grades. Close the loop: morning = plan, evening = review. Same tab, different time of day. And follow-up reminders are a relationship lifeline — lapsed donor who hasn't replied in 7 days? That's a pipeline leak."
+
+CEO vote: end-of-day recap (6/6), follow-up with time-based reminders (6/6), morning/evening context switching on Today (5/6)
+
+**Data panel (6/6):**
+> "Track reply rates per contact. If Kayla sends 10 emails to board members and 3 don't reply within 48 hours, surface that. This is measurable, actionable, and directly maps to relationship health. The follow-up queue is just: sent emails where `inReplyTo` has no response within N days."
+
+Data vote: reply tracking via Gmail sent + inbox correlation (6/6), surface non-replies after 48h (5/6), follow-up queue sorted by days waiting (6/6)
+
+**CFO panel (5/6):**
+> "End-of-day for financial emails: did the team respond to the credit card allocation? Did the grant LOI get submitted? These are the things that keep me up at night. The recap should flag financial-bucket items that are still unresolved."
+
+CFO vote: end-of-day recap with financial focus (5/6), follow-up on financial emails (5/6)
+
+**COO panel (6/6):**
+> "Follow-up is ops 101. Right now there's no system for 'I need to hear back from this person by Friday.' Snooze exists but it only brings the email back — it doesn't tell you why you snoozed it or what you're waiting for. Add a follow-up reason field."
+
+COO vote: follow-up with reason/note (6/6), follow-up queue on Today tab (6/6), snooze upgrade — show reason on return (5/6)
+
+**CRO panel (5/6):**
+> "For donor stewardship: 'You emailed 3 donors today but haven't heard back from Pat Wynne (sent Tuesday).' That's the CRM check-in that doesn't exist yet. Surface non-replies from high-value contacts above generic non-replies."
+
+CRO vote: donor non-reply prioritization (5/6), follow-up queue with donor tier weighting (4/6)
+
+**Product team resolution (Kayla as PM):**
+- Feature 1: Follow-up action on emails — "Follow Up" button creates a reminder with optional note and date. Follow-ups stored in localStorage. Follow-up queue section on Today tab shows pending follow-ups sorted by date.
+- Feature 2: Sent email reply tracking — scan sent emails, check if reply received within configurable window (default 48h). Surface non-replies as "Awaiting Reply" section on Today tab.
+- Feature 3: End-of-day recap — time-aware section on Today tab (appears after 3pm). AI-generated summary: emails handled, meetings attended, tasks completed, follow-ups still pending, non-replies flagged. One button, inline display.
+- Feature 4: Follow-up queue with donor prioritization — non-replies from Classy/donation contacts surfaced first with donor badge.
+
+**Deferred:**
+- Snooze reason field (Sprint 14 — requires snooze flow refactor)
+- Reply rate analytics per contact (Sprint 14 — needs historical data aggregation)
+
+**New env vars needed:** None
+**New API routes:** POST /api/eod-recap (end-of-day AI summary), GET /api/sent-tracking (scan sent emails for non-replies)

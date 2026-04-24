@@ -2735,6 +2735,12 @@ export default function Home() {
   const [aiPrep, setAiPrep] = useState({}); // eventId → { loading, text, error }
   const [aiFocus, setAiFocus] = useState(null); // { loading, items, error }
   const [aiTriage, setAiTriage] = useState(null); // { loading, recommendations: [{id, action, reason}] }
+  const [followUps, setFollowUps] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('ffc_follow_ups') || '[]'); } catch { return []; }
+  });
+  const [followUpForm, setFollowUpForm] = useState(null); // { emailId, from, subject } or null
+  const [awaitingReply, setAwaitingReply] = useState(null); // [{id, to, subject, daysSince}] or null
+  const [eodRecap, setEodRecap] = useState(null); // { loading, text, error }
 
   // ── Dashboard layout — configurable sections ──────────────────────────────────
   const DEFAULT_TODAY_SECTIONS = [
@@ -2747,6 +2753,8 @@ export default function Home() {
     { id: "pipeline-donations", label: "Pipeline + Donations", icon: "💰", width: "full" },
     { id: "team-this-week", label: "Team This Week", icon: "👥", width: "full" },
     { id: "team-meeting-agenda", label: "Team Meeting Agenda", icon: "📋", width: "full" },
+    { id: "follow-ups", label: "Follow-Ups", icon: "🔔", width: "half" },
+    { id: "awaiting-reply", label: "Awaiting Reply", icon: "⏳", width: "half" },
     { id: "end-of-day", label: "End of Day", icon: "🌅", width: "full" },
   ];
   const [dashLayout, setDashLayout] = useState(() => {
@@ -2890,6 +2898,8 @@ export default function Home() {
     }
   }, [tasks]);
   useEffect(() => { if (typeof window !== "undefined") localStorage.setItem("ffc_prepped", JSON.stringify(preppedEvents)); }, [preppedEvents]);
+  useEffect(() => { try { localStorage.setItem('ffc_follow_ups', JSON.stringify(followUps)); } catch {} }, [followUps]);
+  useEffect(() => { if (auth) fetch("/api/sent-tracking", { credentials: "include" }).then(r => r.json()).then(d => { if (d.awaitingReply) setAwaitingReply(d.awaitingReply); }).catch(() => {}); }, [auth]);
   useEffect(() => { if (typeof window !== "undefined" && stickyNotes.length >= 0) localStorage.setItem("ffc_stickies", JSON.stringify(stickyNotes)); }, [stickyNotes]);
   useEffect(() => {
     if (typeof window !== "undefined") { try { setForwardSuggestions(JSON.parse(localStorage.getItem("ffc_fwd_suggest") || "{}")); } catch {} }
@@ -3289,6 +3299,30 @@ export default function Home() {
     }
   };
 
+  const addFollowUp = (emailId, from, subject, note, dueDate) => {
+    const fu = { id: `fu_${Date.now()}_${emailId}`, emailId, from: from || '', subject: subject || '', note: note || '', dueDate: dueDate || null, createdAt: new Date().toISOString(), completed: false };
+    setFollowUps(prev => [fu, ...prev]);
+    setFollowUpForm(null);
+    showToast("Follow-up added");
+  };
+
+  const fetchEodRecap = async () => {
+    if (eodRecap?.loading) return;
+    setEodRecap({ loading: true, text: null, error: null });
+    const pending = followUps.filter(f => !f.completed).length;
+    const nonReplies = awaitingReply?.length || 0;
+    try {
+      const r = await fetch("/api/eod-recap", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailsHandled: emails.length, meetingsAttended: events.length, tasksCompleted: tasks.filter(t => t.done).length, followUpsPending: pending, nonReplies }),
+      });
+      const d = await r.json();
+      if (d.recap) setEodRecap({ loading: false, text: d.recap, error: null });
+      else setEodRecap({ loading: false, text: null, error: d.error || "Failed" });
+    } catch (e) { setEodRecap({ loading: false, text: null, error: e.message }); }
+  };
+
   const calendarAction = async (action, data) => {
     const r = await fetch("/api/calendar-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, ...data }) });
     const d = await r.json();
@@ -3643,6 +3677,7 @@ export default function Home() {
                   showToast(`Spam — future emails from ${domain || addr} → sales bucket`);
                 }} style={abtn(T.danger, T.dangerBg)} title="Delete and learn: future emails from this sender go to Sales/Spam">🚫 Spam</button>}
                 {isEmailActionVisible("makeTask", emailActionConfig) && <button onClick={() => setShowTaskForm({ prefillFromEmail: email })} style={abtn(T.taskAmber, T.taskAmberBg)}>📋 Make Task</button>}
+                <button onClick={() => setFollowUpForm({ emailId: email.id, from: email.from, subject: email.subject })} style={abtn(T.info, T.infoBg)}>🔔 Follow Up</button>
                 {isEmailActionVisible("toDo", emailActionConfig) && (effectiveBucket === "to-do"
                   ? <button onClick={() => setToDoEmailIds(prev => { const n = new Set(prev); n.delete(email.id); return n; })} style={abtn(T.calGreen, T.calGreenBg)}>✓ Done</button>
                   : <button onClick={() => setToDoEmailIds(prev => new Set([...prev, email.id]))} style={abtn(T.accent, T.accentBg)}>📌 To Do</button>
@@ -4723,18 +4758,97 @@ export default function Home() {
                 </div>
               );
             })()}
+            {id === "follow-ups" && (
+            <div style={{ background: T.card, border: `1px solid ${T.info}30`, borderRadius: 12, padding: "18px 22px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 17 }}>🔔</span>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: T.info }}>Follow-Ups</span>
+                  {followUps.filter(f => !f.completed).length > 0 && <span style={{ fontSize: 12, padding: "2px 8px", borderRadius: 10, background: T.infoBg, color: T.info, fontWeight: 700 }}>{followUps.filter(f => !f.completed).length}</span>}
+                </div>
+              </div>
+              {followUps.filter(f => !f.completed).length === 0 ? (
+                <div style={{ fontSize: 14, color: T.textDim, textAlign: "center", padding: "12px 0" }}>No pending follow-ups</div>
+              ) : (
+                [...followUps].filter(f => !f.completed).sort((a, b) => {
+                  const aDonor = /classy\.org|foundation|fund|donat/.test((a.from || '').toLowerCase());
+                  const bDonor = /classy\.org|foundation|fund|donat/.test((b.from || '').toLowerCase());
+                  if (aDonor !== bDonor) return aDonor ? -1 : 1;
+                  if (a.dueDate && !b.dueDate) return -1;
+                  if (!a.dueDate && b.dueDate) return 1;
+                  if (a.dueDate && b.dueDate) return new Date(a.dueDate) - new Date(b.dueDate);
+                  return new Date(a.createdAt) - new Date(b.createdAt);
+                }).map(fu => {
+                  const isOverdue = fu.dueDate && new Date(fu.dueDate) < new Date();
+                  const isDonor = /classy\.org|foundation|fund|donat/.test((fu.from || '').toLowerCase());
+                  return (
+                    <div key={fu.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: `1px solid ${T.borderLight}`, fontSize: 13 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fu.subject}</div>
+                        <div style={{ color: T.textMuted, fontSize: 12 }}>{fu.from?.replace(/<.*>/, '').trim()}</div>
+                        {fu.note && <div style={{ color: T.textDim, fontSize: 11, fontStyle: "italic", marginTop: 2 }}>{fu.note}</div>}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                        {isDonor && <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 8, background: T.calGreenBg, color: T.calGreen, fontWeight: 600 }}>💚 Donor</span>}
+                        {fu.dueDate && <span style={{ fontSize: 11, color: isOverdue ? T.danger : T.textMuted, fontWeight: isOverdue ? 700 : 400 }}>{isOverdue ? "Overdue" : fu.dueDate}</span>}
+                        <button onClick={() => setFollowUps(prev => prev.map(f => f.id === fu.id ? { ...f, completed: true } : f))} style={{ padding: "3px 8px", background: T.calGreenBg, color: T.calGreen, border: `1px solid ${T.calGreenBorder}`, borderRadius: 5, cursor: "pointer", fontSize: 11, fontWeight: 600 }}>✓</button>
+                        <button onClick={() => setFollowUps(prev => prev.filter(f => f.id !== fu.id))} style={{ padding: "3px 6px", background: "transparent", color: T.textDim, border: `1px solid ${T.border}`, borderRadius: 5, cursor: "pointer", fontSize: 11 }}>✕</button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            )}
+            {id === "awaiting-reply" && (
+            <div style={{ background: T.card, border: `1px solid ${T.taskAmber}30`, borderRadius: 12, padding: "18px 22px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <span style={{ fontSize: 17 }}>⏳</span>
+                <span style={{ fontSize: 16, fontWeight: 700, color: T.taskAmber }}>Awaiting Reply</span>
+                {awaitingReply?.length > 0 && <span style={{ fontSize: 12, padding: "2px 8px", borderRadius: 10, background: T.taskAmberBg, color: T.taskAmber, fontWeight: 700 }}>{awaitingReply.length}</span>}
+              </div>
+              {!awaitingReply ? (
+                <div style={{ fontSize: 13, color: T.textDim, textAlign: "center", padding: "12px 0" }}>Loading sent email tracking...</div>
+              ) : awaitingReply.length === 0 ? (
+                <div style={{ fontSize: 14, color: T.textDim, textAlign: "center", padding: "12px 0" }}>All sent emails have been replied to!</div>
+              ) : (
+                awaitingReply.slice(0, 8).map(e => (
+                  <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: `1px solid ${T.borderLight}`, fontSize: 13 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.subject}</div>
+                      <div style={{ color: T.textMuted, fontSize: 12 }}>To: {e.to}</div>
+                    </div>
+                    <span style={{ fontSize: 11, color: e.daysSince >= 5 ? T.danger : T.taskAmber, fontWeight: 600, flexShrink: 0 }}>{e.daysSince}d ago</span>
+                  </div>
+                ))
+              )}
+            </div>
+            )}
             {id === "end-of-day" && (
-            new Date().getHours() >= 16 ? (
+            new Date().getHours() >= 15 ? (
               <div style={{ background: T.goldBg, border: `1px solid ${T.taskAmberBorder}`, borderRadius: 12, padding: "20px 24px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                  <span style={{ fontSize: 18 }}>🌅</span><span style={{ fontSize: 17, fontWeight: 700, color: T.taskAmber }}>End of Day Wrap-Up</span>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 18 }}>🌅</span><span style={{ fontSize: 17, fontWeight: 700, color: T.taskAmber }}>End of Day Wrap-Up</span>
+                  </div>
+                  <button onClick={fetchEodRecap} disabled={eodRecap?.loading} style={{ padding: "6px 14px", background: "rgba(255,255,255,0.5)", color: T.taskAmber, border: `1px solid ${T.taskAmberBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                    {eodRecap?.loading ? "✨ Generating..." : eodRecap?.text ? "✨ Refresh" : "✨ AI Recap"}
+                  </button>
                 </div>
                 <div style={{ fontSize: 16, lineHeight: 1.8, color: T.text }}>
                   <div>📧 Emails still needing reply: <strong>{needsReply.length}</strong></div>
                   <div>✅ Tasks completed today: <strong>{tasks.filter(t => t.done).length}</strong></div>
                   <div>📋 Tasks carrying over: <strong>{tasks.filter(t => !t.done).length}</strong></div>
                   <div>⚠️ Overdue: <strong style={{ color: overdueTasks.length > 0 ? T.danger : T.calGreen }}>{overdueTasks.length}</strong></div>
+                  {followUps.filter(f => !f.completed).length > 0 && <div>🔔 Follow-ups pending: <strong>{followUps.filter(f => !f.completed).length}</strong></div>}
+                  {awaitingReply?.length > 0 && <div>⏳ Sent emails without reply: <strong>{awaitingReply.length}</strong></div>}
                 </div>
+                {eodRecap?.text && (
+                  <div style={{ marginTop: 14, padding: "14px 16px", background: "rgba(255,255,255,0.6)", borderRadius: 10, fontSize: 15, lineHeight: 1.6, color: T.text }}>{eodRecap.text}</div>
+                )}
+                {eodRecap?.error && (
+                  <div style={{ marginTop: 10, padding: "8px 12px", background: T.dangerBg, borderRadius: 6, fontSize: 13, color: T.danger }}>{eodRecap.error}</div>
+                )}
               </div>
             ) : null
             )}
@@ -5820,6 +5934,24 @@ export default function Home() {
 
       </div>
 
+      {/* Follow-up form modal */}
+      {followUpForm && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setFollowUpForm(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: 14, padding: 24, width: 420, maxWidth: "90vw", boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: T.text, marginBottom: 14 }}>🔔 Set Follow-Up</div>
+            <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 12 }}>Re: {followUpForm.subject}</div>
+            <div style={{ fontSize: 12, color: T.textDim, marginBottom: 14 }}>From: {followUpForm.from}</div>
+            <input type="date" id="fu-date" style={{ width: "100%", padding: "8px 12px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 14, marginBottom: 10, background: T.surface, color: T.text, boxSizing: "border-box" }} />
+            <textarea id="fu-note" placeholder="Why are you following up? (optional)" rows={2}
+              style={{ width: "100%", padding: "8px 12px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, marginBottom: 14, background: T.surface, color: T.text, resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }} />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setFollowUpForm(null)} style={{ padding: "8px 18px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 14 }}>Cancel</button>
+              <button onClick={() => { const d = document.getElementById("fu-date")?.value; const n = document.getElementById("fu-note")?.value; addFollowUp(followUpForm.emailId, followUpForm.from, followUpForm.subject, n, d || null); }}
+                style={{ padding: "8px 18px", background: T.info, color: "#fff", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 700 }}>Add Follow-Up</button>
+            </div>
+          </div>
+        </div>
+      )}
       {toast && <Toast message={toast.message} onUndo={toast.onUndo} onDone={() => setToast(null)} />}
       {meetingPrepEvent && <MeetingPrepDrawer event={meetingPrepEvent} T={T} onClose={() => setMeetingPrepEvent(null)} showToast={showToast} />}
 
