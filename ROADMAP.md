@@ -542,8 +542,8 @@ CEO vote: session expiry banner (6/6), auto-retry on token refresh (already buil
 
 ---
 
-## Sprint 7 — Intelligence & Clarity
-*Status: IN PROGRESS — user issues #63–74 shipped 2026-03-23; planned features below pending*
+## Sprint 7 — Intelligence & Clarity ✅ COMPLETE
+*Shipped: 2026-04-24 | User issues #63–93 shipped 2026-03-23–03-28; planned features shipped 2026-04-24 | 976 tests passing*
 
 ### Panel deliberation
 
@@ -574,7 +574,18 @@ CRO vote: donor intent signal on email row (5/6), HubSpot auto-lookup on open (4
 - Feature 4: Donor intent signal — if email is from a known HubSpot contact, show deal stage badge on email row
 
 **New env vars needed:** None (ANTHROPIC_API_KEY already in use)
-**New API routes:** POST /api/ai-triage (batch), GET /api/ai-explain?id= (per-email)
+**New API routes:** POST /api/ai-triage (batch), POST /api/ai-focus
+
+### Planned features shipped (2026-04-24)
+
+| Feature | Status |
+|---|---|
+| AI daily focus briefing on Today tab (3-bullet priority list from inbox + calendar + tasks) | ✅ |
+| Per-email classification explanation ("Why here?" on email expand) | ✅ |
+| Batch AI triage button in inbox header (RESPOND/ARCHIVE/DEFER per email) | ✅ |
+| Donor intent signal badges on email rows (Classy donation, fundraising keywords) | ✅ |
+
+**Tests added:** 34 new tests (sprint7features.test.js) — **976 total passing**
 
 ### User issues shipped in Sprint 7 (pre-planned-features)
 
@@ -776,3 +787,42 @@ These features were implemented in a hands-on session with Kayla, not via the au
 | All persisted to localStorage | `ffc_dashboard_layout` stores section order, widths, team members, email bucket widths. |
 
 **Architecture:** SectionWrap component wraps each today-tab section with drag/resize/hide controls in edit mode. Sections rendered via `.map()` over `dashLayout.todaySections` with `{id === "xxx" && (...)}` pattern — existing JSX stays intact, just wrapped.
+
+---
+
+## Sprint 12 — User Issues + Meeting Prep + Drive Improvements (April 2026) ✅ COMPLETE
+*Shipped: 2026-04-17 through 2026-04-24 | 976 tests passing*
+
+### User issues closed
+
+| Issue | What shipped |
+|---|---|
+| #111 | Birthday TO field fix — already shipped in Sprint 10, issue closed |
+| #108 | Drag-to-reorder email buckets — ⠿ grip handle on each section header, custom order persisted to localStorage |
+| #106 | Create docs in Drive with folder placement — "+ New Doc" button with folder search, creates doc via /api/create-doc |
+| #104 | Resizable panels with drag handles — bottom-edge drag handles on email buckets + Today sections, persisted to localStorage |
+| #99 | Email section descriptors/examples — editable description field under each bucket header, persisted to localStorage |
+| #95 | Whisper flow for Capture — 🎤 voice-to-text button using Web Speech API, continuous listening with interim results |
+
+### Meeting Prep for External Meetings (MEETING_PREP_SPEC.md)
+
+Full implementation of the meeting prep spec with 3 locked decisions:
+1. **v1-as-written** — lean moves-management (Last Contact + stage branching)
+2. **gmail-drive-only** — no external web sources
+3. **drive-doc-only** — Drive doc is single source of truth
+
+| Component | What shipped |
+|---|---|
+| `/api/person-research` | Aggregates identity, Gmail threads, Drive collaborators, donation signals, calendar context per external attendee |
+| `/api/meeting-prep` | Drive doc management — one doc per person in private `FFC Command Center/Meeting Prep/` folder. Privacy guard checks folder ACL on every write |
+| `MeetingPrepDrawer` | Right-side 480px drawer with fixed-slot sections, skeleton loading, source status pills, confidence chips, inline citations, sparse-data card |
+| Calendar integration | External attendee detection triggers enhanced "📋 Prep" button. Completion signal pills (Brief ready / Opened) on event rows |
+
+### Other improvements
+
+| Feature | What shipped |
+|---|---|
+| Board prep rewrite | HTML board email with clickable links, rotation detection (detectNextInRotation), agenda table builder, docsApiUpdate helper |
+
+**Tests:** 59 new tests across meetingPrep.test.js, emailSections.test.js, createDoc.test.js, resizePanels.test.js, whisperCapture.test.js
+**Total tests:** 976 passing across 36 test suites
