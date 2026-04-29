@@ -35,14 +35,12 @@ Switch to **EXPANSION** only when Kayla explicitly asks to think bigger or explo
 
 ---
 
-## Auth pattern — copy this exactly for every new API route
+## Auth pattern — import from shared module
 
-Every API route starts with the same three functions. Do not inline or abbreviate them. Copy them verbatim from `src/pages/api/drafts.js`:
+Every API route imports auth from `src/lib/auth.js`. **Do not inline auth functions.** Import them:
 
 ```js
-parseCookies(req)       // parses cookie string → object
-refreshToken(rt)        // POSTs to Google OAuth token endpoint
-getToken(req, res)      // checks ffc_at, silently refreshes if expired, returns token or null
+const { getToken } = require('../../lib/auth');
 ```
 
 Then the handler follows this shape:
