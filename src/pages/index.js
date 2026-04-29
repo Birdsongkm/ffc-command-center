@@ -3083,7 +3083,7 @@ export default function Home() {
   // ── Actions ──
   const emailAction = async (action, messageId, extra = {}) => {
     const emailToUndo = (action === "trash" || action === "archive") ? emails.find(e => e.id === messageId) : null;
-    const r = await fetch("/api/email-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, messageId, ...extra }) });
+    const r = await fetch("/api/email-actions", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, messageId, ...extra }) });
     const d = await r.json();
     if (d.success) {
       if (["markRead", "archive", "trash", "snooze"].includes(action)) setEmails(prev => prev.filter(e => e.id !== messageId));
@@ -3102,7 +3102,7 @@ export default function Home() {
             const labels = { archive: "Archived", markRead: "Marked as read", trash: "Deleted", star: "Starred", unstar: "Unstarred", snooze: "Snoozed" };
             const undoAction = action === "trash" ? "untrash" : "unarchive";
             const onUndo = async () => {
-              const ur = await fetch("/api/email-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: undoAction, messageId }) });
+              const ur = await fetch("/api/email-actions", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: undoAction, messageId }) });
               const ud = await ur.json();
               if (ud.success) {
                 if (emailToUndo) setEmails(prev => prev.some(e => e.id === emailToUndo.id) ? prev : [emailToUndo, ...prev]);
@@ -3126,7 +3126,7 @@ export default function Home() {
   };
 
   const batchAction = async (action, ids) => {
-    const r = await fetch("/api/email-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, messageIds: ids }) });
+    const r = await fetch("/api/email-actions", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, messageIds: ids }) });
     const d = await r.json();
     if (d.success) {
       if (["markRead", "archive", "trash"].includes(action)) setEmails(prev => prev.filter(e => !ids.includes(e.id)));
@@ -3135,14 +3135,14 @@ export default function Home() {
   };
 
   const sendEmail = async (payload) => {
-    const r = await fetch("/api/send-email", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const r = await fetch("/api/send-email", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const d = await r.json();
     if (d.success) {
       showToast("Email sent!");
       setComposing(null);
       if (payload.originalMessageId) {
         setEmails(prev => prev.filter(e => e.id !== payload.originalMessageId));
-        fetch("/api/email-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "markRead", messageId: payload.originalMessageId }) });
+        fetch("/api/email-actions", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "markRead", messageId: payload.originalMessageId }) });
       }
     } else { showToast("Failed: " + (d.error || "Unknown error")); }
   };
@@ -3250,7 +3250,7 @@ export default function Home() {
     setAiPrep(prev => ({ ...prev, [ev.id]: { loading: true } }));
     try {
       const r = await fetch("/api/ai-prep", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: ev.title, date: ev.start, attendees: ev.attendees, location: ev.location, description: ev.description }),
       });
       const d = await r.json();
@@ -3324,7 +3324,7 @@ export default function Home() {
   };
 
   const calendarAction = async (action, data) => {
-    const r = await fetch("/api/calendar-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, ...data }) });
+    const r = await fetch("/api/calendar-actions", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, ...data }) });
     const d = await r.json();
     if (d.success) { showToast(action === "create" ? "Event created!" : action === "delete" ? "Event deleted" : "Event updated"); fetchData(); }
     return d;
@@ -3333,7 +3333,7 @@ export default function Home() {
   const calendarRsvp = async (eventId, status) => {
     setCalRsvpBusy(eventId);
     try {
-      const r = await fetch("/api/calendar-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "rsvp", eventId, status }) });
+      const r = await fetch("/api/calendar-actions", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "rsvp", eventId, status }) });
       const d = await r.json();
       if (d.success) {
         setCalRsvpOverrides(prev => ({ ...prev, [eventId]: status }));
@@ -3354,7 +3354,7 @@ export default function Home() {
     const endOfWeek = new Date(now);
     const daysUntilSat = 6 - now.getDay();
     endOfWeek.setDate(now.getDate() + daysUntilSat); endOfWeek.setHours(23, 59, 59, 999);
-    const r = await fetch("/api/calendar-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "range", startDate: today.toISOString(), endDate: endOfWeek.toISOString() }) });
+    const r = await fetch("/api/calendar-actions", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "range", startDate: today.toISOString(), endDate: endOfWeek.toISOString() }) });
     const d = await r.json();
     if (d.success) setWeekEvents(d.events || []);
   };
@@ -3390,7 +3390,7 @@ export default function Home() {
       const sun = new Date(now); sun.setDate(now.getDate() + (7 - now.getDay())); sun.setHours(23, 59, 59);
       end = sun;
     }
-    const r = await fetch("/api/calendar-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "range", startDate: start.toISOString(), endDate: end.toISOString() }) });
+    const r = await fetch("/api/calendar-actions", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "range", startDate: start.toISOString(), endDate: end.toISOString() }) });
     const d = await r.json();
     if (d.success) { setWeekPrepEvents(d.events || []); setShowWeekPrep(true); }
   };
@@ -5015,8 +5015,24 @@ export default function Home() {
                         }} style={{ padding: "4px 10px", background: "transparent", color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>
                           {visibleEmails.every(e => selectedEmailIds.has(e.id)) && visibleEmails.length > 0 ? "✓ All" : "☐ Select"}
                         </button>
-                        <button onClick={() => batchAction("markRead", bucketEmails.map(e => e.id))} style={{ padding: "4px 10px", background: "transparent", color: T.textDim, border: `1px solid ${T.border}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>Read all</button>
-                        {canBatchDelete && <button onClick={() => batchAction("trash", visibleEmails.map(e => e.id))} style={{ padding: "4px 10px", background: "transparent", color: T.danger, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>Delete {totalPages > 1 ? "page" : "all"}</button>}
+                        {(() => {
+                          const bucketSet = new Set(bucketEmails.map(e => e.id));
+                          const selectedInBucket = [...selectedEmailIds].filter(id => bucketSet.has(id));
+                          const hasSelection = selectedInBucket.length > 0;
+                          const readTargets = hasSelection ? selectedInBucket : bucketEmails.map(e => e.id);
+                          const deleteTargets = hasSelection ? selectedInBucket : visibleEmails.map(e => e.id);
+                          return (
+                            <>
+                              <button onClick={() => { batchAction("markRead", readTargets); if (hasSelection) setSelectedEmailIds(new Set()); }} style={{ padding: "4px 10px", background: hasSelection ? T.emailBlueBg : "transparent", color: hasSelection ? T.emailBlue : T.textDim, border: `1px solid ${hasSelection ? T.emailBlueBorder : T.border}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>
+                                {hasSelection ? `Read ${selectedInBucket.length} selected` : "Read all"}
+                              </button>
+                              {canBatchDelete && <button onClick={() => { batchAction("trash", deleteTargets); if (hasSelection) setSelectedEmailIds(new Set()); }} style={{ padding: "4px 10px", background: hasSelection ? T.dangerBg : "transparent", color: T.danger, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>
+                                {hasSelection ? `Delete ${selectedInBucket.length} selected` : `Delete ${totalPages > 1 ? "page" : "all"}`}
+                              </button>}
+                              {hasSelection && <button onClick={() => { batchAction("archive", selectedInBucket); setSelectedEmailIds(new Set()); }} style={{ padding: "4px 10px", background: T.calGreenBg, color: T.calGreen, border: `1px solid ${T.calGreenBorder}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>Archive {selectedInBucket.length}</button>}
+                            </>
+                          );
+                        })()}
                         <button onClick={() => setDashLayout(prev => ({ ...prev, emailBucketWidths: { ...prev.emailBucketWidths, [bucket]: bucketWidth === 'full' ? 'auto' : 'full' } }))}
                           style={{ padding: "4px 10px", background: "transparent", color: T.textDim, border: `1px solid ${T.border}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>{bucketWidth === 'full' ? '↕' : '↔'}</button>
                       </div>
@@ -5641,7 +5657,7 @@ export default function Home() {
                     <div style={{ display: "flex", gap: 8 }}>
                       <button disabled={draftSaving} onClick={async () => {
                         setDraftSaving(true);
-                        const r = await fetch("/api/drafts", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draftId: d.id, to: editingDraft.to, subject: editingDraft.subject, body: editingDraft.body }) });
+                        const r = await fetch("/api/drafts", { method: "PATCH", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draftId: d.id, to: editingDraft.to, subject: editingDraft.subject, body: editingDraft.body }) });
                         const res = await r.json();
                         setDraftSaving(false);
                         if (res.success) { showToast("Draft saved!"); setEditingDraft(null); fetchDrafts(); }
@@ -5655,12 +5671,12 @@ export default function Home() {
                 )}
                 {!isEditing && (
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button onClick={async () => { const r = await fetch("/api/drafts", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draftId: d.id }) }); const res = await r.json(); if (res.success) { showToast("Draft sent!"); fetchDrafts(); } else { showToast("Send failed — try Edit & Send"); } }} style={{ padding: "8px 18px", background: T.accent, color: "#fff", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Send Now</button>
+                    <button onClick={async () => { const r = await fetch("/api/drafts", { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draftId: d.id }) }); const res = await r.json(); if (res.success) { showToast("Draft sent!"); fetchDrafts(); } else { showToast("Send failed — try Edit & Send"); } }} style={{ padding: "8px 18px", background: T.accent, color: "#fff", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 600 }}>Send Now</button>
                     <button onClick={() => setEditingDraft({ id: d.id, to: d.to || "", subject: d.subject || "", body: d.body || d.snippet || "" })} style={{ padding: "8px 18px", background: T.infoBg, color: T.info, border: `1px solid ${T.info}30`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>✏️ Edit</button>
                     <button onClick={() => window.open(`https://mail.google.com/mail/#drafts/${d.messageId}`, "_blank")} style={{ padding: "8px 18px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>Edit in Gmail</button>
                     <button onClick={() => setDocModal({ title: d.subject || "Draft", content: `To: ${d.to || ""}\nSubject: ${d.subject || ""}\n\n${d.snippet || ""}` })} style={{ padding: "8px 18px", background: T.driveVioletBg, color: T.driveViolet, border: `1px solid ${T.driveVioletBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>📄 Google Doc</button>
                     <button onClick={() => setHsModal({ note: `Draft email\nTo: ${d.to || ""}\nSubject: ${d.subject || ""}\n\n${d.snippet || ""}`, subject: d.subject || "Draft" })} style={{ padding: "8px 18px", background: "#FFF4F0", color: "#FF7A59", border: "1px solid #FFB8A0", borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>🏢 HubSpot</button>
-                    <button onClick={async () => { const r = await fetch(`/api/drafts?id=${d.id}`, { method: "DELETE" }); const res = await r.json(); if (res.success) { showToast("Draft deleted"); fetchDrafts(); } }} style={{ padding: "8px 18px", background: T.dangerBg, color: T.danger, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>Delete</button>
+                    <button onClick={async () => { const r = await fetch(`/api/drafts?id=${d.id}`, { method: "DELETE", credentials: "include" }); const res = await r.json(); if (res.success) { showToast("Draft deleted"); fetchDrafts(); } }} style={{ padding: "8px 18px", background: T.dangerBg, color: T.danger, border: `1px solid ${T.urgentCoralBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 15, fontWeight: 500 }}>Delete</button>
                   </div>
                 )}
               </div>
@@ -6104,7 +6120,7 @@ export default function Home() {
                         if (m) folderId = m[1];
                       }
                       const r = await fetch("/api/create-doc", {
-                        method: "POST",
+                        method: "POST", credentials: "include",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ title: docModal.title, content: docModal.content, folderId }),
                       });
