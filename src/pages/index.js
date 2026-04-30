@@ -1659,23 +1659,61 @@ function BirthdayPanel({ birthdays, recipients, onClose, showToast }) {
 }
 
 // ── getPayrollChanges — pure diff helper (mirrored in __tests__/payrollReview.test.js) ──
-// Parse payroll PDF text into per-employee rows with name + numeric values
+// Parse payroll PDF text into labeled rows grouped by employee.
+// Strategy: look for lines that are person names (2+ capitalized words, no payroll jargon),
+// then group subsequent field+value lines under that person.
 function parsePayrollRows(lines) {
-  const rows = [];
+  // Payroll jargon — these are field labels, NOT employee names
+  const fieldLabels = /^(total|sub.?total|grand|net|gross|regular|overtime|salary|hourly|pay\s?period|pay\s?date|check|deduction|earning|tax|federal|state|social|medicare|fica|payroll|company|address|ein|page|report|printed|date|period|fedfit|fedsocsec|fedmedcare|cosit|co\b|dental|health|vision|life|disability|401|403|hsa|fsa|ira|reimb|pretax|posttax|er-|ee-|garnish|loan|advance|bonus|commission|tip|pto|vacation|sick|holiday|personal|memo|void|adjustment|retro|w-?2|yt[d]|qtr|quarter|annual|monthly|weekly|bi-?week)/i;
+
+  const sections = [];
+  let currentPerson = null;
+  let currentFields = [];
+
   for (const line of (lines || [])) {
     const trimmed = line.trim();
-    if (!trimmed) continue;
+    if (!trimmed || trimmed.length < 2) continue;
+
     const numbers = trimmed.match(/[\$]?[\d,]+\.?\d*/g) || [];
-    if (numbers.length === 0) continue;
     const firstNumIdx = trimmed.search(/[\$\d]/);
-    if (firstNumIdx <= 0) continue;
-    const name = trimmed.slice(0, firstNumIdx).trim();
-    if (name.length < 2) continue;
-    const lowerName = name.toLowerCase();
-    if (/^(total|sub.?total|grand|net|gross|employee|name|date|period|check|pay\s|deduction|earning|tax|federal|state|social|medicare|fica)/.test(lowerName)) continue;
-    const values = numbers.map(n => parseFloat(n.replace(/[$,]/g, '')));
-    rows.push({ name, values, raw: trimmed });
+    const textPart = firstNumIdx > 0 ? trimmed.slice(0, firstNumIdx).trim() : trimmed;
+
+    // Is this a person name? Must have 2+ words, contain spaces, mostly letters, not a field label
+    const looksLikeName = /^[A-Z][a-z]+ [A-Z][a-z]/.test(textPart) && !fieldLabels.test(textPart) && textPart.length < 40;
+
+    if (looksLikeName && numbers.length === 0) {
+      // Pure name line — start a new person section
+      if (currentPerson) sections.push({ person: currentPerson, fields: currentFields });
+      currentPerson = textPart;
+      currentFields = [];
+    } else if (looksLikeName && numbers.length > 0) {
+      // Name + numbers on same line
+      if (currentPerson) sections.push({ person: currentPerson, fields: currentFields });
+      currentPerson = textPart;
+      currentFields = [{ label: textPart, values: numbers.map(n => parseFloat(n.replace(/[$,]/g, ''))), raw: trimmed }];
+    } else if (numbers.length > 0) {
+      // Field with values — extract the label
+      const label = firstNumIdx > 0 ? textPart : '';
+      const values = numbers.map(n => parseFloat(n.replace(/[$,]/g, '')));
+      const field = { label: label || '(value)', values, raw: trimmed };
+      currentFields.push(field);
+    }
   }
+  if (currentPerson) sections.push({ person: currentPerson, fields: currentFields });
+
+  // If no person names found, treat all fields as one unnamed section
+  if (sections.length === 0 && currentFields.length > 0) {
+    sections.push({ person: null, fields: currentFields });
+  }
+
+  // Also build flat rows for backward compat with diff logic
+  const rows = sections.map(s => ({
+    name: s.person || 'Payroll',
+    values: s.fields.flatMap(f => f.values),
+    fields: s.fields,
+    raw: s.fields.map(f => f.raw).join('\n'),
+  }));
+
   return rows;
 }
 
@@ -1683,12 +1721,12 @@ function normalizePayrollName(name) {
   return (name || '').toLowerCase().replace(/[^a-z]/g, '').trim();
 }
 
-// Diff current vs previous payroll — side-by-side per-employee comparison
+// Diff current vs previous payroll — per-employee, per-field comparison
 function getPayrollChanges(currentLines, prevLines) {
   const currentRows = parsePayrollRows(currentLines);
   const prevRows = parsePayrollRows(prevLines);
 
-  // Match by name
+  // Match employee sections by name
   const matched = [];
   const unmatchedCurr = [...currentRows];
   const unmatchedPrev = [...prevRows];
@@ -1704,17 +1742,36 @@ function getPayrollChanges(currentLines, prevLines) {
   const changes = [];
   const unchanged = [];
   for (const { current, previous } of matched) {
-    const diffs = [];
-    const maxLen = Math.max(current.values.length, previous.values.length);
-    for (let vi = 0; vi < maxLen; vi++) {
-      const curr = current.values[vi] ?? null;
-      const prev = previous.values[vi] ?? null;
-      if (curr !== prev) {
-        const delta = curr !== null && prev !== null ? curr - prev : null;
-        diffs.push({ index: vi, prev, curr, delta });
+    const fieldChanges = [];
+    const currFields = current.fields || [];
+    const prevFields = previous.fields || [];
+
+    // Match fields by label within this employee
+    for (const cf of currFields) {
+      const pf = prevFields.find(p => p.label && cf.label && p.label.toLowerCase() === cf.label.toLowerCase());
+      if (pf) {
+        // Compare values
+        const maxLen = Math.max(cf.values.length, pf.values.length);
+        for (let vi = 0; vi < maxLen; vi++) {
+          const curr = cf.values[vi] ?? null;
+          const prev = pf.values[vi] ?? null;
+          if (curr !== prev) {
+            fieldChanges.push({ label: cf.label, prev, curr, delta: curr !== null && prev !== null ? curr - prev : null });
+          }
+        }
+      } else {
+        // New field
+        cf.values.forEach(v => fieldChanges.push({ label: cf.label, prev: null, curr: v, delta: null }));
       }
     }
-    if (diffs.length > 0) changes.push({ name: current.name, diffs, currentValues: current.values, previousValues: previous.values });
+    // Removed fields
+    for (const pf of prevFields) {
+      if (!currFields.find(cf => cf.label && pf.label && cf.label.toLowerCase() === pf.label.toLowerCase())) {
+        pf.values.forEach(v => fieldChanges.push({ label: pf.label, prev: v, curr: null, delta: null }));
+      }
+    }
+
+    if (fieldChanges.length > 0) changes.push({ name: current.name, diffs: fieldChanges });
     else unchanged.push(current.name);
   }
 
@@ -1826,30 +1883,38 @@ function PayrollReviewPanel({ email, cache, onCacheUpdate, onClose, onApproved, 
             {prevDate && <span style={{ fontSize: 12, color: T.textMuted, marginLeft: "auto" }}>vs. {prevDate}</span>}
           </div>
 
-          {/* Side-by-side change table */}
+          {/* Side-by-side change table — grouped by employee */}
           {diff.changes?.length > 0 && (
-            <div style={{ border: `1px solid ${T.border}`, borderRadius: 10, overflow: "hidden", marginBottom: 16 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", background: T.bg, borderBottom: `1px solid ${T.border}` }}>
-                <div style={{ padding: "8px 12px", fontSize: 12, fontWeight: 700, color: T.textMuted }}>Employee</div>
-                <div style={{ padding: "8px 12px", fontSize: 12, fontWeight: 700, color: T.textMuted }}>Last Month</div>
-                <div style={{ padding: "8px 12px", fontSize: 12, fontWeight: 700, color: T.textMuted }}>This Month</div>
-              </div>
+            <div style={{ marginBottom: 16 }}>
               {diff.changes.map((ch, ci) => (
-                <div key={ci}>
+                <div key={ci} style={{ border: `1px solid ${T.border}`, borderRadius: 10, overflow: "hidden", marginBottom: 12 }}>
+                  {/* Employee name header */}
+                  <div style={{ padding: "10px 14px", background: T.taskAmberBg, borderBottom: `1px solid ${T.taskAmberBorder}`, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 15 }}>👤</span>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: T.taskAmber }}>{ch.name || "Payroll Changes"}</span>
+                    <span style={{ fontSize: 12, color: T.textMuted }}>{ch.diffs.length} change{ch.diffs.length !== 1 ? "s" : ""}</span>
+                  </div>
+                  {/* Field header row */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr", background: T.bg, borderBottom: `1px solid ${T.border}` }}>
+                    <div style={{ padding: "6px 12px", fontSize: 11, fontWeight: 700, color: T.textMuted }}>Field</div>
+                    <div style={{ padding: "6px 12px", fontSize: 11, fontWeight: 700, color: T.textMuted }}>Last Month</div>
+                    <div style={{ padding: "6px 12px", fontSize: 11, fontWeight: 700, color: T.textMuted }}>This Month</div>
+                  </div>
+                  {/* Changed fields */}
                   {ch.diffs.map((d, di) => {
                     const prev = d.prev;
                     const curr = d.curr;
                     const delta = d.delta;
                     const sign = delta > 0 ? "+" : "";
-                    const isDollar = (prev !== null ? prev : curr) >= 100;
+                    const isDollar = Math.abs(prev !== null ? prev : curr) >= 100;
                     const fmt = v => v === null ? "—" : isDollar ? "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2 }) : v.toFixed(2);
-                    const deltaStr = delta !== null ? ` (${sign}${isDollar ? "$" : ""}${Math.abs(delta).toLocaleString("en-US", { minimumFractionDigits: 2 })})` : "";
+                    const deltaStr = delta !== null ? ` (${sign}${isDollar ? "$" : ""}${Math.abs(delta).toLocaleString("en-US", { minimumFractionDigits: 2 })})` : d.prev === null ? " (new)" : d.curr === null ? " (removed)" : "";
                     return (
-                      <div key={`${ci}-${di}`} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", borderBottom: `1px solid ${T.borderLight}` }}>
-                        <div style={{ padding: "8px 12px", fontSize: 14, fontWeight: 600, color: T.text }}>{di === 0 ? ch.name : ""}</div>
-                        <div style={{ padding: "8px 12px", fontSize: 14, color: T.textMuted }}>{fmt(prev)}</div>
-                        <div style={{ padding: "8px 12px", fontSize: 14, fontWeight: 600, color: delta > 0 ? "#155724" : delta < 0 ? "#721C24" : T.text, background: delta !== 0 && delta !== null ? (delta > 0 ? "#D4EDDA" : "#F8D7DA") : "transparent" }}>
-                          {fmt(curr)}<span style={{ fontSize: 12, fontWeight: 400 }}>{deltaStr}</span>
+                      <div key={di} style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr", borderBottom: `1px solid ${T.borderLight}` }}>
+                        <div style={{ padding: "7px 12px", fontSize: 13, fontWeight: 500, color: T.text }}>{d.label || `Value ${di + 1}`}</div>
+                        <div style={{ padding: "7px 12px", fontSize: 13, color: T.textMuted }}>{fmt(prev)}</div>
+                        <div style={{ padding: "7px 12px", fontSize: 13, fontWeight: 600, color: delta > 0 ? "#155724" : delta < 0 ? "#721C24" : T.text, background: delta !== 0 && delta !== null ? (delta > 0 ? "#D4EDDA" : "#F8D7DA") : prev === null ? "#D4EDDA" : curr === null ? "#F8D7DA" : "transparent" }}>
+                          {fmt(curr)}<span style={{ fontSize: 11, fontWeight: 400, marginLeft: 4 }}>{deltaStr}</span>
                         </div>
                       </div>
                     );
