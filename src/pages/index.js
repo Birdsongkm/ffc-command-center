@@ -1659,13 +1659,66 @@ function BirthdayPanel({ birthdays, recipients, onClose, showToast }) {
 }
 
 // ── getPayrollChanges — pure diff helper (mirrored in __tests__/payrollReview.test.js) ──
+// Parse payroll PDF text into per-employee rows with name + numeric values
+function parsePayrollRows(lines) {
+  const rows = [];
+  for (const line of (lines || [])) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const numbers = trimmed.match(/[\$]?[\d,]+\.?\d*/g) || [];
+    if (numbers.length === 0) continue;
+    const firstNumIdx = trimmed.search(/[\$\d]/);
+    if (firstNumIdx <= 0) continue;
+    const name = trimmed.slice(0, firstNumIdx).trim();
+    if (name.length < 2) continue;
+    const lowerName = name.toLowerCase();
+    if (/^(total|sub.?total|grand|net|gross|employee|name|date|period|check|pay\s|deduction|earning|tax|federal|state|social|medicare|fica)/.test(lowerName)) continue;
+    const values = numbers.map(n => parseFloat(n.replace(/[$,]/g, '')));
+    rows.push({ name, values, raw: trimmed });
+  }
+  return rows;
+}
+
+function normalizePayrollName(name) {
+  return (name || '').toLowerCase().replace(/[^a-z]/g, '').trim();
+}
+
+// Diff current vs previous payroll — side-by-side per-employee comparison
 function getPayrollChanges(currentLines, prevLines) {
-  const currentSet = new Set((currentLines || []).filter(l => l.trim()));
-  const prevSet = new Set((prevLines || []).filter(l => l.trim()));
-  const added = [], removed = [], unchanged = [];
-  currentSet.forEach(l => { if (prevSet.has(l)) unchanged.push(l); else added.push(l); });
-  prevSet.forEach(l => { if (!currentSet.has(l)) removed.push(l); });
-  return { added, removed, unchanged };
+  const currentRows = parsePayrollRows(currentLines);
+  const prevRows = parsePayrollRows(prevLines);
+
+  // Match by name
+  const matched = [];
+  const unmatchedCurr = [...currentRows];
+  const unmatchedPrev = [...prevRows];
+  for (let i = unmatchedCurr.length - 1; i >= 0; i--) {
+    const idx = unmatchedPrev.findIndex(p => normalizePayrollName(p.name) === normalizePayrollName(unmatchedCurr[i].name));
+    if (idx !== -1) {
+      matched.push({ current: unmatchedCurr[i], previous: unmatchedPrev[idx] });
+      unmatchedCurr.splice(i, 1);
+      unmatchedPrev.splice(idx, 1);
+    }
+  }
+
+  const changes = [];
+  const unchanged = [];
+  for (const { current, previous } of matched) {
+    const diffs = [];
+    const maxLen = Math.max(current.values.length, previous.values.length);
+    for (let vi = 0; vi < maxLen; vi++) {
+      const curr = current.values[vi] ?? null;
+      const prev = previous.values[vi] ?? null;
+      if (curr !== prev) {
+        const delta = curr !== null && prev !== null ? curr - prev : null;
+        diffs.push({ index: vi, prev, curr, delta });
+      }
+    }
+    if (diffs.length > 0) changes.push({ name: current.name, diffs, currentValues: current.values, previousValues: previous.values });
+    else unchanged.push(current.name);
+  }
+
+  return { changes, unchanged, addedEmployees: unmatchedCurr, removedEmployees: unmatchedPrev };
 }
 
 function PayrollReviewPanel({ email, cache, onCacheUpdate, onClose, onApproved, showToast }) {
@@ -1725,8 +1778,8 @@ function PayrollReviewPanel({ email, cache, onCacheUpdate, onClose, onApproved, 
   };
 
   const diff = data ? getPayrollChanges(
-    (data.current.text || "").split("\n"),
-    (data.previous[0]?.text || "").split("\n")
+    (data.current?.text || "").split("\n"),
+    (data.previous?.[0]?.text || "").split("\n")
   ) : null;
 
   const prevDate = data?.previous[0]?.date
@@ -1766,29 +1819,64 @@ function PayrollReviewPanel({ email, cache, onCacheUpdate, onClose, onApproved, 
         <>
           {/* Summary bar */}
           <div style={{ display: "flex", gap: 16, alignItems: "center", padding: "10px 0", marginBottom: 12, borderBottom: `1px solid ${T.borderLight}` }}>
-            {diff.added.length > 0 && <span style={{ fontSize: 13, color: "#155724", fontWeight: 600 }}>+{diff.added.length} added</span>}
-            {diff.removed.length > 0 && <span style={{ fontSize: 13, color: "#721C24", fontWeight: 600 }}>−{diff.removed.length} removed</span>}
-            {diff.added.length === 0 && diff.removed.length === 0 && <span style={{ fontSize: 13, color: T.calGreen, fontWeight: 600 }}>✓ No changes from last payroll</span>}
+            {diff.changes?.length > 0 && <span style={{ fontSize: 13, color: T.taskAmber, fontWeight: 600 }}>{diff.changes.length} employee{diff.changes.length !== 1 ? "s" : ""} changed</span>}
+            {diff.addedEmployees?.length > 0 && <span style={{ fontSize: 13, color: "#155724", fontWeight: 600 }}>+{diff.addedEmployees.length} new</span>}
+            {diff.removedEmployees?.length > 0 && <span style={{ fontSize: 13, color: "#721C24", fontWeight: 600 }}>−{diff.removedEmployees.length} removed</span>}
+            {(!diff.changes?.length && !diff.addedEmployees?.length && !diff.removedEmployees?.length) && <span style={{ fontSize: 13, color: T.calGreen, fontWeight: 600 }}>✓ No changes from last payroll</span>}
             {prevDate && <span style={{ fontSize: 12, color: T.textMuted, marginLeft: "auto" }}>vs. {prevDate}</span>}
           </div>
 
-          {/* Diff lines */}
-          <div style={{ maxHeight: 240, overflowY: "auto", fontFamily: "monospace", fontSize: 12, border: `1px solid ${T.border}`, borderRadius: 8, marginBottom: 16 }}>
-            {diff.added.map((line, i) => (
-              <div key={`a${i}`} style={{ background: "#D4EDDA", color: "#155724", padding: "2px 10px", whiteSpace: "pre-wrap" }}>+ {line}</div>
-            ))}
-            {diff.removed.map((line, i) => (
-              <div key={`r${i}`} style={{ background: "#F8D7DA", color: "#721C24", padding: "2px 10px", whiteSpace: "pre-wrap" }}>− {line}</div>
-            ))}
-            {diff.unchanged.length > 0 && (
-              <div style={{ padding: "4px 10px", color: "#888", fontSize: 11, borderTop: diff.added.length + diff.removed.length > 0 ? `1px solid ${T.border}` : "none" }}>
-                ── {diff.unchanged.length} unchanged lines ──
+          {/* Side-by-side change table */}
+          {diff.changes?.length > 0 && (
+            <div style={{ border: `1px solid ${T.border}`, borderRadius: 10, overflow: "hidden", marginBottom: 16 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", background: T.bg, borderBottom: `1px solid ${T.border}` }}>
+                <div style={{ padding: "8px 12px", fontSize: 12, fontWeight: 700, color: T.textMuted }}>Employee</div>
+                <div style={{ padding: "8px 12px", fontSize: 12, fontWeight: 700, color: T.textMuted }}>Last Month</div>
+                <div style={{ padding: "8px 12px", fontSize: 12, fontWeight: 700, color: T.textMuted }}>This Month</div>
               </div>
-            )}
-            {diff.added.length === 0 && diff.removed.length === 0 && diff.unchanged.length === 0 && (
-              <div style={{ padding: "12px 10px", color: T.textMuted, fontSize: 13, textAlign: "center" }}>No parseable content found in PDFs.</div>
-            )}
-          </div>
+              {diff.changes.map((ch, ci) => (
+                <div key={ci}>
+                  {ch.diffs.map((d, di) => {
+                    const prev = d.prev;
+                    const curr = d.curr;
+                    const delta = d.delta;
+                    const sign = delta > 0 ? "+" : "";
+                    const isDollar = (prev !== null ? prev : curr) >= 100;
+                    const fmt = v => v === null ? "—" : isDollar ? "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2 }) : v.toFixed(2);
+                    const deltaStr = delta !== null ? ` (${sign}${isDollar ? "$" : ""}${Math.abs(delta).toLocaleString("en-US", { minimumFractionDigits: 2 })})` : "";
+                    return (
+                      <div key={`${ci}-${di}`} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", borderBottom: `1px solid ${T.borderLight}` }}>
+                        <div style={{ padding: "8px 12px", fontSize: 14, fontWeight: 600, color: T.text }}>{di === 0 ? ch.name : ""}</div>
+                        <div style={{ padding: "8px 12px", fontSize: 14, color: T.textMuted }}>{fmt(prev)}</div>
+                        <div style={{ padding: "8px 12px", fontSize: 14, fontWeight: 600, color: delta > 0 ? "#155724" : delta < 0 ? "#721C24" : T.text, background: delta !== 0 && delta !== null ? (delta > 0 ? "#D4EDDA" : "#F8D7DA") : "transparent" }}>
+                          {fmt(curr)}<span style={{ fontSize: 12, fontWeight: 400 }}>{deltaStr}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* New/removed employees */}
+          {diff.addedEmployees?.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              {diff.addedEmployees.map((e, i) => <div key={i} style={{ padding: "6px 12px", background: "#D4EDDA", color: "#155724", borderRadius: 6, marginBottom: 4, fontSize: 13 }}>+ New: {e.name} ({e.values.map(v => v >= 100 ? "$" + v.toLocaleString() : v).join(", ")})</div>)}
+            </div>
+          )}
+          {diff.removedEmployees?.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              {diff.removedEmployees.map((e, i) => <div key={i} style={{ padding: "6px 12px", background: "#F8D7DA", color: "#721C24", borderRadius: 6, marginBottom: 4, fontSize: 13 }}>− Removed: {e.name}</div>)}
+            </div>
+          )}
+
+          {/* Unchanged employees summary */}
+          {diff.unchanged?.length > 0 && (
+            <div style={{ padding: "8px 12px", background: T.bg, borderRadius: 8, marginBottom: 16, fontSize: 13, color: T.textMuted }}>
+              ✓ {diff.unchanged.length} employee{diff.unchanged.length !== 1 ? "s" : ""} unchanged: {diff.unchanged.join(", ")}
+            </div>
+          )}
 
           {/* Previous payrolls context */}
           {data.previous.length > 1 && (
