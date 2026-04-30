@@ -1834,14 +1834,25 @@ function PayrollReviewPanel({ email, cache, onCacheUpdate, onClose, onApproved, 
     setApproving(false);
   };
 
-  const diff = data ? getPayrollChanges(
-    (data.current?.text || "").split("\n"),
-    (data.previous?.[0]?.text || "").split("\n")
-  ) : null;
+  const [aiDiff, setAiDiff] = useState(null); // { loading, summary, error }
 
   const prevDate = data?.previous[0]?.date
     ? new Date(data.previous[0].date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : null;
+
+  // Auto-generate AI diff when data loads
+  useEffect(() => {
+    if (!data?.current?.text || !data?.previous?.[0]?.text || aiDiff) return;
+    setAiDiff({ loading: true, summary: null, error: null });
+    fetch("/api/ai-payroll-diff", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ currentText: data.current.text, previousText: data.previous[0].text }),
+    }).then(r => r.json()).then(d => {
+      if (d.summary) setAiDiff({ loading: false, summary: d.summary, error: null });
+      else setAiDiff({ loading: false, summary: null, error: d.error || "Failed to analyze" });
+    }).catch(e => setAiDiff({ loading: false, summary: null, error: e.message }));
+  }, [data]);
 
   return (
     <div style={{ background: T.card, border: `2px solid ${T.taskAmberBorder}`, borderRadius: 16, padding: 24, marginBottom: 26 }}>
@@ -1871,75 +1882,38 @@ function PayrollReviewPanel({ email, cache, onCacheUpdate, onClose, onApproved, 
         </div>
       )}
 
-      {/* Diff view */}
-      {!loading && data && diff && (
+      {/* Diff view — AI-powered comparison */}
+      {!loading && data && (
         <>
-          {/* Summary bar */}
-          <div style={{ display: "flex", gap: 16, alignItems: "center", padding: "10px 0", marginBottom: 12, borderBottom: `1px solid ${T.borderLight}` }}>
-            {diff.changes?.length > 0 && <span style={{ fontSize: 13, color: T.taskAmber, fontWeight: 600 }}>{diff.changes.length} employee{diff.changes.length !== 1 ? "s" : ""} changed</span>}
-            {diff.addedEmployees?.length > 0 && <span style={{ fontSize: 13, color: "#155724", fontWeight: 600 }}>+{diff.addedEmployees.length} new</span>}
-            {diff.removedEmployees?.length > 0 && <span style={{ fontSize: 13, color: "#721C24", fontWeight: 600 }}>−{diff.removedEmployees.length} removed</span>}
-            {(!diff.changes?.length && !diff.addedEmployees?.length && !diff.removedEmployees?.length) && <span style={{ fontSize: 13, color: T.calGreen, fontWeight: 600 }}>✓ No changes from last payroll</span>}
-            {prevDate && <span style={{ fontSize: 12, color: T.textMuted, marginLeft: "auto" }}>vs. {prevDate}</span>}
-          </div>
-
-          {/* Side-by-side change table — grouped by employee */}
-          {diff.changes?.length > 0 && (
-            <div style={{ marginBottom: 16 }}>
-              {diff.changes.map((ch, ci) => (
-                <div key={ci} style={{ border: `1px solid ${T.border}`, borderRadius: 10, overflow: "hidden", marginBottom: 12 }}>
-                  {/* Employee name header */}
-                  <div style={{ padding: "10px 14px", background: T.taskAmberBg, borderBottom: `1px solid ${T.taskAmberBorder}`, display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 15 }}>👤</span>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: T.taskAmber }}>{ch.name || "Payroll Changes"}</span>
-                    <span style={{ fontSize: 12, color: T.textMuted }}>{ch.diffs.length} change{ch.diffs.length !== 1 ? "s" : ""}</span>
-                  </div>
-                  {/* Field header row */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr", background: T.bg, borderBottom: `1px solid ${T.border}` }}>
-                    <div style={{ padding: "6px 12px", fontSize: 11, fontWeight: 700, color: T.textMuted }}>Field</div>
-                    <div style={{ padding: "6px 12px", fontSize: 11, fontWeight: 700, color: T.textMuted }}>Last Month</div>
-                    <div style={{ padding: "6px 12px", fontSize: 11, fontWeight: 700, color: T.textMuted }}>This Month</div>
-                  </div>
-                  {/* Changed fields */}
-                  {ch.diffs.map((d, di) => {
-                    const prev = d.prev;
-                    const curr = d.curr;
-                    const delta = d.delta;
-                    const sign = delta > 0 ? "+" : "";
-                    const isDollar = Math.abs(prev !== null ? prev : curr) >= 100;
-                    const fmt = v => v === null ? "—" : isDollar ? "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2 }) : v.toFixed(2);
-                    const deltaStr = delta !== null ? ` (${sign}${isDollar ? "$" : ""}${Math.abs(delta).toLocaleString("en-US", { minimumFractionDigits: 2 })})` : d.prev === null ? " (new)" : d.curr === null ? " (removed)" : "";
-                    return (
-                      <div key={di} style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr", borderBottom: `1px solid ${T.borderLight}` }}>
-                        <div style={{ padding: "7px 12px", fontSize: 13, fontWeight: 500, color: T.text }}>{d.label || `Value ${di + 1}`}</div>
-                        <div style={{ padding: "7px 12px", fontSize: 13, color: T.textMuted }}>{fmt(prev)}</div>
-                        <div style={{ padding: "7px 12px", fontSize: 13, fontWeight: 600, color: delta > 0 ? "#155724" : delta < 0 ? "#721C24" : T.text, background: delta !== 0 && delta !== null ? (delta > 0 ? "#D4EDDA" : "#F8D7DA") : prev === null ? "#D4EDDA" : curr === null ? "#F8D7DA" : "transparent" }}>
-                          {fmt(curr)}<span style={{ fontSize: 11, fontWeight: 400, marginLeft: 4 }}>{deltaStr}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
+          {prevDate && (
+            <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 12 }}>Comparing vs. {prevDate}</div>
           )}
 
-          {/* New/removed employees */}
-          {diff.addedEmployees?.length > 0 && (
-            <div style={{ marginBottom: 12 }}>
-              {diff.addedEmployees.map((e, i) => <div key={i} style={{ padding: "6px 12px", background: "#D4EDDA", color: "#155724", borderRadius: 6, marginBottom: 4, fontSize: 13 }}>+ New: {e.name} ({e.values.map(v => v >= 100 ? "$" + v.toLocaleString() : v).join(", ")})</div>)}
+          {/* AI Summary */}
+          {aiDiff?.loading && (
+            <div style={{ padding: "20px 16px", textAlign: "center", color: T.textMuted, fontSize: 14 }}>
+              ✨ Analyzing payroll changes...
             </div>
           )}
-          {diff.removedEmployees?.length > 0 && (
-            <div style={{ marginBottom: 12 }}>
-              {diff.removedEmployees.map((e, i) => <div key={i} style={{ padding: "6px 12px", background: "#F8D7DA", color: "#721C24", borderRadius: 6, marginBottom: 4, fontSize: 13 }}>− Removed: {e.name}</div>)}
+          {aiDiff?.summary && (
+            <div style={{ padding: "16px 18px", background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, marginBottom: 16, fontSize: 14, lineHeight: 1.7, color: T.text, whiteSpace: "pre-wrap" }}>
+              {aiDiff.summary}
             </div>
           )}
-
-          {/* Unchanged employees summary */}
-          {diff.unchanged?.length > 0 && (
-            <div style={{ padding: "8px 12px", background: T.bg, borderRadius: 8, marginBottom: 16, fontSize: 13, color: T.textMuted }}>
-              ✓ {diff.unchanged.length} employee{diff.unchanged.length !== 1 ? "s" : ""} unchanged: {diff.unchanged.join(", ")}
+          {aiDiff?.error && (
+            <div style={{ padding: "12px 16px", background: T.dangerBg, borderRadius: 8, marginBottom: 16, fontSize: 13, color: T.danger }}>
+              {aiDiff.error}
+              <button onClick={() => {
+                setAiDiff({ loading: true, summary: null, error: null });
+                fetch("/api/ai-payroll-diff", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ currentText: data.current.text, previousText: data.previous[0].text }) })
+                  .then(r => r.json()).then(d => setAiDiff({ loading: false, summary: d.summary || null, error: d.error || null }))
+                  .catch(e => setAiDiff({ loading: false, summary: null, error: e.message }));
+              }} style={{ marginLeft: 10, padding: "4px 12px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 6, cursor: "pointer", fontSize: 12 }}>Retry</button>
+            </div>
+          )}
+          {!data.previous?.length && (
+            <div style={{ padding: "12px 16px", background: T.infoBg, borderRadius: 8, marginBottom: 16, fontSize: 13, color: T.info }}>
+              No previous payroll found to compare against. This is the first one.
             </div>
           )}
 
