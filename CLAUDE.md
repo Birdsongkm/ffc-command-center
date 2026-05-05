@@ -120,6 +120,32 @@ Not required on:
 
 ---
 
+## Popup-dismissal rule
+
+Every dismissable alert/banner/popup must persist its dismissal **keyed to the unique trigger that caused it**, so dismissing it once does not silence it forever — a *new* trigger reappears the alert.
+
+**The rule:**
+1. **Never use a plain `useState(false)` boolean for "dismissed".** It loses state on refresh, and conflates "I've seen this trigger" with "I never want to see this again."
+2. Pick a stable id from whatever caused the alert:
+   - Email-driven alert (payroll, finance, CC allocation) → `email.id` or `messageId`
+   - Calendar-driven alert (board prep, meeting prep) → calendar event `id` (fallback to `start` time)
+   - Content-driven recurring alert (birthday) → a **content hash** of the trigger payload (e.g., names+dates joined). Persists across midnight; only resets when the underlying content changes (new person, next year's birthday).
+   - Truly per-day reminders (e.g., "today's planning prompt") → today's `localDateKey()`. **Do not use this for time-sensitive alerts the user might miss.**
+3. Persist to `localStorage` as `ffc_dismissed_<feature>` (single id) or `ffc_dismissed_<feature>` JSON array (multiple).
+4. Render condition: `triggerActive && currentTriggerId !== dismissedId` (or `!dismissedSet.has(currentTriggerId)`).
+5. **Every dismissal must show an Undo toast.** Use `showToast(msg, onUndo)` with an `onUndo` callback that reverses the dismissal (sets the persisted id back to its previous value, or removes from the Set). The user can fat-finger the X — the alert should not be lost without recourse.
+
+**Reference implementations in `index.js`:**
+- Single-id (email): `dismissedCcAllocId` / `ffc_dismissed_cc_alloc`
+- Single-id (event): `dismissedBoardPrepId` / `ffc_dismissed_board_prep`
+- Single-id (content hash): `dismissedBirthdayKey` / `ffc_dismissed_birthday` — uses `birthdayContentKey(birthdays)` so dismissal sticks until the birthday set changes
+- Set: `dismissedPayrollIds` / `ffc_dismissed_payroll` (with `undoDismissPayroll`)
+- Set: `dismissedFinanceIds` / `ffc_dismissed_finance` (with `undoDismissFinance`)
+
+If you add a new alert and use a plain boolean, or skip the undo toast, the review subagent should flag it.
+
+---
+
 ## Email reply behavior
 
 **Reply-all is always the default.** When composing a reply (in `ComposeForm` or any automated send like payroll approval), always include the original To and CC recipients in the outgoing CC. Never default to reply-to-sender-only.

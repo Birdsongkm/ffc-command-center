@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Head from "next/head";
 import MeetingPrepDrawer from "../components/MeetingPrepDrawer";
+import { localDateKey, loadDailySticky, saveDailySticky } from "../lib/dailySticky";
 
 // ═══════════════════════════════════════════════
 //  THEME
@@ -2810,6 +2811,26 @@ export default function Home() {
     return [];
   });
   const [newStickyText, setNewStickyText] = useState("");
+  const [dailyStickyOpen, setDailyStickyOpen] = useState(false);
+  const [dailyStickyDate, setDailyStickyDate] = useState(() => localDateKey());
+  const [dailyStickyText, setDailyStickyText] = useState("");
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setDailyStickyText(loadDailySticky(window.localStorage, new Date()));
+    const tick = () => {
+      const k = localDateKey();
+      if (k !== dailyStickyDate) {
+        setDailyStickyDate(k);
+        setDailyStickyText(loadDailySticky(window.localStorage, new Date()));
+      }
+    };
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, [dailyStickyDate]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    saveDailySticky(window.localStorage, new Date(), dailyStickyText);
+  }, [dailyStickyText, dailyStickyDate]);
   const [voiceListening, setVoiceListening] = useState(false);
   const voiceRecognitionRef = useRef(null);
   const [editingCaptureId, setEditingCaptureId] = useState(null);
@@ -2840,6 +2861,11 @@ export default function Home() {
     try { localStorage.setItem('ffc_dismissed_payroll', JSON.stringify([...next])); } catch {}
     return next;
   });
+  const undoDismissPayroll = id => setDismissedPayrollIds(prev => {
+    const next = new Set(prev); next.delete(id);
+    try { localStorage.setItem('ffc_dismissed_payroll', JSON.stringify([...next])); } catch {}
+    return next;
+  });
 
   const [dismissedFinanceIds, setDismissedFinanceIds] = useState(new Set());
   useEffect(() => {
@@ -2853,12 +2879,40 @@ export default function Home() {
     try { localStorage.setItem('ffc_dismissed_finance', JSON.stringify([...next])); } catch {}
     return next;
   });
+  const undoDismissFinance = id => setDismissedFinanceIds(prev => {
+    const next = new Set(prev); next.delete(id);
+    try { localStorage.setItem('ffc_dismissed_finance', JSON.stringify([...next])); } catch {}
+    return next;
+  });
 
-  const [boardPrepDismissed, setBoardPrepDismissed] = useState(false);
-  const [birthdayDismissed, setBirthdayDismissed] = useState(false);
+  // Popup-dismissal rule: every dismissable alert persists the trigger id so the alert reappears ONLY when the underlying trigger changes. See CLAUDE.md "Popup-dismissal rule".
+  const [dismissedBoardPrepId, setDismissedBoardPrepId] = useState(null);
+  const [dismissedBirthdayKey, setDismissedBirthdayKey] = useState(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try { setDismissedBoardPrepId(localStorage.getItem("ffc_dismissed_board_prep")); } catch {}
+    try { setDismissedBirthdayKey(localStorage.getItem("ffc_dismissed_birthday")); } catch {}
+  }, []);
+  const dismissBoardPrep = id => {
+    setDismissedBoardPrepId(id);
+    try { if (id) localStorage.setItem("ffc_dismissed_board_prep", id); } catch {}
+  };
+  const dismissBirthday = key => {
+    setDismissedBirthdayKey(key);
+    try { if (key) localStorage.setItem("ffc_dismissed_birthday", key); } catch {}
+  };
+  const birthdayContentKey = bs => (bs || []).map(b => `${b.name || ''}_${b.date || ''}`).join('|');
   const [ccAllocInfo, setCcAllocInfo] = useState(null); // { found, messageId, threadId, subject, spreadsheetUrl, ... }
   const [ccAllocPanel, setCcAllocPanel] = useState(false);
-  const [ccAllocDismissed, setCcAllocDismissed] = useState(false);
+  const [dismissedCcAllocId, setDismissedCcAllocId] = useState(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try { setDismissedCcAllocId(localStorage.getItem("ffc_dismissed_cc_alloc")); } catch {}
+  }, []);
+  const dismissCcAlloc = id => {
+    setDismissedCcAllocId(id);
+    try { if (id) localStorage.setItem("ffc_dismissed_cc_alloc", id); } catch {}
+  };
   const [aiPrep, setAiPrep] = useState({}); // eventId → { loading, text, error }
   const [aiFocus, setAiFocus] = useState(null); // { loading, items, error }
   const [aiTriage, setAiTriage] = useState(null); // { loading, recommendations: [{id, action, reason}] }
@@ -4038,13 +4092,13 @@ export default function Home() {
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div onClick={() => setPayrollPanel(e)} style={{ padding: "10px 24px", background: "#fff", color: "#D45555", borderRadius: 8, fontWeight: 800, fontSize: 15, whiteSpace: "nowrap", cursor: "pointer" }}>Run Payroll Review →</div>
-              <button onClick={ev => { ev.stopPropagation(); dismissPayroll(e.id); }} style={{ background: "rgba(255,255,255,0.25)", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", color: "#fff", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Dismiss">×</button>
+              <button onClick={ev => { ev.stopPropagation(); dismissPayroll(e.id); showToast("Payroll alert dismissed", () => undoDismissPayroll(e.id)); }} style={{ background: "rgba(255,255,255,0.25)", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", color: "#fff", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Dismiss">×</button>
             </div>
           </div>
         ))}
 
         {/* Board prep — sticky alert when board meeting is within 21 days */}
-        {boardPrepInfo?.meeting && !boardPrepPanel && !boardPrepDismissed && (
+        {boardPrepInfo?.meeting && !boardPrepPanel && (boardPrepInfo.meeting.id || boardPrepInfo.meeting.start) !== dismissedBoardPrepId && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "14px 22px", background: T.emailBlue, borderRadius: 12, marginBottom: 12, cursor: "pointer", boxShadow: "0 4px 20px rgba(59,130,196,0.35)" }} onClick={() => setBoardPrepPanel(true)}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontSize: 26 }}>📋</span>
@@ -4055,7 +4109,7 @@ export default function Home() {
             </div>
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
               <div style={{ padding: "10px 24px", background: "#fff", color: T.emailBlue, borderRadius: 8, fontWeight: 800, fontSize: 15, whiteSpace: "nowrap" }}>Start Prep →</div>
-              <button onClick={e => { e.stopPropagation(); setBoardPrepDismissed(true); }} style={{ background: "rgba(255,255,255,0.25)", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", color: "#fff", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Dismiss">×</button>
+              <button onClick={e => { e.stopPropagation(); const id = boardPrepInfo.meeting.id || boardPrepInfo.meeting.start; const prev = dismissedBoardPrepId; dismissBoardPrep(id); showToast("Board prep alert dismissed", () => dismissBoardPrep(prev)); }} style={{ background: "rgba(255,255,255,0.25)", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", color: "#fff", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Dismiss">×</button>
             </div>
           </div>
         )}
@@ -4066,7 +4120,7 @@ export default function Home() {
         )}
 
         {/* Credit Card Allocation alert */}
-        {ccAllocInfo?.found && !ccAllocPanel && !ccAllocDismissed && (
+        {ccAllocInfo?.found && !ccAllocPanel && ccAllocInfo.messageId !== dismissedCcAllocId && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "14px 22px", background: T.taskAmber, borderRadius: 12, marginBottom: 12, cursor: "pointer", boxShadow: "0 4px 20px rgba(196,148,42,0.35)" }} onClick={() => setCcAllocPanel(true)}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontSize: 26 }}>💳</span>
@@ -4077,7 +4131,7 @@ export default function Home() {
             </div>
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
               <div style={{ padding: "10px 24px", background: "#fff", color: T.taskAmber, borderRadius: 8, fontWeight: 800, fontSize: 15, whiteSpace: "nowrap" }}>Start Flow →</div>
-              <button onClick={e => { e.stopPropagation(); setCcAllocDismissed(true); }} style={{ background: "rgba(255,255,255,0.25)", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", color: "#fff", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Dismiss">×</button>
+              <button onClick={e => { e.stopPropagation(); const id = ccAllocInfo.messageId; const prev = dismissedCcAllocId; dismissCcAlloc(id); showToast("Credit card alert dismissed", () => dismissCcAlloc(prev)); }} style={{ background: "rgba(255,255,255,0.25)", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", color: "#fff", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Dismiss">×</button>
             </div>
           </div>
         )}
@@ -4088,7 +4142,7 @@ export default function Home() {
         )}
 
         {/* Birthday alert */}
-        {birthdayInfo?.birthdays?.length > 0 && !birthdayPanel && !birthdayDismissed && (
+        {birthdayInfo?.birthdays?.length > 0 && !birthdayPanel && birthdayContentKey(birthdayInfo.birthdays) !== dismissedBirthdayKey && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "14px 22px", background: T.gold, borderRadius: 12, marginBottom: 12, cursor: "pointer", boxShadow: `0 4px 20px rgba(196,148,42,0.4)` }} onClick={() => setBirthdayPanel(true)}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontSize: 26 }}>🎂</span>
@@ -4103,7 +4157,7 @@ export default function Home() {
             </div>
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
               <div style={{ padding: "10px 24px", background: "#fff", color: T.gold, borderRadius: 8, fontWeight: 800, fontSize: 15, whiteSpace: "nowrap" }}>Draft Message →</div>
-              <button onClick={e => { e.stopPropagation(); setBirthdayDismissed(true); }} style={{ background: "rgba(255,255,255,0.25)", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", color: "#fff", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Dismiss">×</button>
+              <button onClick={e => { e.stopPropagation(); const k = birthdayContentKey(birthdayInfo.birthdays); const prev = dismissedBirthdayKey; dismissBirthday(k); showToast("Birthday dismissed", () => dismissBirthday(prev)); }} style={{ background: "rgba(255,255,255,0.25)", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", color: "#fff", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Dismiss">×</button>
             </div>
           </div>
         )}
@@ -4374,7 +4428,7 @@ export default function Home() {
                   <button onClick={() => setFinancePanel(debbieDetailsEmail)} style={{ padding: "10px 22px", background: T.taskAmber, color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: "pointer" }}>
                     Run Finance Review →
                   </button>
-                  <button onClick={e => { e.stopPropagation(); dismissFinance(debbieDetailsEmail.id); }} style={{ background: "none", border: `1px solid ${T.taskAmberBorder}`, borderRadius: "50%", width: 30, height: 30, cursor: "pointer", color: T.taskAmber, fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }} title="Dismiss">×</button>
+                  <button onClick={e => { e.stopPropagation(); const id = debbieDetailsEmail.id; dismissFinance(id); showToast("Finance alert dismissed", () => undoDismissFinance(id)); }} style={{ background: "none", border: `1px solid ${T.taskAmberBorder}`, borderRadius: "50%", width: 30, height: 30, cursor: "pointer", color: T.taskAmber, fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }} title="Dismiss">×</button>
                 </div>
               </div>
             )}
@@ -6449,6 +6503,31 @@ export default function Home() {
 
       {expandedEmail && (
         <div onClick={() => setExpandedEmail(null)} style={{ position: "fixed", inset: 0, zIndex: 1, cursor: "default" }} />
+      )}
+
+      {/* Daily post-it — per-day scratchpad, bottom-left floating */}
+      {!dailyStickyOpen && (
+        <button onClick={() => setDailyStickyOpen(true)} title="Today's notes"
+          style={{ position: "fixed", bottom: 28, left: 28, width: 52, height: 52, borderRadius: "50%", background: T.stickyYellowBg, border: `2px solid ${T.stickyYellowBorder}`, cursor: "pointer", fontSize: 24, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.2)", zIndex: 999 }}>
+          📝
+        </button>
+      )}
+      {dailyStickyOpen && (
+        <>
+          <div onClick={() => setDailyStickyOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 999 }} />
+          <div style={{ position: "fixed", bottom: 28, left: 28, width: 320, height: 380, background: T.stickyYellowBg, border: `2px solid ${T.stickyYellowBorder}`, borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,0.25)", zIndex: 1000, display: "flex", flexDirection: "column", padding: 16, transform: "rotate(-1deg)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.text, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                {new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+              </div>
+              <button onClick={() => setDailyStickyOpen(false)} title="Close"
+                style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 20, color: T.text, lineHeight: 1, padding: 0, width: 24, height: 24 }}>×</button>
+            </div>
+            <textarea autoFocus value={dailyStickyText} onChange={e => setDailyStickyText(e.target.value)}
+              placeholder="Today's items..."
+              style={{ flex: 1, width: "100%", border: "none", background: "transparent", color: T.text, fontSize: 15, fontFamily: "inherit", resize: "none", outline: "none", lineHeight: 1.5, boxSizing: "border-box" }} />
+          </div>
+        </>
       )}
 
       <LightbulbFAB />
