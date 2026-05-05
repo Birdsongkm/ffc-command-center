@@ -273,8 +273,8 @@ CEO vote: pipeline funnel stages (6/6), trend arrow on sparkline (4/6 — "only 
 
 ---
 
-## Sprint 4 — Reporting & Weekly Intelligence
-*Status: PLANNED — next to execute*
+## Sprint 4 — Reporting & Weekly Intelligence ✅ COMPLETE
+*Shipped: 2026-03-21 | 287 tests passing*
 
 ### Panel deliberation (post-Sprint 3 convening)
 
@@ -627,7 +627,7 @@ CRO vote: donor intent signal on email row (5/6), HubSpot auto-lookup on open (4
 
 ---
 
-## Sprint 8 — Gmail Compose: BCC Field + Reply/Reply-All Toggle
+## Sprint 8 — Gmail Compose: BCC Field + Reply/Reply-All Toggle ✅ COMPLETE
 *Shipped: 2026-03-23 | 475 tests passing*
 
 ### Panel deliberation
@@ -830,8 +830,8 @@ Full implementation of the meeting prep spec with 3 locked decisions:
 
 ---
 
-## Sprint 13 — Follow-Up Intelligence & End-of-Day Recap
-*Status: PLANNED — next to execute*
+## Sprint 13 — Follow-Up Intelligence & End-of-Day Recap ✅ COMPLETE
+*Shipped: 2026-04-24 | 1005 tests passing*
 
 ### Panel deliberation (post-Sprint 12 convening)
 
