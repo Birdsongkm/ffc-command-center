@@ -67,9 +67,13 @@ async function checkTeamCompletion(token, spreadsheetId, sheetName, staffInitial
 
 async function findAllocationEmail(token) {
   try {
-    const q = 'from:dnatsi.com subject:("credit card" OR "cc transactions" OR "transactions ready" OR allocations OR allocation) newer_than:30d';
+    // Search for Debbie's CC allocation email — only from the current month
+    // to prevent last month's email from re-triggering
+    const now = new Date();
+    const firstOfMonth = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/01`;
+    const q = `from:dnatsi.com subject:("credit card" OR "cc transactions" OR "transactions ready" OR allocations OR allocation) after:${firstOfMonth}`;
     const searchRes = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(q)}&maxResults=1`,
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(q)}&maxResults=3`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     if (!searchRes.ok) {
@@ -77,8 +81,25 @@ async function findAllocationEmail(token) {
       return { found: false };
     }
     const searchData = await searchRes.json();
-    const msgId = searchData.messages?.[0]?.id;
-    if (!msgId) return { found: false };
+    if (!searchData.messages?.length) return { found: false };
+
+    // Find the most recent message that Kayla hasn't replied to yet
+    let msgId = null;
+    for (const candidate of searchData.messages) {
+      // Check the thread — if Kayla sent a reply, skip this one
+      const threadRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/threads/${candidate.threadId}?format=metadata&metadataHeaders=From`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!threadRes.ok) { msgId = candidate.id; break; } // Can't check thread, show it
+      const threadData = await threadRes.json();
+      const kaylaReplied = (threadData.messages || []).some(m => {
+        const from = (m.payload?.headers || []).find(h => h.name.toLowerCase() === 'from')?.value || '';
+        return from.toLowerCase().includes('freshfoodconnect.org') || from.toLowerCase().includes('kayla');
+      });
+      if (!kaylaReplied) { msgId = candidate.id; break; }
+    }
+    if (!msgId) return { found: false }; // All threads have replies
 
     const msgRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}?format=full`,
