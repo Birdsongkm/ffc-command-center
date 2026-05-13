@@ -5135,18 +5135,9 @@ export default function Home() {
                         });
                         setDragReorderBucket(null); setDragOverReorderBucket(null);
                       } else if (draggingEmail && draggingEmail.id) {
+                        // Move THIS email only — no domain learning on drag
+                        // (domain learning is only for the 🚫 Spam button)
                         setEmailBucketOverrides(prev => ({ ...prev, [draggingEmail.id]: bucket }));
-                        const senderEmail = (draggingEmail.from || "").toLowerCase().match(/[\w.-]+@[\w.-]+/)?.[0] || "";
-                        const senderDomain = senderEmail.split("@")[1] || "";
-                        if (senderEmail || senderDomain) {
-                          setLearnedBuckets(prev => {
-                            const updated = { ...prev };
-                            if (senderEmail) updated[senderEmail] = bucket;
-                            if (senderDomain) updated[senderDomain] = bucket;
-                            try { localStorage.setItem("ffc_learned_buckets", JSON.stringify(updated)); } catch {}
-                            return updated;
-                          });
-                        }
                         setDraggingEmail(null); setDragOverEmailBucket(null);
                       }
                     }}
