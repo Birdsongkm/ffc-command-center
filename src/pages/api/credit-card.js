@@ -121,23 +121,39 @@ async function findAllocationEmail(token) {
     const isSubjectMatch = /allocat|credit card|cc transaction|transactions ready/.test(subjectLower);
     if (!isFromDebbie && !isSubjectMatch) return { found: false };
 
-    // Extract spreadsheet link from body
-    let bodyText = '';
+    // Extract ALL text from body — both plain and HTML (links may only exist in HTML)
+    let plainText = '';
+    let htmlText = '';
     function extractText(part) {
       if (part.mimeType === 'text/plain' && part.body?.data) {
-        bodyText += Buffer.from(part.body.data, 'base64').toString('utf-8');
+        plainText += Buffer.from(part.body.data, 'base64').toString('utf-8');
       }
-      if (part.mimeType === 'text/html' && part.body?.data && !bodyText) {
-        bodyText += Buffer.from(part.body.data, 'base64').toString('utf-8');
+      if (part.mimeType === 'text/html' && part.body?.data) {
+        htmlText += Buffer.from(part.body.data, 'base64').toString('utf-8');
       }
       if (part.parts) part.parts.forEach(extractText);
     }
     extractText(msg.payload);
+    // Also check top-level body (some emails don't use multipart)
+    if (!plainText && !htmlText && msg.payload?.body?.data) {
+      const decoded = Buffer.from(msg.payload.body.data, 'base64').toString('utf-8');
+      if (msg.payload.mimeType === 'text/html') htmlText = decoded;
+      else plainText = decoded;
+    }
+    const bodyText = plainText + '\n' + htmlText;
 
-    // Find Google Sheets URLs
-    const sheetMatch = bodyText.match(/https:\/\/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
-    const spreadsheetUrl = sheetMatch ? `https://docs.google.com/spreadsheets/d/${sheetMatch[1]}` : null;
-    const spreadsheetId = sheetMatch ? sheetMatch[1] : null;
+    // Find Google Sheets URLs — check both plain text and HTML href attributes
+    const sheetMatch = bodyText.match(/https:\/\/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/)
+      || htmlText.match(/href="(https:\/\/docs\.google\.com\/spreadsheets\/d\/[a-zA-Z0-9_-]+[^"]*)"/)
+      || bodyText.match(/https:\/\/docs\.google\.com\/spreadsheets\/[^\s"'<]+/);
+    let spreadsheetUrl = null;
+    let spreadsheetId = null;
+    if (sheetMatch) {
+      const url = sheetMatch[1]?.startsWith('http') ? sheetMatch[1] : sheetMatch[0];
+      const idMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+      spreadsheetId = idMatch ? idMatch[1] : null;
+      spreadsheetUrl = spreadsheetId ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}` : url;
+    }
 
     return {
       found: true,
