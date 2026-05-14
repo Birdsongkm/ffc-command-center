@@ -334,7 +334,7 @@ The learned overrides are checked in `emailsByBucket` derivation (line ~3205) be
 
 ## Credit card allocation flow
 
-**Trigger:** Email from `@dnatsi.com` with subject containing "credit card", "CC", "transactions", or "allocation" (within 30 days).
+**Trigger:** Email with subject containing "credit card", "CC transactions", "transactions ready", or "allocation" — current month only. Debbie's emails may arrive from `@dnatsi.com` directly or forwarded through HubSpot. Only triggers if Kayla hasn't replied to the thread yet.
 
 **API:** `/api/credit-card` with actions: `findAllocationEmail`, `checkTeamCompletion`, `draftNudge`, `draftReplyToDebbie`, `checkSheet`.
 

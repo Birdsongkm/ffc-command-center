@@ -67,11 +67,12 @@ async function checkTeamCompletion(token, spreadsheetId, sheetName, staffInitial
 
 async function findAllocationEmail(token) {
   try {
-    // Search for Debbie's CC allocation email — only from the current month
-    // to prevent last month's email from re-triggering
+    // Search for CC allocation email — current month only.
+    // Match by subject keywords (Debbie's emails may arrive directly from @dnatsi.com
+    // or forwarded through HubSpot/other tools with a different From header).
     const now = new Date();
     const firstOfMonth = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/01`;
-    const q = `from:dnatsi.com subject:("credit card" OR "cc transactions" OR "transactions ready" OR allocations OR allocation) after:${firstOfMonth}`;
+    const q = `subject:("credit card" OR "cc transactions" OR "transactions ready" OR "allocations" OR "allocation") after:${firstOfMonth}`;
     const searchRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(q)}&maxResults=3`,
       { headers: { Authorization: `Bearer ${token}` } }
@@ -111,6 +112,14 @@ async function findAllocationEmail(token) {
     }
     const msg = await msgRes.json();
     const getH = name => (msg.payload?.headers || []).find(h => h.name.toLowerCase() === name.toLowerCase())?.value || '';
+
+    // Verify this is actually a CC allocation email (not a random match)
+    // Must be from @dnatsi.com OR body mentions "allocat" or "credit card" or "transactions"
+    const fromAddr = getH('From').toLowerCase();
+    const subjectLower = getH('Subject').toLowerCase();
+    const isFromDebbie = fromAddr.includes('dnatsi.com') || fromAddr.includes('debbie') || fromAddr.includes('dnash');
+    const isSubjectMatch = /allocat|credit card|cc transaction|transactions ready/.test(subjectLower);
+    if (!isFromDebbie && !isSubjectMatch) return { found: false };
 
     // Extract spreadsheet link from body
     let bodyText = '';

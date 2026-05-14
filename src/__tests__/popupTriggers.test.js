@@ -213,6 +213,66 @@ describe("Birthday trigger", () => {
   });
 });
 
+// ── CC Allocation subject matching ───────────────────────────────────────────
+
+function matchesCcAllocSubject(subject) {
+  const s = (subject || '').toLowerCase();
+  return /credit card|cc transaction|transactions ready|allocat/.test(s);
+}
+
+function isCcAllocSender(from) {
+  const f = (from || '').toLowerCase();
+  return f.includes('dnatsi.com') || f.includes('debbie') || f.includes('dnash');
+}
+
+describe("CC Allocation subject matching", () => {
+  test("matches 'April CC transactions ready for allocations'", () => {
+    expect(matchesCcAllocSubject("April CC transactions ready for allocations")).toBe(true);
+  });
+
+  test("matches 'credit card'", () => {
+    expect(matchesCcAllocSubject("March credit card transactions")).toBe(true);
+  });
+
+  test("matches 'allocations'", () => {
+    expect(matchesCcAllocSubject("Team allocations needed")).toBe(true);
+  });
+
+  test("matches 'transactions ready'", () => {
+    expect(matchesCcAllocSubject("CC Transactions Ready")).toBe(true);
+  });
+
+  test("does not match unrelated subject", () => {
+    expect(matchesCcAllocSubject("Board meeting agenda")).toBe(false);
+  });
+
+  test("does not match null", () => {
+    expect(matchesCcAllocSubject(null)).toBe(false);
+  });
+});
+
+describe("CC Allocation sender matching", () => {
+  test("matches @dnatsi.com", () => {
+    expect(isCcAllocSender("dnash@dnatsi.com")).toBe(true);
+  });
+
+  test("matches Debbie in display name", () => {
+    expect(isCcAllocSender("Debbie Nash <someone@hubspot.com>")).toBe(true);
+  });
+
+  test("matches forwarded from HubSpot with debbie in name", () => {
+    expect(isCcAllocSender('"Debbie" via HubSpot <noreply@hubspot.com>')).toBe(true);
+  });
+
+  test("does not match random sender", () => {
+    expect(isCcAllocSender("pat@acme.org")).toBe(false);
+  });
+
+  test("does not match null", () => {
+    expect(isCcAllocSender(null)).toBe(false);
+  });
+});
+
 describe("Dismissal persistence", () => {
   test("returns persisted shape", () => {
     const r = persistDismissal("ffc_dismissed_cc_alloc", "msg1");
