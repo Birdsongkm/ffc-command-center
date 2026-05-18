@@ -190,7 +190,7 @@ index.js load
   → GET /api/drafts        draft list (batched 10 at a time)
   → GET /api/monday-digest weekly briefing (parallel fetches)
   → GET /api/signature     email signature HTML
-  → GET /api/board-prep    check for upcoming board meeting (21-day window)
+  → GET /api/board-prep    check for upcoming board meeting (8-day window)
   → GET /api/birthday      check for today's birthdays in calendar
   → GET /api/credit-card?action=findAllocationEmail   check for CC allocation email from @dnatsi.com
 

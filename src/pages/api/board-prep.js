@@ -375,7 +375,7 @@ async function handleGet(token) {
   // Calendar: next 21 days
   const now = new Date();
   const timeMin = now.toISOString();
-  const timeMax = new Date(now.getTime() + 21 * 24 * 60 * 60 * 1000).toISOString();
+  const timeMax = new Date(now.getTime() + 8 * 24 * 60 * 60 * 1000).toISOString();
   // Search for board meeting — use broad query then filter client-side
   // (Google Calendar q= search can miss multi-word phrases)
   const calRes = await fetch(
