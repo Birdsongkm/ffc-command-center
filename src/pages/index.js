@@ -3212,7 +3212,7 @@ export default function Home() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { if (auth) fetch("/api/signature").then(r => r.json()).then(d => { if (d.signature) setSignature(d.signature); }).catch(() => {}); }, [auth]);
-  useEffect(() => { if (auth) fetch("/api/board-prep", { credentials: "include" }).then(r => r.json()).then(d => { if (d.meeting) setBoardPrepInfo(d); }).catch(() => {}); }, [auth]);
+  useEffect(() => { if (auth) fetch("/api/board-prep", { credentials: "include" }).then(r => r.json()).then(d => { if (d.meeting) setBoardPrepInfo(d); else console.warn('board-prep: no meeting found in next 21 days', d); }).catch(e => console.error('board-prep:fetch', e.message)); }, [auth]);
   useEffect(() => { if (auth) fetch("/api/birthday", { credentials: "include" }).then(r => r.json()).then(d => { if (d.birthdays?.length > 0) setBirthdayInfo(d); }).catch(() => {}); }, [auth]);
   useEffect(() => { if (auth) fetch("/api/credit-card?action=findAllocationEmail", { credentials: "include" }).then(r => r.json()).then(d => { if (d.found) setCcAllocInfo(d); }).catch(() => {}); }, [auth]);
 

@@ -376,8 +376,10 @@ async function handleGet(token) {
   const now = new Date();
   const timeMin = now.toISOString();
   const timeMax = new Date(now.getTime() + 21 * 24 * 60 * 60 * 1000).toISOString();
+  // Search for board meeting — use broad query then filter client-side
+  // (Google Calendar q= search can miss multi-word phrases)
   const calRes = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&q=board+meeting`,
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&q=board`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
   if (!calRes.ok) {
@@ -386,8 +388,9 @@ async function handleGet(token) {
     throw new Error(`Calendar fetch failed: ${err.error?.message || calRes.status}`);
   }
   const calData = await calRes.json();
+  // Match any event containing "board" in the title — covers "Board Meeting", "FFC Board Meeting", "Board Meeting - Fresh Food Connect", etc.
   const meeting = (calData.items || [])
-    .filter(e => (e.summary || '').toLowerCase().includes('board meeting'))
+    .filter(e => (e.summary || '').toLowerCase().includes('board'))
     .sort((a, b) => new Date(a.start.dateTime || a.start.date) - new Date(b.start.dateTime || b.start.date))[0] || null;
 
   // Drive: find docs (parallel)
