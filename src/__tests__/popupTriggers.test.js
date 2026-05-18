@@ -273,6 +273,51 @@ describe("CC Allocation sender matching", () => {
   });
 });
 
+// ── Board prep banner text ───────────────────────────────────────────────────
+
+function formatBoardPrepBanner(meetingDateStr) {
+  const d = new Date(meetingDateStr);
+  const days = Math.ceil((d - new Date()) / (1000 * 60 * 60 * 24));
+  const dateStr = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+  if (days <= 0) return `${dateStr} is today!`;
+  if (days === 1) return `${dateStr} is tomorrow!`;
+  return `${dateStr} is ${days} days away`;
+}
+
+describe("Board prep banner text", () => {
+  test("shows actual date, not hardcoded", () => {
+    const future = new Date(); future.setDate(future.getDate() + 5);
+    const text = formatBoardPrepBanner(future.toISOString());
+    expect(text).toContain("5 days away");
+    expect(text).not.toContain("April 6"); // never hardcoded
+  });
+
+  test("shows 'today' for today's meeting", () => {
+    expect(formatBoardPrepBanner(new Date().toISOString())).toContain("today!");
+  });
+
+  test("shows 'tomorrow' for tomorrow", () => {
+    const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1);
+    expect(formatBoardPrepBanner(tmrw.toISOString())).toContain("tomorrow!");
+  });
+
+  test("shows correct month name", () => {
+    const d = new Date(); d.setDate(d.getDate() + 3);
+    const text = formatBoardPrepBanner(d.toISOString());
+    const expectedMonth = d.toLocaleDateString('en-US', { month: 'long' });
+    expect(text).toContain(expectedMonth);
+  });
+
+  test("no hardcoded dates exist in index.js", () => {
+    const fs = require('fs');
+    const path = require('path');
+    const source = fs.readFileSync(path.join(__dirname, '..', 'pages', 'index.js'), 'utf-8');
+    // Search for hardcoded "April 6" or "March 15" etc in board prep context
+    const hardcodedDateInBanner = /Board Meeting Prep Due.*(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}\s+is\s+\d+\s+days/.test(source);
+    expect(hardcodedDateInBanner).toBe(false);
+  });
+});
+
 describe("Dismissal persistence", () => {
   test("returns persisted shape", () => {
     const r = persistDismissal("ffc_dismissed_cc_alloc", "msg1");

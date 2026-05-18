@@ -4103,7 +4103,7 @@ export default function Home() {
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontSize: 26 }}>📋</span>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>Board Meeting Prep Due — April 6 is 5 days away</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>Board Meeting Prep Due — {(() => { const d = new Date(boardPrepInfo.meeting.start?.dateTime || boardPrepInfo.meeting.start?.date || boardPrepInfo.meeting.start); const days = Math.ceil((d - new Date()) / (1000 * 60 * 60 * 24)); return `${d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} is ${days <= 0 ? 'today!' : days === 1 ? 'tomorrow!' : `${days} days away`}`; })()}</div>
                 <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", marginTop: 1 }}>Copy board report, draft staff email, draft board email, pull 1:1 agenda items</div>
               </div>
             </div>
