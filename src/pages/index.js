@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Head from "next/head";
 import MeetingPrepDrawer from "../components/MeetingPrepDrawer";
+import ChatSection from "../components/ChatSection";
 import { localDateKey, loadDailySticky, saveDailySticky } from "../lib/dailySticky";
 
 // ═══════════════════════════════════════════════
@@ -3627,7 +3628,7 @@ export default function Home() {
   useEffect(() => { if (auth && (tab === "drafts" || tab === "emails")) fetchDrafts(); }, [auth, tab]);
 
   // ── Keyboard shortcuts ──
-  const TAB_IDS = ["today", "emails", "calendar", "tasks", "drive", "drafts", "sticky"];
+  const TAB_IDS = ["today", "emails", "calendar", "tasks", "drive", "drafts", "chat", "sticky"];
   useEffect(() => {
     function onKey(e) {
       const tag = (e.target.tagName || "").toLowerCase();
@@ -4032,6 +4033,7 @@ export default function Home() {
     { id: "calendar", label: "Calendar", color: T.calGreen, icon: "📅" },
     { id: "tasks", label: "Tasks", color: T.taskAmber, icon: "📋" },
     { id: "drive", label: "Drive", color: T.driveViolet, icon: "📁" },
+    { id: "chat", label: "Chat", color: T.info, icon: "💬" },
     { id: "settings", label: "Settings", color: T.textMuted, icon: "⚙️" },
   ];
 
@@ -6033,6 +6035,12 @@ export default function Home() {
                 <div style={{ fontSize: 13, color: T.textMuted, marginTop: 4 }}>Built for executive directors who run fast and care deeply.</div>
               </div>
             </div>
+          </div>
+        )}
+
+        {tab === "chat" && (
+          <div className="tab-content">
+            <ChatSection T={T} showToast={showToast} auth={auth} />
           </div>
         )}
 
