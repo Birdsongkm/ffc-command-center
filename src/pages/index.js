@@ -5074,21 +5074,7 @@ export default function Home() {
                 {nextPage && <button onClick={() => fetchData(nextPage)} style={{ padding: "6px 16px", background: T.emailBlueBg, color: T.emailBlue, border: `1px solid ${T.emailBlueBorder}`, borderRadius: 7, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>Load More</button>}
               </div>
             </div>
-            {/* Payroll approval urgent banner (#94) */}
-            {emails.filter(e => (e.from || "").toLowerCase().includes("@dnatsi.com") && (e.subject || "").toLowerCase().includes("payroll approval")).map(e => (
-              <div key={e.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "16px 22px", background: "#D45555", borderRadius: 12, marginBottom: 16, boxShadow: "0 4px 16px rgba(212,85,85,0.35)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span style={{ fontSize: 28 }}>💰</span>
-                  <div>
-                    <div style={{ fontSize: 17, fontWeight: 800, color: "#fff" }}>Payroll Approval Needed</div>
-                    <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", marginTop: 2 }}>{e.from?.replace(/<.*>/, "").trim()} · {e.subject} · Must respond within hours</div>
-                  </div>
-                </div>
-                <button onClick={() => setPayrollPanel(e)} style={{ padding: "12px 28px", background: "#fff", color: "#D45555", border: "none", borderRadius: 9, fontWeight: 800, fontSize: 16, cursor: "pointer", whiteSpace: "nowrap", boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
-                  💰 Run Payroll Review
-                </button>
-              </div>
-            ))}
+            {/* Payroll approval banner removed from email tab — lives on Today tab only */}
 
             {/* Selection action toolbar */}
             {selectedEmailIds.size > 0 && (
