@@ -1196,7 +1196,7 @@ function ComposeForm({ mode = "compose", email = null, onSend, onSchedule, onCan
   const [scheduleCustom, setScheduleCustom] = useState("");
   const [selectedAttachmentIds, setSelectedAttachmentIds] = useState(() => forwardAttachments.map(a => a.attachmentId));
   // Sync pre-selection when attachments load after compose opens
-  React.useEffect(() => {
+  useEffect(() => {
     setSelectedAttachmentIds(forwardAttachments.map(a => a.attachmentId));
   }, [forwardAttachments.length]);
 
