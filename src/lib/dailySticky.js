@@ -22,4 +22,4 @@ function saveDailySticky(storage, date, text) {
   try { storage.setItem(dailyStickyKey(date), text); } catch {}
 }
 
-module.exports = { localDateKey, dailyStickyKey, loadDailySticky, saveDailySticky };
+export { localDateKey, dailyStickyKey, loadDailySticky, saveDailySticky };
