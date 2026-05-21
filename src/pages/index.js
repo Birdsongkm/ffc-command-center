@@ -246,7 +246,7 @@ function getEmailActionConfig(stored) {
 
 // ── Chat providers — add Slack / Teams entries here to enable future integrations ──
 const CHAT_PROVIDERS = [
-  { id: "google-chat", name: "Google Chat", apiPath: "/api/chat-messages", icon: "💬" },
+  { id: "google-chat", name: "Google Chat", apiPath: "/api/chat/google", icon: "💬" },
   // { id: "slack", name: "Slack", apiPath: "/api/slack-messages", icon: "💬" },
   // { id: "teams", name: "Microsoft Teams", apiPath: "/api/teams-messages", icon: "💬" },
 ];
@@ -912,7 +912,7 @@ function LightbulbFAB() {
 
   function loadAudit() {
     setAuditLoading(true);
-    fetch("/api/audit-log")
+    fetch("/api/audit-log", { credentials: "include" })
       .then(r => r.json())
       .then(d => { if (d.entries) setAuditLog(d.entries); })
       .finally(() => setAuditLoading(false));
@@ -1966,12 +1966,21 @@ function PayrollReviewPanel({ email, cache, onCacheUpdate, onClose, onApproved, 
 // ═══════════════════════════════════════════════
 //  BOARD PREP PANEL
 // ═══════════════════════════════════════════════
-const BOARD_PREP_DEFAULTS = {
-  meetingLabel: 'March',
-  year: 2026,
-  boardMeetingDate: '2026-04-06',
-  financialsQuery: 'Feb 2026 Financials',
-};
+// Board prep defaults — derived from current date, not hardcoded
+function getBoardPrepDefaults(meeting) {
+  const now = new Date();
+  const meetingDate = meeting?.start?.dateTime || meeting?.start?.date || now.toISOString();
+  const d = new Date(meetingDate);
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const meetingMonth = MONTHS[d.getMonth()];
+  const prevMonth = MONTHS[d.getMonth() === 0 ? 11 : d.getMonth() - 1];
+  return {
+    meetingLabel: meetingMonth,
+    year: d.getFullYear(),
+    boardMeetingDate: meetingDate.slice(0, 10),
+    financialsQuery: `${prevMonth} ${d.getFullYear()} Financials`,
+  };
+}
 
 // ── Credit Card Allocation Panel ──────────────────────────────────────────────
 function CreditCardPanel({ emailInfo, onClose, showToast }) {
@@ -2004,7 +2013,7 @@ function CreditCardPanel({ emailInfo, onClose, showToast }) {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ action: 'checkTeamCompletion', spreadsheetId, sheetName: '2026 CC Purchases' });
+      const params = new URLSearchParams({ action: 'checkTeamCompletion', spreadsheetId, sheetName: `${new Date().getFullYear()} CC Purchases` });
       staffForCC.forEach(m => params.append('staffInitials', m.initials));
       const r = await fetch(`/api/credit-card?${params}`, { credentials: 'include' });
       const d = await r.json();
@@ -2030,7 +2039,7 @@ function CreditCardPanel({ emailInfo, onClose, showToast }) {
     setError(null);
     try {
       // 1. Fetch empty rows and suggestions
-      const params = new URLSearchParams({ action: 'reviewAllocations', spreadsheetId, sheetName: '2026 CC Purchases' });
+      const params = new URLSearchParams({ action: 'reviewAllocations', spreadsheetId, sheetName: `${new Date().getFullYear()} CC Purchases` });
       const r = await fetch(`/api/credit-card?${params}`, { credentials: 'include' });
       const d = await r.json();
       if (d.error) { setError(d.error); setLoading(false); return; }
@@ -2058,7 +2067,7 @@ function CreditCardPanel({ emailInfo, onClose, showToast }) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ spreadsheetId, sheetName: '2026 CC Purchases', updates }),
+          body: JSON.stringify({ spreadsheetId, sheetName: `${new Date().getFullYear()} CC Purchases`, updates }),
         });
         const wd = await wr.json();
         if (wd.success) {
@@ -2317,10 +2326,11 @@ function BoardPrepPanel({ meeting, latestBoardReport, jack1on1, initialAgendaIte
   const [step, setStep] = useState('confirm'); // confirm | running | done | error
   const [results, setResults] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
-  const [meetingLabel, setMeetingLabel] = useState(BOARD_PREP_DEFAULTS.meetingLabel);
-  const [year] = useState(BOARD_PREP_DEFAULTS.year);
-  const [boardMeetingDate] = useState(BOARD_PREP_DEFAULTS.boardMeetingDate);
-  const [financialsQuery] = useState(BOARD_PREP_DEFAULTS.financialsQuery);
+  const _bpd = getBoardPrepDefaults(meeting);
+  const [meetingLabel, setMeetingLabel] = useState(_bpd.meetingLabel);
+  const [year] = useState(_bpd.year);
+  const [boardMeetingDate] = useState(_bpd.boardMeetingDate);
+  const [financialsQuery] = useState(_bpd.financialsQuery);
   const [agendaItems, setAgendaItems] = useState(initialAgendaItems || []);
   const [noteTaker, setNoteTaker] = useState('');
   const [introPerson, setIntroPerson] = useState('');
@@ -3241,7 +3251,7 @@ export default function Home() {
   // Monday digest
   useEffect(() => {
     if (auth && new Date().getDay() <= 1) {
-      fetch("/api/monday-digest").then(r => r.json()).then(d => { if (d.digest) setDigest(d); }).catch(() => {});
+      fetch("/api/monday-digest", { credentials: "include" }).then(r => r.json()).then(d => { if (d.digest) setDigest(d); }).catch(e => console.error('monday-digest:fetch', e.message));
     }
   }, [auth]);
 
@@ -3628,7 +3638,7 @@ export default function Home() {
   useEffect(() => { if (auth && (tab === "drafts" || tab === "emails")) fetchDrafts(); }, [auth, tab]);
 
   // ── Keyboard shortcuts ──
-  const TAB_IDS = ["today", "emails", "calendar", "tasks", "drive", "drafts", "chat", "sticky"];
+  const TAB_IDS = ["today", "emails", "calendar", "tasks", "drive", "drafts", "sticky"];
   useEffect(() => {
     function onKey(e) {
       const tag = (e.target.tagName || "").toLowerCase();
@@ -4033,7 +4043,6 @@ export default function Home() {
     { id: "calendar", label: "Calendar", color: T.calGreen, icon: "📅" },
     { id: "tasks", label: "Tasks", color: T.taskAmber, icon: "📋" },
     { id: "drive", label: "Drive", color: T.driveViolet, icon: "📁" },
-    { id: "chat", label: "Chat", color: T.info, icon: "💬" },
     { id: "settings", label: "Settings", color: T.textMuted, icon: "⚙️" },
   ];
 
@@ -6024,12 +6033,6 @@ export default function Home() {
           </div>
         )}
 
-        {tab === "chat" && (
-          <div className="tab-content">
-            <ChatSection T={T} showToast={showToast} auth={auth} />
-          </div>
-        )}
-
         {tab === "sticky" && (
           <div className="tab-content">
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 22 }}>
@@ -6136,6 +6139,7 @@ export default function Home() {
       )}
       {toast && <Toast message={toast.message} onUndo={toast.onUndo} onDone={() => setToast(null)} />}
       {meetingPrepEvent && <MeetingPrepDrawer event={meetingPrepEvent} T={T} onClose={() => setMeetingPrepEvent(null)} showToast={showToast} />}
+      {auth && <ChatSection T={T} showToast={showToast} auth={auth} />}
 
       {/* ═══════════ CHAT NOTIFICATIONS ═══════════ */}
       {chatNotifs.slice(-3).map((notif, i) => (

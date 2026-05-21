@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 /**
- * ChatSection — universal chat hub for the Chat tab.
- * Split-pane: conversation list (left) + message thread (right).
+ * ChatSection — Gmail-style chat popup docked to bottom-right.
+ * Always visible as a minimized bar. Expands to show conversation list + thread.
  * Provider-agnostic — works with any provider that implements the plugin contract.
  *
  * Props: T (theme), showToast, auth
@@ -14,20 +14,20 @@ const PROVIDERS = [
 ];
 
 export default function ChatSection({ T, showToast, auth }) {
+  const [expanded, setExpanded] = useState(false);
   const [conversations, setConversations] = useState([]);
   const [messages, setMessages] = useState([]);
   const [selectedConvo, setSelectedConvo] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [composing, setComposing] = useState('');
   const [sending, setSending] = useState(false);
-  const [providerFilter, setProviderFilter] = useState(null);
   const [connectedProviders, setConnectedProviders] = useState([]);
   const messagesEndRef = useRef(null);
 
-  // Fetch conversations from all providers on mount
+  // Fetch conversations when expanded
   useEffect(() => {
-    if (!auth) return;
+    if (!auth || !expanded || conversations.length > 0) return;
     setLoading(true);
     const fetchAll = async () => {
       const allConvos = [];
@@ -54,9 +54,8 @@ export default function ChatSection({ T, showToast, auth }) {
       setLoading(false);
     };
     fetchAll();
-  }, [auth]);
+  }, [auth, expanded]);
 
-  // Fetch messages when a conversation is selected
   const selectConvo = useCallback(async (convo) => {
     setSelectedConvo(convo);
     setMessages([]);
@@ -73,17 +72,15 @@ export default function ChatSection({ T, showToast, auth }) {
       });
       setMessages(msgs);
     } catch (e) {
-      showToast('Failed to load messages: ' + e.message);
+      showToast('Failed to load messages');
     }
     setLoadingMessages(false);
   }, [showToast]);
 
-  // Auto-scroll to bottom when messages load
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Send message
   const handleSend = async () => {
     if (!composing.trim() || !selectedConvo || sending) return;
     setSending(true);
@@ -96,21 +93,11 @@ export default function ChatSection({ T, showToast, auth }) {
         body: JSON.stringify({ action: 'send', conversationId: selectedConvo.id, text: composing.trim() }),
       });
       const d = await r.json();
-      if (d.message) {
-        setMessages(prev => [...prev, d.message]);
-        setComposing('');
-      } else {
-        showToast(d.error || 'Failed to send');
-      }
-    } catch (e) {
-      showToast('Send failed: ' + e.message);
-    }
+      if (d.message) { setMessages(prev => [...prev, d.message]); setComposing(''); }
+      else showToast(d.error || 'Failed to send');
+    } catch (e) { showToast('Send failed'); }
     setSending(false);
   };
-
-  const filteredConvos = providerFilter
-    ? conversations.filter(c => c.provider === providerFilter)
-    : conversations;
 
   const totalUnread = conversations.reduce((s, c) => s + (c.unreadCount || 0), 0);
 
@@ -124,122 +111,120 @@ export default function ChatSection({ T, showToast, auth }) {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 200px)', minHeight: 400, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden', background: T.card }}>
-      {/* Left: Conversation list */}
-      <div style={{ width: 320, borderRight: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-        {/* Header */}
-        <div style={{ padding: '14px 16px', borderBottom: `1px solid ${T.border}` }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ fontSize: 17, fontWeight: 700, color: T.text }}>Chat</span>
-            {totalUnread > 0 && <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 10, background: T.urgentCoralBg, color: T.urgentCoral, fontWeight: 700 }}>{totalUnread}</span>}
-          </div>
-          {/* Provider filter pills */}
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-            <button onClick={() => setProviderFilter(null)} style={{ padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, background: !providerFilter ? T.accent : T.bg, color: !providerFilter ? '#fff' : T.textMuted, border: `1px solid ${!providerFilter ? T.accent : T.border}` }}>All</button>
-            {connectedProviders.map(pid => {
-              const p = PROVIDERS.find(pr => pr.id === pid);
-              if (!p) return null;
-              return (
-                <button key={pid} onClick={() => setProviderFilter(providerFilter === pid ? null : pid)} style={{ padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, background: providerFilter === pid ? T.accent : T.bg, color: providerFilter === pid ? '#fff' : T.textMuted, border: `1px solid ${providerFilter === pid ? T.accent : T.border}` }}>
-                  {p.icon} {p.name}
-                </button>
-              );
-            })}
-          </div>
+  // Minimized bar
+  if (!expanded) {
+    return (
+      <div onClick={() => setExpanded(true)} style={{
+        position: 'fixed', bottom: 0, right: 24, width: 280,
+        background: T.accent, color: '#fff', borderRadius: '10px 10px 0 0',
+        padding: '10px 16px', cursor: 'pointer', zIndex: 900,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 -2px 12px rgba(0,0,0,0.15)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>💬</span>
+          <span style={{ fontSize: 14, fontWeight: 700 }}>Chat</span>
         </div>
+        {totalUnread > 0 && (
+          <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 10, background: '#fff', color: T.accent, fontWeight: 700 }}>{totalUnread}</span>
+        )}
+      </div>
+    );
+  }
 
-        {/* Conversation list */}
+  // Expanded popup
+  return (
+    <div style={{
+      position: 'fixed', bottom: 0, right: 24, width: 380, height: 500,
+      background: T.card, border: `1px solid ${T.border}`, borderRadius: '12px 12px 0 0',
+      boxShadow: '0 -4px 24px rgba(0,0,0,0.15)', zIndex: 900,
+      display: 'flex', flexDirection: 'column', overflow: 'hidden',
+    }}>
+      {/* Header bar */}
+      <div onClick={() => { if (selectedConvo) { setSelectedConvo(null); setMessages([]); } else setExpanded(false); }}
+        style={{
+          padding: '10px 16px', background: T.accent, color: '#fff', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
+        }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {selectedConvo && <span style={{ fontSize: 14 }}>←</span>}
+          <span style={{ fontSize: 16 }}>💬</span>
+          <span style={{ fontSize: 14, fontWeight: 700 }}>{selectedConvo ? selectedConvo.name : 'Chat'}</span>
+        </div>
+        <button onClick={e => { e.stopPropagation(); setExpanded(false); setSelectedConvo(null); }}
+          style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 4, color: '#fff', fontSize: 16, cursor: 'pointer', padding: '2px 8px', lineHeight: 1 }}>—</button>
+      </div>
+
+      {selectedConvo ? (
+        /* Message thread view */
+        <>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
+            {loadingMessages ? (
+              <div style={{ textAlign: 'center', color: T.textMuted, fontSize: 13, padding: 20 }}>Loading...</div>
+            ) : messages.length === 0 ? (
+              <div style={{ textAlign: 'center', color: T.textMuted, fontSize: 13, padding: 30 }}>No messages</div>
+            ) : messages.map(m => (
+              <div key={m.id} style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', alignItems: m.isOwn ? 'flex-end' : 'flex-start' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: m.isOwn ? T.accent : T.text }}>{m.sender}</span>
+                  <span style={{ fontSize: 10, color: T.textDim }}>{fmtTime(m.timestamp)}</span>
+                </div>
+                <div style={{
+                  padding: '7px 12px', borderRadius: 10, maxWidth: '85%', fontSize: 13, lineHeight: 1.4,
+                  background: m.isOwn ? T.accent : T.bg, color: m.isOwn ? '#fff' : T.text,
+                  borderBottomRightRadius: m.isOwn ? 3 : 10, borderBottomLeftRadius: m.isOwn ? 10 : 3,
+                }}>
+                  {m.text}
+                </div>
+                {m.attachments?.length > 0 && (
+                  <div style={{ display: 'flex', gap: 4, marginTop: 3, flexWrap: 'wrap' }}>
+                    {m.attachments.map((a, i) => (
+                      <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: T.emailBlue, padding: '2px 6px', background: T.emailBlueBg, borderRadius: 4, textDecoration: 'none' }}>📎 {a.name}</a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+          {/* Compose */}
+          <div style={{ padding: '8px 12px', borderTop: `1px solid ${T.border}`, display: 'flex', gap: 6, flexShrink: 0 }}>
+            <input value={composing} onChange={e => setComposing(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+              placeholder="Type a message..."
+              style={{ flex: 1, padding: '8px 12px', border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, background: T.surface, color: T.text, outline: 'none' }} />
+            <button onClick={handleSend} disabled={!composing.trim() || sending}
+              style={{ padding: '8px 14px', background: composing.trim() && !sending ? T.accent : T.bg, color: composing.trim() && !sending ? '#fff' : T.textMuted, border: 'none', borderRadius: 6, cursor: composing.trim() ? 'pointer' : 'default', fontWeight: 700, fontSize: 13 }}>
+              {sending ? '...' : '↑'}
+            </button>
+          </div>
+        </>
+      ) : (
+        /* Conversation list */
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {loading ? (
-            <div style={{ padding: '40px 16px', textAlign: 'center', color: T.textMuted, fontSize: 14 }}>Loading conversations...</div>
-          ) : filteredConvos.length === 0 ? (
-            <div style={{ padding: '40px 16px', textAlign: 'center', color: T.textMuted }}>
-              <div style={{ fontSize: 36, marginBottom: 8 }}>💬</div>
-              <div style={{ fontSize: 14 }}>{connectedProviders.length === 0 ? 'No chat providers connected' : 'No conversations found'}</div>
+            <div style={{ padding: '30px 16px', textAlign: 'center', color: T.textMuted, fontSize: 13 }}>Loading conversations...</div>
+          ) : conversations.length === 0 ? (
+            <div style={{ padding: '30px 16px', textAlign: 'center', color: T.textMuted }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>💬</div>
+              <div style={{ fontSize: 13 }}>{connectedProviders.length === 0 ? 'No chat providers connected' : 'No conversations'}</div>
             </div>
-          ) : filteredConvos.map(c => (
+          ) : conversations.map(c => (
             <div key={`${c.provider}-${c.id}`} onClick={() => selectConvo(c)}
-              style={{
-                padding: '12px 16px', cursor: 'pointer', borderBottom: `1px solid ${T.borderLight}`,
-                background: selectedConvo?.id === c.id && selectedConvo?.provider === c.provider ? T.accentBg : 'transparent',
-              }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 14 }}>{c.icon}</span>
-                <span style={{ fontSize: 14, fontWeight: c.unreadCount > 0 ? 700 : 500, color: T.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
-                {c.unreadCount > 0 && <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 8, background: T.urgentCoral, color: '#fff', fontWeight: 700 }}>{c.unreadCount}</span>}
+              style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${T.borderLight}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 13, flexShrink: 0 }}>{c.icon}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 13, fontWeight: c.unreadCount > 0 ? 700 : 500, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
+                  {c.lastMessageAt && <span style={{ fontSize: 10, color: T.textDim, flexShrink: 0 }}>{fmtTime(c.lastMessageAt)}</span>}
+                </div>
+                {c.lastMessage && <div style={{ fontSize: 12, color: T.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>{c.lastMessage}</div>}
               </div>
-              {c.lastMessage && <div style={{ fontSize: 12, color: T.textMuted, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.lastMessage}</div>}
-              {c.lastMessageAt && <div style={{ fontSize: 11, color: T.textDim, marginTop: 2 }}>{fmtTime(c.lastMessageAt)}</div>}
+              {c.unreadCount > 0 && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 8, background: T.urgentCoral, color: '#fff', fontWeight: 700, flexShrink: 0 }}>{c.unreadCount}</span>}
             </div>
           ))}
         </div>
-      </div>
-
-      {/* Right: Message thread */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {selectedConvo ? (
-          <>
-            {/* Thread header */}
-            <div style={{ padding: '12px 18px', borderBottom: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 15 }}>{selectedConvo.icon}</span>
-              <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{selectedConvo.name}</span>
-              <span style={{ fontSize: 12, color: T.textDim }}>{selectedConvo.type}</span>
-            </div>
-
-            {/* Messages */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 18px' }}>
-              {loadingMessages ? (
-                <div style={{ textAlign: 'center', color: T.textMuted, fontSize: 14, padding: 20 }}>Loading messages...</div>
-              ) : messages.length === 0 ? (
-                <div style={{ textAlign: 'center', color: T.textMuted, fontSize: 14, padding: 40 }}>No messages yet</div>
-              ) : messages.map(m => (
-                <div key={m.id} style={{ marginBottom: 14, display: 'flex', flexDirection: 'column', alignItems: m.isOwn ? 'flex-end' : 'flex-start' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: m.isOwn ? T.accent : T.text }}>{m.sender}</span>
-                    <span style={{ fontSize: 11, color: T.textDim }}>{fmtTime(m.timestamp)}</span>
-                  </div>
-                  <div style={{
-                    padding: '8px 14px', borderRadius: 12, maxWidth: '75%', fontSize: 14, lineHeight: 1.5,
-                    background: m.isOwn ? T.accent : T.bg, color: m.isOwn ? '#fff' : T.text,
-                    borderBottomRightRadius: m.isOwn ? 4 : 12, borderBottomLeftRadius: m.isOwn ? 12 : 4,
-                  }}>
-                    {m.text}
-                  </div>
-                  {m.attachments?.length > 0 && (
-                    <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                      {m.attachments.map((a, i) => (
-                        <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: T.emailBlue, textDecoration: 'none', padding: '3px 8px', background: T.emailBlueBg, borderRadius: 6 }}>📎 {a.name}</a>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Compose */}
-            <div style={{ padding: '12px 18px', borderTop: `1px solid ${T.border}`, display: 'flex', gap: 8 }}>
-              <input
-                value={composing}
-                onChange={e => setComposing(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                placeholder="Type a message..."
-                style={{ flex: 1, padding: '10px 14px', border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 14, background: T.surface, color: T.text, outline: 'none' }}
-              />
-              <button onClick={handleSend} disabled={!composing.trim() || sending}
-                style={{ padding: '10px 20px', background: composing.trim() && !sending ? T.accent : T.bg, color: composing.trim() && !sending ? '#fff' : T.textMuted, border: 'none', borderRadius: 8, cursor: composing.trim() && !sending ? 'pointer' : 'default', fontWeight: 700, fontSize: 14 }}>
-                {sending ? '...' : 'Send'}
-              </button>
-            </div>
-          </>
-        ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', color: T.textMuted }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>💬</div>
-            <div style={{ fontSize: 16 }}>Select a conversation</div>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }
