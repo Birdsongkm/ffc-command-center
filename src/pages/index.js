@@ -5054,24 +5054,37 @@ export default function Home() {
         {/* ═══════════ EMAILS TAB ═══════════ */}
         {tab === "emails" && (
           <div className="tab-content">
-            {/* Email search bar */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
+            {/* Gmail-style toolbar: compose + search + actions */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
+              {/* Compose button — prominent like Gmail */}
+              <button onClick={() => setComposing("compose")} style={{ padding: "10px 24px", background: T.accent, color: "#fff", border: "none", borderRadius: 18, fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 2px 8px rgba(0,0,0,0.12)", whiteSpace: "nowrap" }}>
+                ✏️ Compose
+              </button>
+              {/* Search */}
               <div style={{ position: "relative", flex: 1 }}>
                 <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 15, color: T.textMuted, pointerEvents: "none" }}>🔍</span>
                 <input
                   value={emailFilter}
                   onChange={e => setEmailFilter(e.target.value)}
-                  placeholder="Filter emails by sender, subject, or content..."
-                  style={{ width: "100%", padding: "10px 12px 10px 36px", background: T.card, color: T.text, border: `1px solid ${emailFilter ? T.emailBlue : T.border}`, borderRadius: 9, fontSize: 14, outline: "none", boxSizing: "border-box" }}
+                  placeholder="Filter emails..."
+                  style={{ width: "100%", padding: "10px 12px 10px 36px", background: T.card, color: T.text, border: `1px solid ${emailFilter ? T.emailBlue : T.border}`, borderRadius: 20, fontSize: 14, outline: "none", boxSizing: "border-box" }}
                 />
                 {emailFilter && (
                   <button onClick={() => setEmailFilter("")} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 16, color: T.textMuted, padding: 0, lineHeight: 1 }}>×</button>
                 )}
               </div>
-              <button onClick={() => { const q = emailFilter.trim(); if (q) window.open(`https://mail.google.com/mail/u/0/#search/${encodeURIComponent(q)}`, "_blank"); }} disabled={!emailFilter.trim()} style={{ padding: "10px 16px", background: emailFilter.trim() ? T.emailBlueBg : T.bg, color: emailFilter.trim() ? T.emailBlue : T.textMuted, border: `1px solid ${emailFilter.trim() ? T.emailBlueBorder : T.border}`, borderRadius: 9, cursor: emailFilter.trim() ? "pointer" : "default", fontSize: 14, fontWeight: 600, whiteSpace: "nowrap" }}>Search Gmail →</button>
+              <button onClick={() => { const q = emailFilter.trim(); if (q) window.open(`https://mail.google.com/mail/u/0/#search/${encodeURIComponent(q)}`, "_blank"); }} disabled={!emailFilter.trim()} style={{ padding: "10px 16px", background: emailFilter.trim() ? T.emailBlueBg : T.bg, color: emailFilter.trim() ? T.emailBlue : T.textMuted, border: `1px solid ${emailFilter.trim() ? T.emailBlueBorder : T.border}`, borderRadius: 20, cursor: emailFilter.trim() ? "pointer" : "default", fontSize: 14, fontWeight: 600, whiteSpace: "nowrap" }}>Gmail →</button>
+              {/* Refresh */}
+              <button onClick={fetchData} title="Refresh inbox" style={{ padding: "10px 12px", background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: "50%", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>↻</button>
             </div>
+            {/* Status bar */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-              <div style={{ fontSize: 15, color: T.textMuted }}>{emailFilter ? `${searchEmails(emails, emailFilter).length} matching · ` : ""}{emails.length} unread · drag ⠿ to reorder sections · drag emails to reclassify{dashLayout.emailBucketOrder?.length > 0 ? <button onClick={() => setDashLayout(prev => { const u = { ...prev }; delete u.emailBucketOrder; return u; })} style={{ marginLeft: 8, padding: "2px 8px", background: "transparent", color: T.textDim, border: `1px solid ${T.border}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>Reset order</button> : null}</div>
+              <div style={{ fontSize: 14, color: T.textMuted }}>
+                {emailFilter ? `${searchEmails(emails, emailFilter).length} matching · ` : ""}
+                <strong>{emails.length}</strong> unread
+                {emails.filter(e => (emailBucketOverrides[e.id] || classifyEmail(e)) === 'needs-response').length > 0 && <span style={{ color: T.urgentCoral, fontWeight: 600 }}> · {emails.filter(e => (emailBucketOverrides[e.id] || classifyEmail(e)) === 'needs-response').length} need reply</span>}
+                {dashLayout.emailBucketOrder?.length > 0 ? <button onClick={() => setDashLayout(prev => { const u = { ...prev }; delete u.emailBucketOrder; return u; })} style={{ marginLeft: 8, padding: "2px 8px", background: "transparent", color: T.textDim, border: `1px solid ${T.border}`, borderRadius: 5, cursor: "pointer", fontSize: 12 }}>Reset order</button> : null}
+              </div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 {/* Density toggle */}
                 {[{ id: "comfortable", icon: "≡", title: "Comfortable" }, { id: "compact", icon: "⊟", title: "Compact" }].map(d => (
